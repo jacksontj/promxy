@@ -1,2 +1,1 @@
-- add config file!
-- 
+- /api/v1/label/__name__/values -- API used by grafana
