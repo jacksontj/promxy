@@ -41,8 +41,7 @@ Phases:
 
 
 TODO:
-    - look into replacing promclient structs with prometheus ones
-    - configs
     - finish arg implementation of HTTP API
     - add "native" step to prometheus API
-    - 
+    - make source fetching pluggable (influx, etc.)
+    -  
