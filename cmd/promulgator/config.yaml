@@ -1,0 +1,3 @@
+server_groups:
+  - ["http://localhost:9090"]
+  - ["http://localhost:9091"]
