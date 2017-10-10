@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/jacksontj/promulgator/promhttputil"
+	"github.com/jacksontj/promxy/promhttputil"
 )
 
 // HTTP client for prometheus

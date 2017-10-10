@@ -1,5 +1,5 @@
-# promulgator
-A prometheus HTTP aggregator.
+# promxy
+A prometheus aggregating HTTP proxy.
 
 Note: this is a WIP, at this point it should be considered PoC quality software.
 

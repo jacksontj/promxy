@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/jacksontj/promulgator/promclient"
-	"github.com/jacksontj/promulgator/promhttputil"
+	"github.com/jacksontj/promxy/promclient"
+	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/storage/local"
 	"github.com/prometheus/prometheus/storage/metric"

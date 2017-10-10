@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/jacksontj/promulgator/promhttputil"
-	"github.com/jacksontj/promulgator/proxyquerier"
+	"github.com/jacksontj/promxy/promhttputil"
+	"github.com/jacksontj/promxy/proxyquerier"
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/promql"
