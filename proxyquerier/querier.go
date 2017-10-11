@@ -52,38 +52,69 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 
 	var result model.Value
 
+	retChan := make(chan interface{})
+	retCount := 0
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
 		for _, server := range serverGroup {
+			retCount++
+
 			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query_range", server))
 			if err != nil {
 				return nil, err
 			}
 			parsedUrl.RawQuery = values.Encode()
 
-			serverResult, err := promclient.GetData(ctx, parsedUrl.String())
-			if err != nil {
-				return nil, err
-			}
-			// TODO: check response code, how do we want to handle it?
-			if serverResult.Status != promhttputil.StatusSuccess {
-				continue
-			}
-
-			// TODO: what to do in failure
-			qData, ok := serverResult.Data.(*promhttputil.QueryData)
-			if !ok {
-				continue
-			}
-
-			// TODO: check qData.ResultType
-
-			if result == nil {
-				result = qData.Result
-			} else {
-				result, err = promhttputil.MergeValues(result, qData.Result)
+			go func(ctx context.Context, retChan chan interface{}) {
+				serverResult, err := promclient.GetData(ctx, parsedUrl.String())
+				var ret interface{}
 				if err != nil {
-					return nil, err
+					ret = err
+				} else {
+					ret = serverResult
+				}
+				select {
+				case retChan <- ret:
+					return
+				case <-ctx.Done():
+					return
+				}
+			}(childContext, retChan)
+		}
+	}
+
+	for i := 0; i < retCount; i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case ret := <-retChan:
+			switch retTyped := ret.(type) {
+			case error:
+				return nil, err
+			case *promhttputil.Response:
+				// TODO: check response code, how do we want to handle it?
+				if retTyped.Status != promhttputil.StatusSuccess {
+					continue
+				}
+
+				// TODO: what to do in failure
+				qData, ok := retTyped.Data.(*promhttputil.QueryData)
+				if !ok {
+					continue
+				}
+
+				// TODO: check qData.ResultType
+
+				if result == nil {
+					result = qData.Result
+				} else {
+					result, err = promhttputil.MergeValues(result, qData.Result)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
@@ -118,38 +149,69 @@ func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenes
 
 	var result model.Value
 
+	retChan := make(chan interface{})
+	retCount := 0
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
 		for _, server := range serverGroup {
+			retCount++
+
 			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query", server))
 			if err != nil {
 				return nil, err
 			}
 			parsedUrl.RawQuery = values.Encode()
 
-			serverResult, err := promclient.GetData(ctx, parsedUrl.String())
-			if err != nil {
-				return nil, err
-			}
-			// TODO: check response code, how do we want to handle it?
-			if serverResult.Status != promhttputil.StatusSuccess {
-				continue
-			}
-
-			// TODO: what to do in failure
-			qData, ok := serverResult.Data.(*promhttputil.QueryData)
-			if !ok {
-				continue
-			}
-
-			// TODO: check qData.ResultType
-
-			if result == nil {
-				result = qData.Result
-			} else {
-				result, err = promhttputil.MergeValues(result, qData.Result)
+			go func(ctx context.Context, retChan chan interface{}) {
+				serverResult, err := promclient.GetData(ctx, parsedUrl.String())
+				var ret interface{}
 				if err != nil {
-					return nil, err
+					ret = err
+				} else {
+					ret = serverResult
+				}
+				select {
+				case retChan <- ret:
+					return
+				case <-ctx.Done():
+					return
+				}
+			}(childContext, retChan)
+		}
+	}
+
+	for i := 0; i < retCount; i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case ret := <-retChan:
+			switch retTyped := ret.(type) {
+			case error:
+				return nil, err
+			case *promhttputil.Response:
+				// TODO: check response code, how do we want to handle it?
+				if retTyped.Status != promhttputil.StatusSuccess {
+					continue
+				}
+
+				// TODO: what to do in failure
+				qData, ok := retTyped.Data.(*promhttputil.QueryData)
+				if !ok {
+					continue
+				}
+
+				// TODO: check qData.ResultType
+
+				if result == nil {
+					result = qData.Result
+				} else {
+					result, err = promhttputil.MergeValues(result, qData.Result)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
@@ -194,23 +256,53 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 
 	result := &promclient.SeriesResult{}
 
+	retChan := make(chan interface{})
+	retCount := 0
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
 		for _, server := range serverGroup {
+			retCount++
+
 			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/series", server))
 			if err != nil {
 				return nil, err
 			}
 			parsedUrl.RawQuery = values.Encode()
 
-			serverResult, err := promclient.GetSeries(ctx, parsedUrl.String())
-			if err != nil {
-				return nil, err
-			}
+			go func(ctx context.Context, retChan chan interface{}) {
+				serverResult, err := promclient.GetSeries(ctx, parsedUrl.String())
+				var ret interface{}
+				if err != nil {
+					ret = err
+				} else {
+					ret = serverResult
+				}
+				select {
+				case retChan <- ret:
+					return
+				case <-ctx.Done():
+					return
+				}
+			}(childContext, retChan)
+		}
+	}
 
-			// TODO check status
-			if err := result.Merge(serverResult); err != nil {
+	for i := 0; i < retCount; i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case ret := <-retChan:
+			switch retTyped := ret.(type) {
+			case error:
 				return nil, err
+			case *promclient.SeriesResult:
+				// TODO check status
+				if err := result.Merge(retTyped); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
