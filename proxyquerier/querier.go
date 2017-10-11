@@ -52,36 +52,37 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
-		// TODO: query multiple within the same group to merge data
-		parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query_range", serverGroup[0]))
-		if err != nil {
-			return nil, err
-		}
-		parsedUrl.RawQuery = values.Encode()
-
-		serverResult, err := promclient.GetData(ctx, parsedUrl.String())
-		if err != nil {
-			return nil, err
-		}
-		// TODO: check response code, how do we want to handle it?
-		if serverResult.Status != promhttputil.StatusSuccess {
-			continue
-		}
-
-		// TODO: what to do in failure
-		qData, ok := serverResult.Data.(*promhttputil.QueryData)
-		if !ok {
-			continue
-		}
-
-		// TODO: check qData.ResultType
-
-		if result == nil {
-			result = qData.Result
-		} else {
-			result, err = promhttputil.MergeValues(result, qData.Result)
+		for _, server := range serverGroup {
+			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query_range", server))
 			if err != nil {
 				return nil, err
+			}
+			parsedUrl.RawQuery = values.Encode()
+
+			serverResult, err := promclient.GetData(ctx, parsedUrl.String())
+			if err != nil {
+				return nil, err
+			}
+			// TODO: check response code, how do we want to handle it?
+			if serverResult.Status != promhttputil.StatusSuccess {
+				continue
+			}
+
+			// TODO: what to do in failure
+			qData, ok := serverResult.Data.(*promhttputil.QueryData)
+			if !ok {
+				continue
+			}
+
+			// TODO: check qData.ResultType
+
+			if result == nil {
+				result = qData.Result
+			} else {
+				result, err = promhttputil.MergeValues(result, qData.Result)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -117,39 +118,39 @@ func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenes
 
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
-		// TODO: query multiple within the same group to merge data
-		parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query", serverGroup[0]))
-		if err != nil {
-			return nil, err
-		}
-		parsedUrl.RawQuery = values.Encode()
-
-		serverResult, err := promclient.GetData(ctx, parsedUrl.String())
-		if err != nil {
-			return nil, err
-		}
-		// TODO: check response code, how do we want to handle it?
-		if serverResult.Status != promhttputil.StatusSuccess {
-			continue
-		}
-
-		// TODO: what to do in failure
-		qData, ok := serverResult.Data.(*promhttputil.QueryData)
-		if !ok {
-			continue
-		}
-
-		// TODO: check qData.ResultType
-
-		if result == nil {
-			result = qData.Result
-		} else {
-			result, err = promhttputil.MergeValues(result, qData.Result)
+		for _, server := range serverGroup {
+			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query", server))
 			if err != nil {
 				return nil, err
 			}
-		}
+			parsedUrl.RawQuery = values.Encode()
 
+			serverResult, err := promclient.GetData(ctx, parsedUrl.String())
+			if err != nil {
+				return nil, err
+			}
+			// TODO: check response code, how do we want to handle it?
+			if serverResult.Status != promhttputil.StatusSuccess {
+				continue
+			}
+
+			// TODO: what to do in failure
+			qData, ok := serverResult.Data.(*promhttputil.QueryData)
+			if !ok {
+				continue
+			}
+
+			// TODO: check qData.ResultType
+
+			if result == nil {
+				result = qData.Result
+			} else {
+				result, err = promhttputil.MergeValues(result, qData.Result)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 
 	iterators := promclient.IteratorsForValue(result)
@@ -193,21 +194,22 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
-		// TODO: query multiple within the same group to merge data
-		parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/series", serverGroup[0]))
-		if err != nil {
-			return nil, err
-		}
-		parsedUrl.RawQuery = values.Encode()
+		for _, server := range serverGroup {
+			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/series", server))
+			if err != nil {
+				return nil, err
+			}
+			parsedUrl.RawQuery = values.Encode()
 
-		serverResult, err := promclient.GetSeries(ctx, parsedUrl.String())
-		if err != nil {
-			return nil, err
-		}
+			serverResult, err := promclient.GetSeries(ctx, parsedUrl.String())
+			if err != nil {
+				return nil, err
+			}
 
-		// TODO check status
-		if err := result.Merge(serverResult); err != nil {
-			return nil, err
+			// TODO check status
+			if err := result.Merge(serverResult); err != nil {
+				return nil, err
+			}
 		}
 	}
 
