@@ -131,6 +131,9 @@ func (p *Proxy) queryRangeHandler(w http.ResponseWriter, r *http.Request, _ http
 }
 
 func (p *Proxy) seriesHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// COORS headers required
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	r.ParseForm()
 	if len(r.Form["match[]"]) == 0 {
 		http.Error(w, "no match[] parameter provided", http.StatusInternalServerError)
