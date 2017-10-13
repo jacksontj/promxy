@@ -32,12 +32,12 @@ func (p *Proxy) ListenAndServe() error {
 	// TODO: check that all of these implement all the same params (maybe use the same tests if the have them?)
 	router := httprouter.New()
 
-	router.GET("/api/v1/query", p.queryHandler)
-	router.GET("/api/v1/query_range", p.queryRangeHandler)
+	router.GET("/api/v1/query", CORSWrap(p.queryHandler))
+	router.GET("/api/v1/query_range", CORSWrap(p.queryRangeHandler))
 
-	router.GET("/api/v1/series", p.seriesHandler)
+	router.GET("/api/v1/series", CORSWrap(p.seriesHandler))
 
-	router.GET("/api/v1/label/:name/values", p.labelValuesHandler)
+	router.GET("/api/v1/label/:name/values", CORSWrap(p.labelValuesHandler))
 	/*
 
 
@@ -60,9 +60,6 @@ func (p *Proxy) ListenAndServe() error {
 
 // Handler for /query
 func (p *Proxy) queryHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// COORS headers required
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	ts, err := promhttputil.ParseTime(r.URL.Query().Get("time"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -93,8 +90,6 @@ func (p *Proxy) queryHandler(w http.ResponseWriter, r *http.Request, _ httproute
 // Handler for /query_range
 func (p *Proxy) queryRangeHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	ctx := r.Context()
-	// COORS headers required
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	start, err := promhttputil.ParseTime(r.URL.Query().Get("start"))
 	if err != nil {
@@ -137,9 +132,6 @@ func (p *Proxy) queryRangeHandler(w http.ResponseWriter, r *http.Request, _ http
 }
 
 func (p *Proxy) seriesHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// COORS headers required
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	r.ParseForm()
 	if len(r.Form["match[]"]) == 0 {
 		http.Error(w, "no match[] parameter provided", http.StatusInternalServerError)
@@ -202,9 +194,6 @@ func (p *Proxy) seriesHandler(w http.ResponseWriter, r *http.Request, _ httprout
 }
 
 func (p *Proxy) labelValuesHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	// COORS headers required
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	name := ps.ByName("name")
 
 	if !model.LabelNameRE.MatchString(name) {
