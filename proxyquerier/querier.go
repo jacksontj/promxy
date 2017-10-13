@@ -190,7 +190,7 @@ func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenes
 		case ret := <-retChan:
 			switch retTyped := ret.(type) {
 			case error:
-				return nil, err
+				return nil, retTyped
 			case *promhttputil.Response:
 				// TODO: check response code, how do we want to handle it?
 				if retTyped.Status != promhttputil.StatusSuccess {
@@ -297,7 +297,7 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 		case ret := <-retChan:
 			switch retTyped := ret.(type) {
 			case error:
-				return nil, err
+				return nil, retTyped
 			case *promclient.SeriesResult:
 				// TODO check status
 				if err := result.Merge(retTyped); err != nil {
@@ -329,5 +329,58 @@ func (h *ProxyQuerier) LastSampleForLabelMatchers(ctx context.Context, cutoff mo
 // Get all of the label values that are associated with a given label name.
 func (h *ProxyQuerier) LabelValuesForLabelName(ctx context.Context, name model.LabelName) (model.LabelValues, error) {
 	fmt.Printf("LabelValuesForLabelName: name=%v\n", name)
-	return nil, fmt.Errorf("Not implemented")
+
+	result := &promclient.LabelResult{}
+
+	retChan := make(chan interface{})
+	retCount := 0
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+
+	// Query each in the groups and get data
+	for _, serverGroup := range h.ServerGroups {
+		for _, server := range serverGroup {
+			retCount++
+
+			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/label/%s/values", server, name))
+			if err != nil {
+				return nil, err
+			}
+
+			go func(ctx context.Context, retChan chan interface{}) {
+				serverResult, err := promclient.GetValuesForLabelName(ctx, parsedUrl.String())
+				var ret interface{}
+				if err != nil {
+					ret = err
+				} else {
+					ret = serverResult
+				}
+				select {
+				case retChan <- ret:
+					return
+				case <-ctx.Done():
+					return
+				}
+			}(childContext, retChan)
+		}
+	}
+
+	for i := 0; i < retCount; i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case ret := <-retChan:
+			switch retTyped := ret.(type) {
+			case error:
+				return nil, retTyped
+			case *promclient.LabelResult:
+				// TODO check status
+				if err := result.Merge(retTyped); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	return result.Data, nil
 }

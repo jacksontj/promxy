@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"sort"
 
 	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/jacksontj/promxy/proxyquerier"
@@ -22,6 +23,10 @@ type Proxy struct {
 	e *promql.Engine
 }
 
+func (p *Proxy) Querier() (local.Querier, error) {
+	return &proxyquerier.ProxyQuerier{p.serverGroups}, nil
+}
+
 func (p *Proxy) ListenAndServe() error {
 	// TODO: instrument these routes
 	// TODO: check that all of these implement all the same params (maybe use the same tests if the have them?)
@@ -32,18 +37,19 @@ func (p *Proxy) ListenAndServe() error {
 
 	router.GET("/api/v1/series", p.seriesHandler)
 
+	router.GET("/api/v1/label/:name/values", p.labelValuesHandler)
 	/*
 
-				r.Get("/label/:name/values", instr("label_values", api.labelValues))
 
-		        r.Get("/series", instr("series", api.series))
-		        r.Del("/series", instr("drop_series", api.dropSeries))
 
-		        r.Get("/targets", instr("targets", api.targets))
-		        r.Get("/alertmanagers", instr("alertmanagers", api.alertmanagers))
+	   r.Get("/series", instr("series", api.series))
+	   r.Del("/series", instr("drop_series", api.dropSeries))
 
-		        r.Get("/status/config", instr("config", api.serveConfig))
-		        r.Post("/read", prometheus.InstrumentHandler("read", http.HandlerFunc(api.remoteRead)))
+	   r.Get("/targets", instr("targets", api.targets))
+	   r.Get("/alertmanagers", instr("alertmanagers", api.alertmanagers))
+
+	   r.Get("/status/config", instr("config", api.serveConfig))
+	   r.Post("/read", prometheus.InstrumentHandler("read", http.HandlerFunc(api.remoteRead)))
 
 
 	*/
@@ -195,6 +201,29 @@ func (p *Proxy) seriesHandler(w http.ResponseWriter, r *http.Request, _ httprout
 	promhttputil.Respond(w, metrics)
 }
 
-func (p *Proxy) Querier() (local.Querier, error) {
-	return &proxyquerier.ProxyQuerier{p.serverGroups}, nil
+func (p *Proxy) labelValuesHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	// COORS headers required
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	name := ps.ByName("name")
+
+	if !model.LabelNameRE.MatchString(name) {
+		http.Error(w, "name doesn't match label RE", http.StatusInternalServerError)
+		return
+	}
+	q, err := p.Querier()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer q.Close()
+
+	vals, err := q.LabelValuesForLabelName(r.Context(), model.LabelName(name))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	sort.Sort(vals)
+
+	promhttputil.Respond(w, vals)
 }
