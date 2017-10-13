@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"math/rand"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"sort"
+	"strings"
 
 	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/jacksontj/promxy/proxyquerier"
@@ -54,8 +58,29 @@ func (p *Proxy) ListenAndServe() error {
 
 	*/
 
-	return http.ListenAndServe(":8082", router)
+	router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Have our fallback rules
+		if strings.HasPrefix(r.URL.Path, "/api") {
+			http.NotFound(w, r)
+		} else {
+			// For all remainingunknown paths we'll simply proxy them to *a* prometheus host
+			p.proxyHandler(w, r)
+		}
 
+	})
+	return http.ListenAndServe(":8082", router)
+}
+
+// Handler to proxy requests to *a* server in serverGroups
+func (p *Proxy) proxyHandler(w http.ResponseWriter, r *http.Request) {
+
+	serverGroup := p.serverGroups[rand.Int()%len(p.serverGroups)]
+	server := serverGroup[rand.Int()%len(serverGroup)]
+	// TODO: failover
+	parsedUrl, _ := url.Parse(server)
+
+	proxy := httputil.NewSingleHostReverseProxy(parsedUrl)
+	proxy.ServeHTTP(w, r)
 }
 
 // Handler for /query
