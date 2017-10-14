@@ -1,4 +1,4 @@
-package promxy
+package proxystorage
 
 import (
 	"fmt"

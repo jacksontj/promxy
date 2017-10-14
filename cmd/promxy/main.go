@@ -1,8 +1,18 @@
 package main
 
 import (
-	"github.com/jacksontj/promxy/promxy"
+	"net/http"
+	"strings"
+
+	"github.com/jacksontj/promxy/proxystorage"
 	"github.com/jessevdk/go-flags"
+	"github.com/julienschmidt/httprouter"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/route"
+	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/storage/local"
+	"github.com/prometheus/prometheus/web/api/v1"
 	"github.com/sirupsen/logrus"
 )
 
@@ -18,17 +28,51 @@ func main() {
 		logrus.Fatalf("Error parsing flags: %v", err)
 	}
 
-	config, err := promxy.ConfigFromFile(opts.ConfigFile)
+	cfg, err := proxystorage.ConfigFromFile(opts.ConfigFile)
 	if err != nil {
-		logrus.Fatalf("Error loading config: %v", err)
+		logrus.Fatalf("Error loading cfg: %v", err)
 	}
 
-	p, err := promxy.NewProxy(config)
+	var storage local.Storage
+
+	ps, err := proxystorage.NewProxyStorage(cfg)
 	if err != nil {
 		logrus.Fatalf("Error creating proxy: %v", err)
 	}
+	storage = ps
 
-	if err := p.ListenAndServe(); err != nil {
-		logrus.Fatalf("Err: %v", err)
-	}
+	engine := promql.NewEngine(storage, nil)
+
+	// TODO
+	cfgFunc := func() config.Config { return config.DefaultConfig }
+	// Return 503 until ready (for us there isn't much startup, so this might not need to be implemented
+	readyFunc := func(f http.HandlerFunc) http.HandlerFunc { return f }
+
+	api := v1.NewAPI(engine, storage, nil, nil, cfgFunc, readyFunc)
+
+	apiRouter := route.New()
+	api.Register(apiRouter.WithPrefix("/api/v1"))
+
+	// API go to their router
+	// Some stuff go to me
+	// rest proxy
+
+	// Create our router
+	r := httprouter.New()
+
+	// TODO: configurable path
+	r.HandlerFunc("GET", "/metrics", prometheus.Handler().ServeHTTP)
+	// TODO: additional endpoints?
+
+	r.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Have our fallback rules
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			apiRouter.ServeHTTP(w, r)
+		} else {
+			// For all remainingunknown paths we'll simply proxy them to *a* prometheus host
+			prometheus.InstrumentHandlerFunc("proxy", ps.ProxyHandler)(w, r)
+		}
+	})
+
+	http.ListenAndServe(":8082", r)
 }
