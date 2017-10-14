@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/jacksontj/promxy/promxy"
 	"github.com/jessevdk/go-flags"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/sirupsen/logrus"
@@ -26,15 +27,15 @@ func main() {
 		logrus.Fatalf("Error parsing flags: %v", err)
 	}
 
-	config, err := ConfigFromFile(opts.ConfigFile)
+	config, err := promxy.ConfigFromFile(opts.ConfigFile)
 	if err != nil {
 		logrus.Fatalf("Error loading config: %v", err)
 	}
 
-	p := &Proxy{
-		serverGroups: config.ServerGroups,
+	p, err := promxy.NewProxy(config)
+	if err != nil {
+		logrus.Fatalf("Error creating proxy: %v", err)
 	}
-	p.e = promql.NewEngine(p, nil)
 
 	if err := p.ListenAndServe(); err != nil {
 		logrus.Fatalf("Err: %v", err)

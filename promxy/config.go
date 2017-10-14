@@ -1,4 +1,4 @@
-package main
+package promxy
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 func ConfigFromFile(path string) (*Config, error) {
 	// load the config file
 	config := &Config{}
-	configBytes, err := ioutil.ReadFile(opts.ConfigFile)
+	configBytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("Error loading config: %v", err)
 	}

@@ -1,4 +1,4 @@
-package main
+package promxy
 
 import (
 	"context"
@@ -18,17 +18,26 @@ import (
 	"github.com/prometheus/prometheus/storage/metric"
 )
 
+func NewProxy(c *Config) (*Proxy, error) {
+	// TODO: validate config
+	p := &Proxy{
+		ServerGroups: c.ServerGroups,
+	}
+	p.e = promql.NewEngine(p, nil)
+	return p, nil
+}
+
 // TODO: rename?
 // TODO: move to its own package?
 type Proxy struct {
 	// Groups of servers to connect to
-	serverGroups [][]string
+	ServerGroups [][]string
 	// query engine
 	e *promql.Engine
 }
 
 func (p *Proxy) Querier() (local.Querier, error) {
-	return &proxyquerier.ProxyQuerier{p.serverGroups}, nil
+	return &proxyquerier.ProxyQuerier{p.ServerGroups}, nil
 }
 
 func (p *Proxy) ListenAndServe() error {
@@ -74,7 +83,7 @@ func (p *Proxy) ListenAndServe() error {
 // Handler to proxy requests to *a* server in serverGroups
 func (p *Proxy) proxyHandler(w http.ResponseWriter, r *http.Request) {
 
-	serverGroup := p.serverGroups[rand.Int()%len(p.serverGroups)]
+	serverGroup := p.ServerGroups[rand.Int()%len(p.ServerGroups)]
 	server := serverGroup[rand.Int()%len(serverGroup)]
 	// TODO: failover
 	parsedUrl, _ := url.Parse(server)
