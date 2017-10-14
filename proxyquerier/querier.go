@@ -86,14 +86,19 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 		}
 	}
 
+	errCount := 0
 	for i := 0; i < retCount; i++ {
 		select {
+		// If the context was closed, we are erroring out (usually client disconnect)
 		case <-ctx.Done():
 			return nil, ctx.Err()
+		// Otherwise we are waiting on a return
 		case ret := <-retChan:
 			switch retTyped := ret.(type) {
+			// If there was an error we'll just continue
 			case error:
-				return nil, err
+				// Don't stop on error, just incr counter
+				errCount++
 			case *promhttputil.Response:
 				// TODO: check response code, how do we want to handle it?
 				if retTyped.Status != promhttputil.StatusSuccess {
@@ -118,6 +123,10 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 				}
 			}
 		}
+	}
+
+	if errCount == retCount {
+		return nil, fmt.Errorf("Unable to fetch from downstream servers")
 	}
 
 	iterators := promclient.IteratorsForValue(result)
@@ -183,14 +192,19 @@ func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenes
 		}
 	}
 
+	errCount := 0
 	for i := 0; i < retCount; i++ {
 		select {
+		// If the context was closed, we are erroring out (usually client disconnect)
 		case <-ctx.Done():
 			return nil, ctx.Err()
+		// Otherwise we are waiting on a return
 		case ret := <-retChan:
 			switch retTyped := ret.(type) {
+			// If there was an error we'll just continue
 			case error:
-				return nil, retTyped
+				// Don't stop on error, just incr counter
+				errCount++
 			case *promhttputil.Response:
 				// TODO: check response code, how do we want to handle it?
 				if retTyped.Status != promhttputil.StatusSuccess {
@@ -215,6 +229,10 @@ func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenes
 				}
 			}
 		}
+	}
+
+	if errCount == retCount {
+		return nil, fmt.Errorf("Unable to fetch from downstream servers")
 	}
 
 	iterators := promclient.IteratorsForValue(result)
@@ -290,6 +308,7 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 		}
 	}
 
+	errCount := 0
 	for i := 0; i < retCount; i++ {
 		select {
 		case <-ctx.Done():
@@ -297,7 +316,7 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 		case ret := <-retChan:
 			switch retTyped := ret.(type) {
 			case error:
-				return nil, retTyped
+				errCount++
 			case *promclient.SeriesResult:
 				// TODO check status
 				if err := result.Merge(retTyped); err != nil {
@@ -305,6 +324,10 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 				}
 			}
 		}
+	}
+
+	if errCount == retCount {
+		return nil, fmt.Errorf("Unable to fetch from downstream servers")
 	}
 
 	metrics := make([]metric.Metric, len(result.Data))
@@ -365,6 +388,8 @@ func (h *ProxyQuerier) LabelValuesForLabelName(ctx context.Context, name model.L
 		}
 	}
 
+	errCount := 0
+
 	for i := 0; i < retCount; i++ {
 		select {
 		case <-ctx.Done():
@@ -372,7 +397,7 @@ func (h *ProxyQuerier) LabelValuesForLabelName(ctx context.Context, name model.L
 		case ret := <-retChan:
 			switch retTyped := ret.(type) {
 			case error:
-				return nil, retTyped
+				errCount++
 			case *promclient.LabelResult:
 				// TODO check status
 				if err := result.Merge(retTyped); err != nil {
@@ -380,6 +405,10 @@ func (h *ProxyQuerier) LabelValuesForLabelName(ctx context.Context, name model.L
 				}
 			}
 		}
+	}
+
+	if errCount == retCount {
+		return nil, fmt.Errorf("Unable to fetch from downstream servers")
 	}
 
 	return result.Data, nil
