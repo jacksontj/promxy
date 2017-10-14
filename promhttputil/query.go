@@ -27,6 +27,20 @@ const (
 	ErrorInternal           = "internal"
 )
 
+var CorsHeaders = map[string]string{
+	"Access-Control-Allow-Headers":  "Accept, Authorization, Content-Type, Origin",
+	"Access-Control-Allow-Methods":  "GET, OPTIONS",
+	"Access-Control-Allow-Origin":   "*",
+	"Access-Control-Expose-Headers": "Date",
+}
+
+// Enables cross-site script calls.
+func SetCORS(w http.ResponseWriter) {
+	for h, v := range CorsHeaders {
+		w.Header().Set(h, v)
+	}
+}
+
 // TODO: clean up
 
 type QueryData struct {
@@ -122,6 +136,45 @@ func Respond(w http.ResponseWriter, data interface{}) {
 	b, err := json.Marshal(&Response{
 		Status: StatusSuccess,
 		Data:   data,
+	})
+	if err != nil {
+		return
+	}
+	w.Write(b)
+}
+
+type ApiError struct {
+	Typ ErrorType
+	Err error
+}
+
+func (e *ApiError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Typ, e.Err)
+}
+
+func RespondError(w http.ResponseWriter, apiErr *ApiError, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var code int
+	switch apiErr.Typ {
+	case ErrorBadData:
+		code = http.StatusBadRequest
+	case ErrorExec:
+		code = 422
+	case ErrorCanceled, ErrorTimeout:
+		code = http.StatusServiceUnavailable
+	case ErrorInternal:
+		code = http.StatusInternalServerError
+	default:
+		code = http.StatusInternalServerError
+	}
+	w.WriteHeader(code)
+
+	b, err := json.Marshal(&Response{
+		Status:    StatusError,
+		ErrorType: apiErr.Typ,
+		Error:     apiErr.Err.Error(),
+		Data:      data,
 	})
 	if err != nil {
 		return

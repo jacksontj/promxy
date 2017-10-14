@@ -2,6 +2,7 @@ package promxy
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"net/http/httputil"
@@ -12,6 +13,7 @@ import (
 	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/jacksontj/promxy/proxyquerier"
 	"github.com/julienschmidt/httprouter"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage/local"
@@ -45,12 +47,12 @@ func (p *Proxy) ListenAndServe() error {
 	// TODO: check that all of these implement all the same params (maybe use the same tests if the have them?)
 	router := httprouter.New()
 
-	router.GET("/api/v1/query", CORSWrap(p.queryHandler))
-	router.GET("/api/v1/query_range", CORSWrap(p.queryRangeHandler))
+	router.GET("/api/v1/query", apiWrap(p.queryHandler))
+	router.GET("/api/v1/query_range", apiWrap(p.queryRangeHandler))
 
-	router.GET("/api/v1/series", CORSWrap(p.seriesHandler))
+	router.GET("/api/v1/series", apiWrap(p.seriesHandler))
 
-	router.GET("/api/v1/label/:name/values", CORSWrap(p.labelValuesHandler))
+	router.GET("/api/v1/label/:name/values", apiWrap(p.labelValuesHandler))
 	/*
 
 
@@ -67,13 +69,15 @@ func (p *Proxy) ListenAndServe() error {
 
 	*/
 
+	router.Handler("GET", "/metrics", prometheus.Handler())
+
 	router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Have our fallback rules
 		if strings.HasPrefix(r.URL.Path, "/api") {
 			http.NotFound(w, r)
 		} else {
 			// For all remainingunknown paths we'll simply proxy them to *a* prometheus host
-			p.proxyHandler(w, r)
+			prometheus.InstrumentHandlerFunc("proxy", p.proxyHandler)(w, r)
 		}
 
 	})
@@ -93,83 +97,75 @@ func (p *Proxy) proxyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Handler for /query
-func (p *Proxy) queryHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (p *Proxy) queryHandler(r *http.Request, ps httprouter.Params) (interface{}, *promhttputil.ApiError) {
 	ts, err := promhttputil.ParseTime(r.URL.Query().Get("time"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorBadData, err}
 	}
 
 	// 	query?_=1507411944.663&query=scrape_duration_seconds&time=1507412244.663
 	q, err := p.e.NewInstantQuery(r.URL.Query().Get("query"), ts)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorBadData, err}
 	}
 	result := q.Exec(r.Context())
 
 	if result.Err != nil {
-		// TODO: type switch on all of them
-		http.Error(w, result.Err.Error(), http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorBadData, err}
 	}
 
-	data := &promhttputil.QueryData{
+	return &promhttputil.QueryData{
 		ResultType: result.Value.Type(),
 		Result:     result.Value,
-	}
-	promhttputil.Respond(w, data)
+	}, nil
 }
 
 // Handler for /query_range
-func (p *Proxy) queryRangeHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (p *Proxy) queryRangeHandler(r *http.Request, ps httprouter.Params) (interface{}, *promhttputil.ApiError) {
 	ctx := r.Context()
 
 	start, err := promhttputil.ParseTime(r.URL.Query().Get("start"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorBadData, err}
 	}
 
 	end, err := promhttputil.ParseTime(r.URL.Query().Get("end"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorBadData, err}
 	}
 
 	interval, err := promhttputil.ParseDuration(r.URL.Query().Get("step"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorBadData, err}
 	}
 	// TODO: better, context values should be a specific type
 	ctx = context.WithValue(ctx, "step", interval)
 
 	q, err := p.e.NewRangeQuery(r.URL.Query().Get("query"), start, end, interval)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorBadData, err}
 	}
 	result := q.Exec(ctx)
-
 	if result.Err != nil {
-		// TODO: type switch on all of them
-		http.Error(w, result.Err.Error(), http.StatusInternalServerError)
-		return
+		switch result.Err.(type) {
+		case promql.ErrQueryCanceled:
+			return nil, &promhttputil.ApiError{promhttputil.ErrorCanceled, result.Err}
+		case promql.ErrQueryTimeout:
+			return nil, &promhttputil.ApiError{promhttputil.ErrorTimeout, result.Err}
+		}
+		return nil, &promhttputil.ApiError{promhttputil.ErrorExec, result.Err}
 	}
 
-	data := &promhttputil.QueryData{
+	return &promhttputil.QueryData{
 		ResultType: result.Value.Type(),
 		Result:     result.Value,
-	}
-	promhttputil.Respond(w, data)
+	}, nil
 }
 
-func (p *Proxy) seriesHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (p *Proxy) seriesHandler(r *http.Request, ps httprouter.Params) (interface{}, *promhttputil.ApiError) {
 	r.ParseForm()
 	if len(r.Form["match[]"]) == 0 {
-		http.Error(w, "no match[] parameter provided", http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorBadData, fmt.Errorf("no match[] parameter provided")}
 	}
 
 	var start model.Time
@@ -177,8 +173,7 @@ func (p *Proxy) seriesHandler(w http.ResponseWriter, r *http.Request, _ httprout
 		var err error
 		start, err = promhttputil.ParseTime(t)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			return nil, &promhttputil.ApiError{promhttputil.ErrorBadData, err}
 		}
 	} else {
 		start = model.Earliest
@@ -189,8 +184,7 @@ func (p *Proxy) seriesHandler(w http.ResponseWriter, r *http.Request, _ httprout
 		var err error
 		end, err = promhttputil.ParseTime(t)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			return nil, &promhttputil.ApiError{promhttputil.ErrorBadData, err}
 		}
 	} else {
 		end = model.Latest
@@ -200,23 +194,20 @@ func (p *Proxy) seriesHandler(w http.ResponseWriter, r *http.Request, _ httprout
 	for _, s := range r.Form["match[]"] {
 		matchers, err := promql.ParseMetricSelector(s)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			return nil, &promhttputil.ApiError{promhttputil.ErrorBadData, err}
 		}
 		matcherSets = append(matcherSets, matchers)
 	}
 
 	q, err := p.Querier()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorExec, err}
 	}
 	defer q.Close()
 
 	res, err := q.MetricsForLabelMatchers(r.Context(), start, end, matcherSets...)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorExec, err}
 	}
 
 	metrics := make([]model.Metric, 0, len(res))
@@ -224,29 +215,26 @@ func (p *Proxy) seriesHandler(w http.ResponseWriter, r *http.Request, _ httprout
 		metrics = append(metrics, met.Metric)
 	}
 
-	promhttputil.Respond(w, metrics)
+	return metrics, nil
 }
 
-func (p *Proxy) labelValuesHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (p *Proxy) labelValuesHandler(r *http.Request, ps httprouter.Params) (interface{}, *promhttputil.ApiError) {
 	name := ps.ByName("name")
 
 	if !model.LabelNameRE.MatchString(name) {
-		http.Error(w, "name doesn't match label RE", http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorBadData, fmt.Errorf("invalid label name: %q", name)}
 	}
 	q, err := p.Querier()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorExec, err}
 	}
 	defer q.Close()
 
 	vals, err := q.LabelValuesForLabelName(r.Context(), model.LabelName(name))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, &promhttputil.ApiError{promhttputil.ErrorExec, err}
 	}
 	sort.Sort(vals)
 
-	promhttputil.Respond(w, vals)
+	return vals, nil
 }
