@@ -11,12 +11,6 @@ import (
 
 var engine promql.Engine
 
-// List of groups of servers (all in the same list are assumed the same)
-var serverGroups = [][]string{
-	[]string{"http://localhost:9090"},
-	[]string{"http://localhost:9091"},
-}
-
 var opts struct {
 	ConfigFile string `long:"config" description:"path to the config file" required:"true"`
 }
