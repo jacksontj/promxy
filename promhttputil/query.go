@@ -103,13 +103,17 @@ func (r *Response) UnmarshalJSON(data []byte) error {
 	r.ErrorType = rawData.ErrorType
 	r.Error = rawData.Error
 
-	// Lets try to unpack
-	qd := &QueryData{}
-	if err := json.Unmarshal(*rawData.Data, qd); err == nil {
-		r.Data = qd
-		return nil
-	} else {
-		fmt.Println("Unable to marshal", err)
-		return json.Unmarshal(*rawData.Data, r.Data)
+	// Only unmarshal if it exists
+	if rawData.Data != nil {
+		// Lets try to unpack
+		qd := &QueryData{}
+		if err := json.Unmarshal(*rawData.Data, qd); err == nil {
+			r.Data = qd
+			return nil
+		} else {
+			fmt.Println("Unable to marshal", err)
+			return json.Unmarshal(*rawData.Data, r.Data)
+		}
 	}
+	return nil
 }
