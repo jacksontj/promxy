@@ -340,6 +340,7 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 	return metrics, nil
 }
 
+// TODO: remove? This was dropped in prometheus 2 -- so probably not worth implementing
 // LastSampleForLabelMatchers returns the last samples that have been
 // ingested for the time series matching the given set of label matchers.
 // The label matching behavior is the same as in MetricsForLabelMatchers.
