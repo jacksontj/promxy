@@ -1,82 +1,80 @@
 package servergroup
 
 import (
-	"net"
-	"net/url"
-	"strings"
+	"context"
+	"fmt"
 	"sync/atomic"
-	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/log"
+	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/discovery"
 )
 
-var (
-	serverGroupLastResolve = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "server_group_last_resolve_time",
-		Help: "Time of the last resolve operation",
-	}, []string{"host", "status"})
-)
+func New() *ServerGroup {
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	// Create the targetSet (which will maintain all of the updating etc. in the background)
+	sg := &ServerGroup{
+		ctx:       ctx,
+		ctxCancel: ctxCancel,
+		Ready:     make(chan struct{}),
+	}
+	sg.targetSet = discovery.NewTargetSet(sg)
+	// Background the updating
+	// TODO: use a context we can cancel? We'll need to do this to support reloading *our* config (adding/removing groups)
+	go sg.targetSet.Run(sg.ctx)
 
-func init() {
-	prometheus.MustRegister(serverGroupLastResolve)
+	return sg
+
 }
 
+// TODO: mechanism to signal that we've loaded once (we've recieved a sync)
 type ServerGroup struct {
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+
+	loaded bool
+	Ready  chan struct{}
+
+	targetSet *discovery.TargetSet
+
 	OriginalURLs []string
-	urls         atomic.Value
+
+	urls atomic.Value
 }
 
-func (s *ServerGroup) UnmarshalYAML(unmarshal func(interface{}) error) error {
-
-	if err := unmarshal(&s.OriginalURLs); err != nil {
-		return err
-	}
-
-	return s.Resolve()
+func (s *ServerGroup) Cancel() {
+	s.ctxCancel()
 }
 
-func (s *ServerGroup) URLs() []string {
-	return s.urls.Load().([]string)
-}
-
-func (s *ServerGroup) Resolve() error {
-	resolvedUrls := make([]string, 0, len(s.OriginalURLs))
-	for _, server := range s.OriginalURLs {
-		serverParsed, err := url.Parse(server)
-		if err != nil {
-			return err
-		}
-
-		hostname := serverParsed.Hostname()
-		ips, err := net.LookupIP(hostname)
-		if err != nil {
-			serverGroupLastResolve.WithLabelValues(hostname, "error").Set(float64(time.Now().Unix()))
-			return err
-		} else {
-			serverGroupLastResolve.WithLabelValues(hostname, "success").Set(float64(time.Now().Unix()))
-		}
-
-		for _, ip := range ips {
-			// TODO: support ipv6, for now we just skip
-			if ip.To4() == nil {
-				continue
-			}
-			newUrl := *serverParsed
-			newUrl.Host = strings.Replace(serverParsed.Host, hostname, ip.String(), 1)
-			resolvedUrls = append(resolvedUrls, newUrl.String())
+func (s *ServerGroup) Sync(tgs []*config.TargetGroup) {
+	targets := make([]string, 0)
+	for _, tg := range tgs {
+		for _, target := range tg.Targets {
+			dst := fmt.Sprintf("http://%s", target[model.AddressLabel])
+			targets = append(targets, dst)
 		}
 	}
+	s.urls.Store(targets)
 
-	s.urls.Store(resolvedUrls)
+	if !s.loaded {
+		s.loaded = true
+		close(s.Ready)
+	}
+}
 
+func (s *ServerGroup) ApplyConfig(cfg *Config) error {
+	// TODO: make a better wrapper for the log? They made their own... :/
+	providerMap := discovery.ProvidersFromConfig(cfg.Hosts, log.Base())
+	s.targetSet.UpdateProviders(providerMap)
 	return nil
 }
 
-func (s ServerGroup) AutoRefresh(interval time.Duration) {
-	go func() {
-		t := time.NewTicker(interval)
-		for range t.C {
-			s.Resolve()
-		}
-	}()
+func (s *ServerGroup) Targets() []string {
+	tmp := s.urls.Load()
+	if ret, ok := tmp.([]string); ok {
+		return ret
+	} else {
+		return nil
+	}
 }

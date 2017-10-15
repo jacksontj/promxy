@@ -46,7 +46,7 @@ func (h *ProxyQuerier) getValue(ctx context.Context, values url.Values) (model.V
 
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
-		for _, server := range serverGroup.URLs() {
+		for _, server := range serverGroup.Targets() {
 			retCount++
 
 			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query", server))
@@ -147,10 +147,10 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-    result, err := h.getValue(childContext, values)
-    if err != nil {
-        return nil, err
-    }
+	result, err := h.getValue(childContext, values)
+	if err != nil {
+		return nil, err
+	}
 
 	iterators := promclient.IteratorsForValue(result)
 	returnIterators := make([]local.SeriesIterator, len(iterators))
@@ -181,10 +181,10 @@ func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenes
 
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-    result, err := h.getValue(childContext, values)
-    if err != nil {
-        return nil, err
-    }
+	result, err := h.getValue(childContext, values)
+	if err != nil {
+		return nil, err
+	}
 
 	iterators := promclient.IteratorsForValue(result)
 	returnIterators := make([]local.SeriesIterator, len(iterators))
@@ -232,7 +232,7 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
-		for _, server := range serverGroup.URLs() {
+		for _, server := range serverGroup.Targets() {
 			retCount++
 
 			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/series", server))
@@ -318,7 +318,7 @@ func (h *ProxyQuerier) LabelValuesForLabelName(ctx context.Context, name model.L
 
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
-		for _, server := range serverGroup.URLs() {
+		for _, server := range serverGroup.Targets() {
 			retCount++
 
 			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/label/%s/values", server, name))

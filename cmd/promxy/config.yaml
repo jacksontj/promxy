@@ -1,5 +1,24 @@
-server_groups:
-  - ["http://localhost:9090"]
-  - ["http://localhost:9091"]
+global:
+  evaluation_interval: 5s
 
-server_group_refresh_interval: 1s
+# Rule files specifies a list of globs. Rules and alerts are read from
+# all matching files.
+rule_files:
+- "*rule"
+
+# Alerting specifies settings related to the Alertmanager.
+alerting:
+  alertmanagers:
+  - scheme: http
+    static_configs:
+    - targets:
+      - "127.0.0.1:12345"
+
+# Our own server-group configs
+server_groups:
+  - static_configs:
+      - targets:
+        - localhost:9090
+  - static_configs:
+      - targets:
+        - localhost:9091

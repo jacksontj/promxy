@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sync/atomic"
 
+	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/proxyquerier"
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/common/model"
@@ -15,23 +17,53 @@ import (
 	"github.com/prometheus/prometheus/storage/metric"
 )
 
-func NewProxyStorage(c *Config) (*ProxyStorage, error) {
+func NewProxyStorage() (*ProxyStorage, error) {
 	// TODO: validate config
-	return &ProxyStorage{
-		ServerGroups: c.ServerGroups,
-	}, nil
+	return &ProxyStorage{}, nil
 }
 
 // TODO: rename?
 type ProxyStorage struct {
-	// Groups of servers to connect to
-	ServerGroups []*servergroup.ServerGroup
+	serverGroups atomic.Value
+}
+
+func (p *ProxyStorage) ServerGroups() []*servergroup.ServerGroup {
+	tmp := p.serverGroups.Load()
+	if sg, ok := tmp.([]*servergroup.ServerGroup); ok {
+		return sg
+	} else {
+		return nil
+	}
+}
+
+func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
+	oldSgs := p.ServerGroups()
+
+	sgs := make([]*servergroup.ServerGroup, len(c.ServerGroups))
+	for i, sgCfg := range c.ServerGroups {
+		sgs[i] = servergroup.New()
+		sgs[i].ApplyConfig(sgCfg)
+	}
+
+	// TODO: wait for them to be ready?
+	for _, sg := range sgs {
+		<-sg.Ready
+	}
+	p.serverGroups.Store(sgs)
+
+	for _, oldSg := range oldSgs {
+		oldSg.Cancel()
+	}
+
+	// TODO: errors?
+	return nil
 }
 
 // Handler to proxy requests to *a* server in serverGroups
 func (p *ProxyStorage) ProxyHandler(w http.ResponseWriter, r *http.Request) {
-	serverGroup := p.ServerGroups[rand.Int()%len(p.ServerGroups)]
-	servers := serverGroup.URLs()
+	serverGroups := p.ServerGroups()
+	serverGroup := serverGroups[rand.Int()%len(serverGroups)]
+	servers := serverGroup.Targets()
 	server := servers[rand.Int()%len(servers)]
 	// TODO: failover
 	parsedUrl, _ := url.Parse(server)
@@ -46,7 +78,7 @@ func (p *ProxyStorage) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *ProxyStorage) Querier() (local.Querier, error) {
-	return &proxyquerier.ProxyQuerier{p.ServerGroups}, nil
+	return &proxyquerier.ProxyQuerier{p.ServerGroups()}, nil
 }
 
 // TODO: IMPLEMENT??
