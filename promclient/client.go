@@ -3,7 +3,6 @@ package promclient
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/jacksontj/promxy/promhttputil"
@@ -27,20 +26,13 @@ func DoRequest(ctx context.Context, url string, responseStruct interface{}) erro
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
-	// Read the body
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
 
 	// TODO: check content headers? Prom seems to only do JSON so not necessary
 	// for now
-	// Unmarshal JSON
-	if err := json.Unmarshal(body, responseStruct); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(responseStruct); err != nil {
 		return err
 	}
+
 	return nil
 }
 
