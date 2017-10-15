@@ -9,10 +9,22 @@ import (
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/jacksontj/promxy/servergroup"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/storage/local"
 	"github.com/prometheus/prometheus/storage/metric"
 )
+
+var (
+	proxyQuerierSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Name: "proxy_querier_request",
+		Help: "Summary of proxyquerier calls to downstreams",
+	}, []string{"host", "call", "status"})
+)
+
+func init() {
+	prometheus.MustRegister(proxyQuerierSummary)
+}
 
 type ProxyQuerier struct {
 	ServerGroups []*servergroup.ServerGroup
@@ -70,11 +82,15 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 			parsedUrl.RawQuery = values.Encode()
 
 			go func(ctx context.Context, retChan chan interface{}) {
+				start := time.Now()
 				serverResult, err := promclient.GetData(ctx, parsedUrl.String())
+				took := time.Now().Sub(start)
 				var ret interface{}
 				if err != nil {
 					ret = err
+					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "query_range", "error").Observe(float64(took))
 				} else {
+					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "query_range", "success").Observe(float64(took))
 					ret = serverResult
 				}
 				select {
@@ -176,11 +192,15 @@ func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenes
 			parsedUrl.RawQuery = values.Encode()
 
 			go func(ctx context.Context, retChan chan interface{}) {
+				start := time.Now()
 				serverResult, err := promclient.GetData(ctx, parsedUrl.String())
+				took := time.Now().Sub(start)
 				var ret interface{}
 				if err != nil {
 					ret = err
+					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "query", "success").Observe(float64(took))
 				} else {
+					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "query", "error").Observe(float64(took))
 					ret = serverResult
 				}
 				select {
@@ -292,11 +312,15 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 			parsedUrl.RawQuery = values.Encode()
 
 			go func(ctx context.Context, retChan chan interface{}) {
+				start := time.Now()
 				serverResult, err := promclient.GetSeries(ctx, parsedUrl.String())
+				took := time.Now().Sub(start)
 				var ret interface{}
 				if err != nil {
 					ret = err
+					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "series", "error").Observe(float64(took))
 				} else {
+					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "series", "success").Observe(float64(took))
 					ret = serverResult
 				}
 				select {
@@ -373,11 +397,15 @@ func (h *ProxyQuerier) LabelValuesForLabelName(ctx context.Context, name model.L
 			}
 
 			go func(ctx context.Context, retChan chan interface{}) {
+				start := time.Now()
 				serverResult, err := promclient.GetValuesForLabelName(ctx, parsedUrl.String())
+				took := time.Now().Sub(start)
 				var ret interface{}
 				if err != nil {
 					ret = err
+					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "label_values", "error").Observe(float64(took))
 				} else {
+					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "label_values", "success").Observe(float64(took))
 					ret = serverResult
 				}
 				select {
