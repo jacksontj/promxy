@@ -21,7 +21,6 @@ func NewProxyStorage(c *Config) (*ProxyStorage, error) {
 }
 
 // TODO: rename?
-// TODO: move to its own package?
 type ProxyStorage struct {
 	// Groups of servers to connect to
 	ServerGroups [][]string
@@ -29,7 +28,6 @@ type ProxyStorage struct {
 
 // Handler to proxy requests to *a* server in serverGroups
 func (p *ProxyStorage) ProxyHandler(w http.ResponseWriter, r *http.Request) {
-
 	serverGroup := p.ServerGroups[rand.Int()%len(p.ServerGroups)]
 	server := serverGroup[rand.Int()%len(serverGroup)]
 	// TODO: failover
@@ -43,7 +41,7 @@ func (p *ProxyStorage) Querier() (local.Querier, error) {
 	return &proxyquerier.ProxyQuerier{p.ServerGroups}, nil
 }
 
-// TODO: IMPLEMENT
+// TODO: IMPLEMENT??
 
 // Append appends a sample to the underlying storage. Depending on the
 // storage implementation, there are different guarantees for the fate
