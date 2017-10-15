@@ -36,34 +36,13 @@ type ProxyQuerier struct {
 // is undefined.
 func (h *ProxyQuerier) Close() error { return nil }
 
-// QueryRange returns a list of series iterators for the selected
-// time range and label matchers. The iterators need to be closed
-// after usage.
-func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time, matchers ...*metric.LabelMatcher) ([]local.SeriesIterator, error) {
-	// TODO: move to logging
-	fmt.Printf("QueryRange: from=%v through=%v matchers=%v\n", from, through, matchers)
-
-	// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
-	pql, err := MatcherToString(matchers)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create the query params
-	values := url.Values{}
-	// We want to grab only the raw datapoints, so we do that through the query interface
-	// passing in a duration that is at least as long as ours (the added second is to deal
-	// with any rounding error etc since the duration is a floating point and we are casting
-	// to an int64
-	values.Add("query", pql+fmt.Sprintf("[%ds]", int64(through.Sub(from).Seconds())+1))
-	values.Add("time", through.String())
-
+// TODO: move to promclient ?
+func (h *ProxyQuerier) getValue(ctx context.Context, values url.Values) (model.Value, error) {
 	var result model.Value
+	var err error
 
 	retChan := make(chan interface{})
 	retCount := 0
-	childContext, childContextCancel := context.WithCancel(ctx)
-	defer childContextCancel()
 
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
@@ -94,7 +73,7 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 				case <-ctx.Done():
 					return
 				}
-			}(childContext, retChan)
+			}(ctx, retChan)
 		}
 	}
 
@@ -140,6 +119,38 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 	if errCount == retCount {
 		return nil, fmt.Errorf("Unable to fetch from downstream servers")
 	}
+
+	return result, nil
+}
+
+// QueryRange returns a list of series iterators for the selected
+// time range and label matchers. The iterators need to be closed
+// after usage.
+func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time, matchers ...*metric.LabelMatcher) ([]local.SeriesIterator, error) {
+	// TODO: move to logging
+	fmt.Printf("QueryRange: from=%v through=%v matchers=%v\n", from, through, matchers)
+
+	// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
+	pql, err := MatcherToString(matchers)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the query params
+	values := url.Values{}
+	// We want to grab only the raw datapoints, so we do that through the query interface
+	// passing in a duration that is at least as long as ours (the added second is to deal
+	// with any rounding error etc since the duration is a floating point and we are casting
+	// to an int64
+	values.Add("query", pql+fmt.Sprintf("[%ds]", int64(through.Sub(from).Seconds())+1))
+	values.Add("time", through.String())
+
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+    result, err := h.getValue(childContext, values)
+    if err != nil {
+        return nil, err
+    }
 
 	iterators := promclient.IteratorsForValue(result)
 	returnIterators := make([]local.SeriesIterator, len(iterators))
@@ -168,88 +179,12 @@ func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenes
 	values.Add("time", ts.String())
 	values.Add("_", ts.Add(-stalenessDelta).String())
 
-	var result model.Value
-
-	retChan := make(chan interface{})
-	retCount := 0
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-
-	// Query each in the groups and get data
-	for _, serverGroup := range h.ServerGroups {
-		for _, server := range serverGroup.URLs() {
-			retCount++
-
-			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query", server))
-			if err != nil {
-				return nil, err
-			}
-			parsedUrl.RawQuery = values.Encode()
-
-			go func(ctx context.Context, retChan chan interface{}) {
-				start := time.Now()
-				serverResult, err := promclient.GetData(ctx, parsedUrl.String())
-				took := time.Now().Sub(start)
-				var ret interface{}
-				if err != nil {
-					ret = err
-					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "query", "success").Observe(float64(took))
-				} else {
-					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "query", "error").Observe(float64(took))
-					ret = serverResult
-				}
-				select {
-				case retChan <- ret:
-					return
-				case <-ctx.Done():
-					return
-				}
-			}(childContext, retChan)
-		}
-	}
-
-	errCount := 0
-	for i := 0; i < retCount; i++ {
-		select {
-		// If the context was closed, we are erroring out (usually client disconnect)
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		// Otherwise we are waiting on a return
-		case ret := <-retChan:
-			switch retTyped := ret.(type) {
-			// If there was an error we'll just continue
-			case error:
-				// Don't stop on error, just incr counter
-				errCount++
-			case *promhttputil.Response:
-				// TODO: check response code, how do we want to handle it?
-				if retTyped.Status != promhttputil.StatusSuccess {
-					continue
-				}
-
-				// TODO: what to do in failure
-				qData, ok := retTyped.Data.(*promhttputil.QueryData)
-				if !ok {
-					continue
-				}
-
-				// TODO: check qData.ResultType
-
-				if result == nil {
-					result = qData.Result
-				} else {
-					result, err = promhttputil.MergeValues(result, qData.Result)
-					if err != nil {
-						return nil, err
-					}
-				}
-			}
-		}
-	}
-
-	if errCount == retCount {
-		return nil, fmt.Errorf("Unable to fetch from downstream servers")
-	}
+    result, err := h.getValue(childContext, values)
+    if err != nil {
+        return nil, err
+    }
 
 	iterators := promclient.IteratorsForValue(result)
 	returnIterators := make([]local.SeriesIterator, len(iterators))
