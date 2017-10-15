@@ -51,17 +51,12 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 
 	// Create the query params
 	values := url.Values{}
-	values.Add("query", pql)
-	values.Add("start", from.String())
-	values.Add("end", through.String())
-	// TODO: how do we pick this? configurable or something based on time range?
-	// if we want to calculate irate for example, then we'd want more, right?
-	if step := ctx.Value("step"); step != nil {
-		stepInterval := step.(time.Duration)
-		values.Add("step", (stepInterval / 2).String())
-	} else {
-		values.Add("step", "1")
-	}
+	// We want to grab only the raw datapoints, so we do that through the query interface
+	// passing in a duration that is at least as long as ours (the added second is to deal
+	// with any rounding error etc since the duration is a floating point and we are casting
+	// to an int64
+	values.Add("query", pql+fmt.Sprintf("[%ds]", int64(through.Sub(from).Seconds())+1))
+	values.Add("time", through.String())
 
 	var result model.Value
 
@@ -75,7 +70,7 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 		for _, server := range serverGroup.URLs() {
 			retCount++
 
-			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query_range", server))
+			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query", server))
 			if err != nil {
 				return nil, err
 			}
@@ -88,9 +83,9 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 				var ret interface{}
 				if err != nil {
 					ret = err
-					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "query_range", "error").Observe(float64(took))
+					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "query", "error").Observe(float64(took))
 				} else {
-					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "query_range", "success").Observe(float64(took))
+					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "query", "success").Observe(float64(took))
 					ret = serverResult
 				}
 				select {

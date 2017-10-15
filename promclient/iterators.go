@@ -91,13 +91,7 @@ func (s *SeriesIterator) RangeValues(interval metric.Interval) []model.SamplePai
 		pairs := make([]model.SamplePair, 0, len(valueTyped.Values))
 		for _, value := range valueTyped.Values {
 			if int64(value.Timestamp) >= int64(interval.OldestInclusive) && int64(value.Timestamp) <= int64(interval.NewestInclusive) {
-				// TODO: RangeValues assumes it gets back unique datapoints from this source
-				// through the API we have no way of knowing *what* is unique, so we
-				// are assuming that the data not changing makes it the same -- which assumes
-				// that our sampling rate is high enough that we don't care
-				if len(pairs) == 0 || (value.Value != pairs[len(pairs)-1].Value) {
-					pairs = append(pairs, value)
-				}
+				pairs = append(pairs, value)
 			}
 		}
 		if len(pairs) > 0 {
