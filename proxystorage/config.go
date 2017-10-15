@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"github.com/jacksontj/promxy/servergroup"
+
 	"gopkg.in/yaml.v2"
 )
 
@@ -18,10 +20,11 @@ func ConfigFromFile(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Error unmarshaling config: %v", err)
 	}
+
 	return config, nil
 }
 
 // Common configuration for all storage nodes
 type Config struct {
-	ServerGroups [][]string `yaml:"server_groups"`
+	ServerGroups []*servergroup.ServerGroup `yaml:"server_groups"`
 }

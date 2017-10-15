@@ -8,13 +8,14 @@ import (
 
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/promhttputil"
+	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/storage/local"
 	"github.com/prometheus/prometheus/storage/metric"
 )
 
 type ProxyQuerier struct {
-	ServerGroups [][]string
+	ServerGroups []*servergroup.ServerGroup
 	// TODO: support limits to the hosts we query
 	// Configurable -- N hosts to query M required to complete
 }
@@ -59,7 +60,7 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
-		for _, server := range serverGroup {
+		for _, server := range serverGroup.URLs() {
 			retCount++
 
 			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query_range", server))
@@ -165,7 +166,7 @@ func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenes
 
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
-		for _, server := range serverGroup {
+		for _, server := range serverGroup.URLs() {
 			retCount++
 
 			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query", server))
@@ -281,7 +282,7 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
-		for _, server := range serverGroup {
+		for _, server := range serverGroup.URLs() {
 			retCount++
 
 			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/series", server))
@@ -363,7 +364,7 @@ func (h *ProxyQuerier) LabelValuesForLabelName(ctx context.Context, name model.L
 
 	// Query each in the groups and get data
 	for _, serverGroup := range h.ServerGroups {
-		for _, server := range serverGroup {
+		for _, server := range serverGroup.URLs() {
 			retCount++
 
 			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/label/%s/values", server, name))

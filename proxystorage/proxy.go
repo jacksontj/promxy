@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/jacksontj/promxy/proxyquerier"
+	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/storage/local"
 	"github.com/prometheus/prometheus/storage/metric"
@@ -23,13 +24,14 @@ func NewProxyStorage(c *Config) (*ProxyStorage, error) {
 // TODO: rename?
 type ProxyStorage struct {
 	// Groups of servers to connect to
-	ServerGroups [][]string
+	ServerGroups []*servergroup.ServerGroup
 }
 
 // Handler to proxy requests to *a* server in serverGroups
 func (p *ProxyStorage) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	serverGroup := p.ServerGroups[rand.Int()%len(p.ServerGroups)]
-	server := serverGroup[rand.Int()%len(serverGroup)]
+	servers := serverGroup.URLs()
+	server := servers[rand.Int()%len(servers)]
 	// TODO: failover
 	parsedUrl, _ := url.Parse(server)
 
