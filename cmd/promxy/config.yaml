@@ -1,3 +1,5 @@
 server_groups:
   - ["http://localhost:9090"]
   - ["http://localhost:9091"]
+
+server_group_refresh_interval: 1s

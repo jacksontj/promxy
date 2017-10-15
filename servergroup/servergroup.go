@@ -5,7 +5,21 @@ import (
 	"net/url"
 	"strings"
 	"sync/atomic"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var (
+	serverGroupLastResolve = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "server_group_last_resolve_time",
+		Help: "Time of the last resolve operation",
+	}, []string{"host", "status"})
+)
+
+func init() {
+	prometheus.MustRegister(serverGroupLastResolve)
+}
 
 type ServerGroup struct {
 	OriginalURLs []string
@@ -36,7 +50,10 @@ func (s *ServerGroup) Resolve() error {
 		hostname := serverParsed.Hostname()
 		ips, err := net.LookupIP(hostname)
 		if err != nil {
+			serverGroupLastResolve.WithLabelValues(hostname, "error").Set(float64(time.Now().Unix()))
 			return err
+		} else {
+			serverGroupLastResolve.WithLabelValues(hostname, "success").Set(float64(time.Now().Unix()))
 		}
 
 		for _, ip := range ips {
@@ -53,4 +70,13 @@ func (s *ServerGroup) Resolve() error {
 	s.urls.Store(resolvedUrls)
 
 	return nil
+}
+
+func (s ServerGroup) AutoRefresh(interval time.Duration) {
+	go func() {
+		t := time.NewTicker(interval)
+		for range t.C {
+			s.Resolve()
+		}
+	}()
 }
