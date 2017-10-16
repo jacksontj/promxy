@@ -2,6 +2,7 @@ package proxystorage
 
 import (
 	"context"
+	"crypto/tls"
 	"math/rand"
 	"net/http"
 	"net/http/httputil"
@@ -36,6 +37,11 @@ func (p *ProxyStorage) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	parsedUrl, _ := url.Parse(server)
 
 	proxy := httputil.NewSingleHostReverseProxy(parsedUrl)
+	// TODO: config option
+	proxy.Transport = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
 	proxy.ServeHTTP(w, r)
 }
 

@@ -2,6 +2,7 @@ package promclient
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 
@@ -10,7 +11,13 @@ import (
 
 func DoRequest(ctx context.Context, url string, responseStruct interface{}) error {
 	// TODO: cache?
-	client := &http.Client{}
+
+	// TODO: config option
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	client := &http.Client{Transport: tr}
 
 	// Create request
 	req, err := http.NewRequest("GET", url, nil)
