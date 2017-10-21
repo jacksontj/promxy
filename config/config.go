@@ -12,7 +12,9 @@ import (
 
 func ConfigFromFile(path string) (*Config, error) {
 	// load the config file
-	cfg := &Config{}
+	cfg := &Config{
+		PromConfig: config.DefaultConfig,
+	}
 	configBytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("Error loading config: %v", err)
