@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/prometheus/discovery"
 )
 
+// TODO: pass in parent context
 func New() *ServerGroup {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	// Create the targetSet (which will maintain all of the updating etc. in the background)
