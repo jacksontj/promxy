@@ -1,5 +1,10 @@
+##
+## Regular prometheus configuration
+##
 global:
   evaluation_interval: 5s
+  external_labels:
+    source: promxy
 
 # Rule files specifies a list of globs. Rules and alerts are read from
 # all matching files.
@@ -14,7 +19,9 @@ alerting:
     - targets:
       - "127.0.0.1:12345"
 
-# Our own server-group configs
+##
+### Promxy configuration
+##
 server_groups:
   - static_configs:
       - targets:
