@@ -31,6 +31,10 @@ func ConfigFromFile(path string) (*Config, error) {
 type Config struct {
 	PromConfig config.Config `yaml:",inline"`
 
+	PromxyConfig `yaml:"promxy"`
+}
+
+type PromxyConfig struct {
 	// Our own configs
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
 }

@@ -22,10 +22,11 @@ alerting:
 ##
 ### Promxy configuration
 ##
-server_groups:
-  - static_configs:
-      - targets:
-        - localhost:9090
-  - static_configs:
-      - targets:
-        - localhost:9091
+promxy:
+  server_groups:
+    - static_configs:
+        - targets:
+          - localhost:9090
+    - static_configs:
+        - targets:
+          - localhost:9091
