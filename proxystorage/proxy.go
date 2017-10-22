@@ -3,12 +3,14 @@ package proxystorage
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"sync/atomic"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/proxyquerier"
 	"github.com/jacksontj/promxy/servergroup"
@@ -18,7 +20,6 @@ import (
 )
 
 func NewProxyStorage() (*ProxyStorage, error) {
-	// TODO: validate config
 	return &ProxyStorage{}, nil
 }
 
@@ -37,15 +38,26 @@ func (p *ProxyStorage) ServerGroups() []*servergroup.ServerGroup {
 }
 
 func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
-	oldSgs := p.ServerGroups()
-
+	failed := false
 	sgs := make([]*servergroup.ServerGroup, len(c.ServerGroups))
 	for i, sgCfg := range c.ServerGroups {
 		sgs[i] = servergroup.New()
-		sgs[i].ApplyConfig(sgCfg)
+		if err := sgs[i].ApplyConfig(sgCfg); err != nil {
+			failed = true
+			logrus.Errorf("Error applying config to server group: %s", err)
+		}
 	}
 
-	// TODO: wait for them to be ready?
+	if failed {
+		for _, sg := range sgs {
+			sg.Cancel()
+		}
+		return fmt.Errorf("Error Applying Config to one or more server group(s)")
+	}
+
+	oldSgs := p.ServerGroups()
+
+	// wait for them to be ready?
 	for _, sg := range sgs {
 		<-sg.Ready
 	}
@@ -55,7 +67,6 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		oldSg.Cancel()
 	}
 
-	// TODO: errors?
 	return nil
 }
 
