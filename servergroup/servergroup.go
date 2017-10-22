@@ -2,7 +2,7 @@ package servergroup
 
 import (
 	"context"
-	"fmt"
+	"net/url"
 	"sync/atomic"
 
 	"github.com/prometheus/common/log"
@@ -21,14 +21,12 @@ func New() *ServerGroup {
 	}
 	sg.targetSet = discovery.NewTargetSet(sg)
 	// Background the updating
-	// TODO: use a context we can cancel? We'll need to do this to support reloading *our* config (adding/removing groups)
 	go sg.targetSet.Run(sg.ctx)
 
 	return sg
 
 }
 
-// TODO: mechanism to signal that we've loaded once (we've recieved a sync)
 type ServerGroup struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
@@ -36,6 +34,7 @@ type ServerGroup struct {
 	loaded bool
 	Ready  chan struct{}
 
+	cfg       *Config
 	targetSet *discovery.TargetSet
 
 	OriginalURLs []string
@@ -51,8 +50,11 @@ func (s *ServerGroup) Sync(tgs []*config.TargetGroup) {
 	targets := make([]string, 0)
 	for _, tg := range tgs {
 		for _, target := range tg.Targets {
-			dst := fmt.Sprintf("http://%s", target[model.AddressLabel])
-			targets = append(targets, dst)
+			u := &url.URL{
+				Scheme: string(s.cfg.GetScheme()),
+				Host:   string(target[model.AddressLabel]),
+			}
+			targets = append(targets, u.String())
 		}
 	}
 	s.urls.Store(targets)
@@ -64,6 +66,7 @@ func (s *ServerGroup) Sync(tgs []*config.TargetGroup) {
 }
 
 func (s *ServerGroup) ApplyConfig(cfg *Config) error {
+	s.cfg = cfg
 	// TODO: make a better wrapper for the log? They made their own... :/
 	providerMap := discovery.ProvidersFromConfig(cfg.Hosts, log.Base())
 	s.targetSet.UpdateProviders(providerMap)
