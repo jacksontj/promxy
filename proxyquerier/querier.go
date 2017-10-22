@@ -3,6 +3,7 @@ package proxyquerier
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -28,6 +29,8 @@ func init() {
 
 type ProxyQuerier struct {
 	ServerGroups []*servergroup.ServerGroup
+	// TODO: use
+	Client *http.Client
 	// TODO: support limits to the hosts we query
 	// Configurable -- N hosts to query M required to complete
 }
@@ -57,7 +60,7 @@ func (h *ProxyQuerier) getValue(ctx context.Context, values url.Values) (model.V
 
 			go func(ctx context.Context, retChan chan interface{}) {
 				start := time.Now()
-				serverResult, err := promclient.GetData(ctx, parsedUrl.String())
+				serverResult, err := promclient.GetData(ctx, parsedUrl.String(), h.Client)
 				took := time.Now().Sub(start)
 				var ret interface{}
 				if err != nil {
@@ -243,7 +246,7 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 
 			go func(ctx context.Context, retChan chan interface{}) {
 				start := time.Now()
-				serverResult, err := promclient.GetSeries(ctx, parsedUrl.String())
+				serverResult, err := promclient.GetSeries(ctx, parsedUrl.String(), h.Client)
 				took := time.Now().Sub(start)
 				var ret interface{}
 				if err != nil {
@@ -328,7 +331,7 @@ func (h *ProxyQuerier) LabelValuesForLabelName(ctx context.Context, name model.L
 
 			go func(ctx context.Context, retChan chan interface{}) {
 				start := time.Now()
-				serverResult, err := promclient.GetValuesForLabelName(ctx, parsedUrl.String())
+				serverResult, err := promclient.GetValuesForLabelName(ctx, parsedUrl.String(), h.Client)
 				took := time.Now().Sub(start)
 				var ret interface{}
 				if err != nil {

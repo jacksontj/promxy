@@ -35,6 +35,7 @@ type Config struct {
 }
 
 type PromxyConfig struct {
+	HTTPConfig config.HTTPClientConfig `yaml:"http_client"`
 	// Our own configs
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
 }

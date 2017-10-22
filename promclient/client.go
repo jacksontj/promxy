@@ -2,23 +2,13 @@ package promclient
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"net/http"
 
 	"github.com/jacksontj/promxy/promhttputil"
 )
 
-func DoRequest(ctx context.Context, url string, responseStruct interface{}) error {
-	// TODO: cache?
-
-	// TODO: config option
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-
-	client := &http.Client{Transport: tr}
-
+func DoRequest(ctx context.Context, url string, client *http.Client, responseStruct interface{}) error {
 	// Create request
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -44,27 +34,27 @@ func DoRequest(ctx context.Context, url string, responseStruct interface{}) erro
 }
 
 // HTTP client for prometheus
-func GetData(ctx context.Context, url string) (*promhttputil.Response, error) {
+func GetData(ctx context.Context, url string, client *http.Client) (*promhttputil.Response, error) {
 	promResp := &promhttputil.Response{}
-	if err := DoRequest(ctx, url, promResp); err == nil {
+	if err := DoRequest(ctx, url, client, promResp); err == nil {
 		return promResp, nil
 	} else {
 		return nil, err
 	}
 }
 
-func GetSeries(ctx context.Context, url string) (*SeriesResult, error) {
+func GetSeries(ctx context.Context, url string, client *http.Client) (*SeriesResult, error) {
 	promResp := &SeriesResult{}
-	if err := DoRequest(ctx, url, promResp); err == nil {
+	if err := DoRequest(ctx, url, client, promResp); err == nil {
 		return promResp, nil
 	} else {
 		return nil, err
 	}
 }
 
-func GetValuesForLabelName(ctx context.Context, url string) (*LabelResult, error) {
+func GetValuesForLabelName(ctx context.Context, url string, client *http.Client) (*LabelResult, error) {
 	promResp := &LabelResult{}
-	if err := DoRequest(ctx, url, promResp); err == nil {
+	if err := DoRequest(ctx, url, client, promResp); err == nil {
 		return promResp, nil
 	} else {
 		return nil, err

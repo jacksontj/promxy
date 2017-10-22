@@ -23,6 +23,9 @@ alerting:
 ### Promxy configuration
 ##
 promxy:
+  http_client:
+    tls_config:
+      insecure_skip_verify: true
   server_groups:
     - static_configs:
         - targets:

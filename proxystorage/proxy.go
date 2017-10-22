@@ -2,7 +2,6 @@ package proxystorage
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -17,7 +16,27 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/storage/local"
 	"github.com/prometheus/prometheus/storage/metric"
+	promhttputil "github.com/prometheus/prometheus/util/httputil"
 )
+
+type proxyStorageState struct {
+	serverGroups []*servergroup.ServerGroup
+	client       *http.Client
+}
+
+func (p *proxyStorageState) Ready() {
+	for _, sg := range p.serverGroups {
+		<-sg.Ready
+	}
+}
+
+func (p *proxyStorageState) Cancel() {
+	if p.serverGroups != nil {
+		for _, sg := range p.serverGroups {
+			sg.Cancel()
+		}
+	}
+}
 
 func NewProxyStorage() (*ProxyStorage, error) {
 	return &ProxyStorage{}, nil
@@ -25,12 +44,12 @@ func NewProxyStorage() (*ProxyStorage, error) {
 
 // TODO: rename?
 type ProxyStorage struct {
-	serverGroups atomic.Value
+	state atomic.Value
 }
 
-func (p *ProxyStorage) ServerGroups() []*servergroup.ServerGroup {
-	tmp := p.serverGroups.Load()
-	if sg, ok := tmp.([]*servergroup.ServerGroup); ok {
+func (p *ProxyStorage) GetState() *proxyStorageState {
+	tmp := p.state.Load()
+	if sg, ok := tmp.(*proxyStorageState); ok {
 		return sg
 	} else {
 		return nil
@@ -39,32 +58,39 @@ func (p *ProxyStorage) ServerGroups() []*servergroup.ServerGroup {
 
 func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	failed := false
-	sgs := make([]*servergroup.ServerGroup, len(c.ServerGroups))
+
+	newState := &proxyStorageState{
+		serverGroups: make([]*servergroup.ServerGroup, len(c.ServerGroups)),
+	}
 	for i, sgCfg := range c.ServerGroups {
-		sgs[i] = servergroup.New()
-		if err := sgs[i].ApplyConfig(sgCfg); err != nil {
+		tmp := servergroup.New()
+		if err := tmp.ApplyConfig(sgCfg); err != nil {
 			failed = true
 			logrus.Errorf("Error applying config to server group: %s", err)
 		}
+		newState.serverGroups[i] = tmp
 	}
 
+	// stage the client swap as well
+	client, err := promhttputil.NewClientFromConfig(c.PromxyConfig.HTTPConfig)
+	if err != nil {
+		failed = true
+		logrus.Errorf("Unable to load client from config: %s", err)
+	}
+	newState.client = client
+
 	if failed {
-		for _, sg := range sgs {
+		for _, sg := range newState.serverGroups {
 			sg.Cancel()
 		}
 		return fmt.Errorf("Error Applying Config to one or more server group(s)")
 	}
 
-	oldSgs := p.ServerGroups()
-
-	// wait for them to be ready?
-	for _, sg := range sgs {
-		<-sg.Ready
-	}
-	p.serverGroups.Store(sgs)
-
-	for _, oldSg := range oldSgs {
-		oldSg.Cancel()
+	newState.Ready()         // Wait for the newstate to be ready
+	oldState := p.GetState() // Fetch the old state
+	p.state.Store(newState)  // Store the new state
+	if oldState != nil {
+		oldState.Cancel() // Cancel the old one
 	}
 
 	return nil
@@ -72,24 +98,26 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 
 // Handler to proxy requests to *a* server in serverGroups
 func (p *ProxyStorage) ProxyHandler(w http.ResponseWriter, r *http.Request) {
-	serverGroups := p.ServerGroups()
-	serverGroup := serverGroups[rand.Int()%len(serverGroups)]
+	state := p.GetState()
+
+	serverGroup := state.serverGroups[rand.Int()%len(state.serverGroups)]
 	servers := serverGroup.Targets()
 	server := servers[rand.Int()%len(servers)]
 	// TODO: failover
 	parsedUrl, _ := url.Parse(server)
 
 	proxy := httputil.NewSingleHostReverseProxy(parsedUrl)
-	// TODO: config option
-	proxy.Transport = &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
+	proxy.Transport = state.client.Transport
 
 	proxy.ServeHTTP(w, r)
 }
 
 func (p *ProxyStorage) Querier() (local.Querier, error) {
-	return &proxyquerier.ProxyQuerier{p.ServerGroups()}, nil
+	state := p.GetState()
+	return &proxyquerier.ProxyQuerier{
+		state.serverGroups,
+		state.client,
+	}, nil
 }
 
 // TODO: IMPLEMENT??
