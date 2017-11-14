@@ -1,9 +1,13 @@
 package servergroup
 
-import "github.com/prometheus/prometheus/config"
+import (
+	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/config"
+)
 
 type Config struct {
 	Scheme string                        `yaml:"scheme"`
+	Labels model.LabelSet                `json:"labels"`
 	Hosts  config.ServiceDiscoveryConfig `yaml:",inline"`
 }
 

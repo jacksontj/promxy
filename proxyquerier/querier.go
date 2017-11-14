@@ -60,7 +60,7 @@ func (h *ProxyQuerier) getValue(ctx context.Context, values url.Values) (model.V
 
 			go func(ctx context.Context, retChan chan interface{}) {
 				start := time.Now()
-				serverResult, err := promclient.GetData(ctx, parsedUrl.String(), h.Client)
+				serverResult, err := promclient.GetData(ctx, parsedUrl.String(), h.Client, serverGroup.Cfg.Labels)
 				took := time.Now().Sub(start)
 				var ret interface{}
 				if err != nil {

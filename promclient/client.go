@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/jacksontj/promxy/promhttputil"
+	"github.com/prometheus/common/model"
 )
 
 func DoRequest(ctx context.Context, url string, client *http.Client, responseStruct interface{}) error {
@@ -34,9 +35,16 @@ func DoRequest(ctx context.Context, url string, client *http.Client, responseStr
 }
 
 // HTTP client for prometheus
-func GetData(ctx context.Context, url string, client *http.Client) (*promhttputil.Response, error) {
+func GetData(ctx context.Context, url string, client *http.Client, labelset model.LabelSet) (*promhttputil.Response, error) {
 	promResp := &promhttputil.Response{}
 	if err := DoRequest(ctx, url, client, promResp); err == nil {
+		// TODO: have the client support serverGroup direct
+		if qData, ok := promResp.Data.(*promhttputil.QueryData); ok {
+			if err := promhttputil.ValueAddLabelSet(qData.Result, labelset); err != nil {
+				return nil, err
+			}
+		}
+
 		return promResp, nil
 	} else {
 		return nil, err

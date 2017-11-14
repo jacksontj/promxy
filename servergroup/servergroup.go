@@ -35,7 +35,7 @@ type ServerGroup struct {
 	loaded bool
 	Ready  chan struct{}
 
-	cfg       *Config
+	Cfg       *Config
 	targetSet *discovery.TargetSet
 
 	OriginalURLs []string
@@ -52,7 +52,7 @@ func (s *ServerGroup) Sync(tgs []*config.TargetGroup) {
 	for _, tg := range tgs {
 		for _, target := range tg.Targets {
 			u := &url.URL{
-				Scheme: string(s.cfg.GetScheme()),
+				Scheme: string(s.Cfg.GetScheme()),
 				Host:   string(target[model.AddressLabel]),
 			}
 			targets = append(targets, u.String())
@@ -67,7 +67,7 @@ func (s *ServerGroup) Sync(tgs []*config.TargetGroup) {
 }
 
 func (s *ServerGroup) ApplyConfig(cfg *Config) error {
-	s.cfg = cfg
+	s.Cfg = cfg
 	// TODO: make a better wrapper for the log? They made their own... :/
 	providerMap := discovery.ProvidersFromConfig(cfg.Hosts, log.Base())
 	s.targetSet.UpdateProviders(providerMap)

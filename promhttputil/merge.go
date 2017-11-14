@@ -7,6 +7,27 @@ import (
 	"github.com/prometheus/common/model"
 )
 
+func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
+	switch aTyped := a.(type) {
+	case model.Vector:
+		for _, item := range aTyped {
+			for k, v := range l {
+				item.Metric[k] = v
+			}
+		}
+
+	case model.Matrix:
+		for _, item := range aTyped {
+			for k, v := range l {
+				item.Metric[k] = v
+			}
+		}
+	}
+
+	return nil
+
+}
+
 // TODO: always make copies? Now we sometimes return one, or make a copy, or do nothing
 // Merge 2 values and
 func MergeValues(a, b model.Value) (model.Value, error) {
