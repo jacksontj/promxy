@@ -58,9 +58,9 @@ func (h *ProxyQuerier) getValue(ctx context.Context, values url.Values) (model.V
 			}
 			parsedUrl.RawQuery = values.Encode()
 
-			go func(ctx context.Context, retChan chan interface{}) {
+			go func(ctx context.Context, parsedUrl *url.URL, ls model.LabelSet, retChan chan interface{}) {
 				start := time.Now()
-				serverResult, err := promclient.GetData(ctx, parsedUrl.String(), h.Client, serverGroup.Cfg.Labels)
+				serverResult, err := promclient.GetData(ctx, parsedUrl.String(), h.Client, ls)
 				took := time.Now().Sub(start)
 				var ret interface{}
 				if err != nil {
@@ -76,7 +76,7 @@ func (h *ProxyQuerier) getValue(ctx context.Context, values url.Values) (model.V
 				case <-ctx.Done():
 					return
 				}
-			}(ctx, retChan)
+			}(ctx, parsedUrl, serverGroup.Cfg.Labels, retChan)
 		}
 	}
 
