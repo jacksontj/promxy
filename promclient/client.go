@@ -17,7 +17,7 @@ func DoRequest(ctx context.Context, url string, client *http.Client, responseStr
 	}
 
 	// Pass the context on
-	req.WithContext(ctx)
+	req = req.WithContext(ctx)
 
 	// Send the request
 	resp, err := client.Do(req)
