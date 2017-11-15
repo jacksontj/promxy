@@ -135,6 +135,19 @@ func MergeSampleStream(a, b *model.SampleStream) (*model.SampleStream, error) {
 	ai := 0 // Offset in a
 	bi := 0 // Offset in b
 
+	// When combining series from 2 different prometheus hosts we can run into some problems
+	// with clock skew (from a variety of sources). The primary one I've run into is issues
+	// with the time that prometheus stores. Since the time associated with the datapoint is
+	// the *start* time of the scrape, there can be quite a lot of time (which can vary
+	// dramatically between hosts) for the exporter to return. In an attempt to mitigate
+	// this problem we're going to *not* merge any datapoint within 5s of another point
+	// we have. This means we can tolerate 2.5s on either side (which can be used by either
+	// clock skew or from this scrape skew).
+
+	// TODO: config
+	antiAffinityBuffer := model.TimeFromUnix(5) // 5s
+	var lastTime model.Time
+
 	for {
 		if ai >= len(a.Values) && bi >= len(b.Values) {
 			break
@@ -168,6 +181,15 @@ func MergeSampleStream(a, b *model.SampleStream) (*model.SampleStream, error) {
 		if _, ok := seenTimes[item.Timestamp]; ok {
 			continue
 		}
+
+		if lastTime == 0 {
+			lastTime = item.Timestamp
+		}
+
+		if item.Timestamp-lastTime < antiAffinityBuffer {
+			continue
+		}
+		lastTime = item.Timestamp
 
 		// Otherwise, lets add it
 		newValues = append(newValues, item)
