@@ -30,6 +30,7 @@ import (
 
 var opts struct {
 	ConfigFile string `long:"config" description:"path to the config file" required:"true"`
+	LogLevel   string `long:"log-level" description:"Log level" default:"info"`
 }
 
 func reloadConfig(rls ...proxyconfig.Reloadable) error {
@@ -59,6 +60,26 @@ func main() {
 	if _, err := parser.Parse(); err != nil {
 		logrus.Fatalf("Error parsing flags: %v", err)
 	}
+
+	// Use log level
+	level := logrus.InfoLevel
+	switch strings.ToLower(opts.LogLevel) {
+	case "panic":
+		level = logrus.PanicLevel
+	case "fatal":
+		level = logrus.FatalLevel
+	case "error":
+		level = logrus.ErrorLevel
+	case "warn":
+		level = logrus.WarnLevel
+	case "info":
+		level = logrus.InfoLevel
+	case "debug":
+		level = logrus.DebugLevel
+	default:
+		logrus.Fatalf("Unknown log level: %s", opts.LogLevel)
+	}
+	logrus.SetLevel(level)
 
 	var proxyStorage local.Storage
 
