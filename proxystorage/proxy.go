@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"sync/atomic"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/proxyquerier"
 	"github.com/jacksontj/promxy/servergroup"

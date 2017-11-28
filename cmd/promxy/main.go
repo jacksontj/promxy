@@ -81,6 +81,13 @@ func main() {
 	}
 	logrus.SetLevel(level)
 
+	// Set the log format to have a reasonable timestamp
+	formatter := &logrus.TextFormatter{
+		FullTimestamp: true,
+	}
+	logrus.SetFormatter(formatter)
+
+
 	var proxyStorage local.Storage
 
 	ps, err := proxystorage.NewProxyStorage()
