@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/jacksontj/promxy/servergroup"
@@ -15,6 +14,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/storage/local"
 	"github.com/prometheus/prometheus/storage/metric"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -131,11 +131,15 @@ func (h *ProxyQuerier) getValue(ctx context.Context, values url.Values) (model.V
 // time range and label matchers. The iterators need to be closed
 // after usage.
 func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time, matchers ...*metric.LabelMatcher) ([]local.SeriesIterator, error) {
-	logrus.WithFields(logrus.Fields{
-	    "from": from,
-	    "through": through,
-	    "matchers": matchers,
-	}).Info("QueryRange")
+	start := time.Now()
+	defer func() {
+		logrus.WithFields(logrus.Fields{
+			"from":     from,
+			"through":  through,
+			"matchers": matchers,
+			"took":     time.Now().Sub(start),
+		}).Info("QueryRange")
+	}()
 
 	// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
 	pql, err := MatcherToString(matchers)
@@ -171,11 +175,15 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 // QueryInstant returns a list of series iterators for the selected
 // instant and label matchers. The iterators need to be closed after usage.
 func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenessDelta time.Duration, matchers ...*metric.LabelMatcher) ([]local.SeriesIterator, error) {
-	logrus.WithFields(logrus.Fields{
-	    "ts": ts,
-	    "stalenessDelta": stalenessDelta,
-	    "matchers": matchers,
-	}).Info("QueryInstant")
+	start := time.Now()
+	defer func() {
+		logrus.WithFields(logrus.Fields{
+			"ts":             ts,
+			"stalenessDelta": stalenessDelta,
+			"matchers":       matchers,
+			"took":           time.Now().Sub(start),
+		}).Info("QueryInstant")
+	}()
 
 	// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
 	pql, err := MatcherToString(matchers)
@@ -214,11 +222,16 @@ func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenes
 // have no samples in the specified interval from the returned map. In
 // doubt, specify model.Earliest for from and model.Latest for through.
 func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, through model.Time, matcherSets ...metric.LabelMatchers) ([]metric.Metric, error) {
-	logrus.WithFields(logrus.Fields{
-	    "from": from,
-	    "through": through,
-	    "matcherSets": matcherSets,
-	}).Info("MetricsForLabelMatchers")
+	start := time.Now()
+	defer func() {
+		logrus.WithFields(logrus.Fields{
+			"from":        from,
+			"through":     through,
+			"matcherSets": matcherSets,
+			"took":        time.Now().Sub(start),
+		}).Info("MetricsForLabelMatchers")
+	}()
+
 	// http://10.0.1.115:8082/api/v1/series?match[]=scrape_samples_scraped&start=1507432802&end=1507433102
 
 	// TODO: check on this? For now the assumption is that we can merge all of the lists
@@ -316,17 +329,21 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 // All returned samples are between the specified cutoff time and now.
 func (h *ProxyQuerier) LastSampleForLabelMatchers(ctx context.Context, cutoff model.Time, matcherSets ...metric.LabelMatchers) (model.Vector, error) {
 	logrus.WithFields(logrus.Fields{
-	    "cutoff": cutoff,
-	    "matcherSets": matcherSets,
+		"cutoff":      cutoff,
+		"matcherSets": matcherSets,
 	}).Info("MetricsForLastSampleForLabelMatchersLabelMatchers")
 	return nil, fmt.Errorf("Not implemented")
 }
 
 // Get all of the label values that are associated with a given label name.
 func (h *ProxyQuerier) LabelValuesForLabelName(ctx context.Context, name model.LabelName) (model.LabelValues, error) {
-	logrus.WithFields(logrus.Fields{
-	    "name": name,
-	}).Info("LabelValuesForLabelName")
+	start := time.Now()
+	defer func() {
+		logrus.WithFields(logrus.Fields{
+			"name": name,
+			"took": time.Now().Sub(start),
+		}).Info("LabelValuesForLabelName")
+	}()
 
 	result := &promclient.LabelResult{}
 

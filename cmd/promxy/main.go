@@ -87,7 +87,6 @@ func main() {
 	}
 	logrus.SetFormatter(formatter)
 
-
 	var proxyStorage local.Storage
 
 	ps, err := proxystorage.NewProxyStorage()

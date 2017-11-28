@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"sync/atomic"
 
-	"github.com/sirupsen/logrus"
 	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/proxyquerier"
 	"github.com/jacksontj/promxy/servergroup"
@@ -17,6 +16,7 @@ import (
 	"github.com/prometheus/prometheus/storage/local"
 	"github.com/prometheus/prometheus/storage/metric"
 	promhttputil "github.com/prometheus/prometheus/util/httputil"
+	"github.com/sirupsen/logrus"
 )
 
 type proxyStorageState struct {
