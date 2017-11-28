@@ -102,6 +102,9 @@ func (p *ProxyStorage) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 
 	serverGroup := state.serverGroups[rand.Int()%len(state.serverGroups)]
 	servers := serverGroup.Targets()
+	if len(servers) <= 0 {
+		http.Error(w, "no servers available in serverGroup", http.StatusBadGateway)
+	}
 	server := servers[rand.Int()%len(servers)]
 	// TODO: failover
 	parsedUrl, _ := url.Parse(server)
