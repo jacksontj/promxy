@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"sync/atomic"
+	"time"
 
 	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/proxyquerier"
@@ -77,6 +79,12 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		failed = true
 		logrus.Errorf("Unable to load client from config: %s", err)
 	}
+
+    // TODO: remove after fixes to upstream
+	// Override the dial timeout
+	transport := client.Transport.(*http.Transport)
+	transport.DialContext = (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext
+
 	newState.client = client
 
 	if failed {
