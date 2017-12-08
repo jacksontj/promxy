@@ -302,7 +302,8 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 			case *promclient.SeriesResult:
 				// TODO check status
 				if err := result.Merge(retTyped); err != nil {
-					return nil, err
+					// TODO: be smarter about checking if we have enough from a specific server_group
+					errCount++
 				}
 			}
 		}
@@ -397,7 +398,8 @@ func (h *ProxyQuerier) LabelValuesForLabelName(ctx context.Context, name model.L
 			case *promclient.LabelResult:
 				// TODO check status
 				if err := result.Merge(retTyped); err != nil {
-					return nil, err
+					// TODO: be smarter about checking if we have enough from a specific server_group
+					errCount++
 				}
 			}
 		}
