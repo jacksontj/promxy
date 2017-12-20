@@ -6,9 +6,11 @@ import (
 )
 
 type Config struct {
-	Scheme string                        `yaml:"scheme"`
-	Labels model.LabelSet                `json:"labels"`
-	Hosts  config.ServiceDiscoveryConfig `yaml:",inline"`
+	Scheme string         `yaml:"scheme"`
+	Labels model.LabelSet `json:"labels"`
+	// List of target relabel configurations.
+	RelabelConfigs []*config.RelabelConfig       `yaml:"relabel_configs,omitempty"`
+	Hosts          config.ServiceDiscoveryConfig `yaml:",inline"`
 }
 
 func (c *Config) GetScheme() string {

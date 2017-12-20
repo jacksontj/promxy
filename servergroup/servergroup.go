@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
+	"github.com/prometheus/prometheus/relabel"
 )
 
 // TODO: pass in parent context
@@ -51,6 +52,13 @@ func (s *ServerGroup) Sync(tgs []*config.TargetGroup) {
 	targets := make([]string, 0)
 	for _, tg := range tgs {
 		for _, target := range tg.Targets {
+
+			target = relabel.Process(target, s.Cfg.RelabelConfigs...)
+			// Check if the target was dropped.
+			if target == nil {
+				continue
+			}
+
 			u := &url.URL{
 				Scheme: string(s.Cfg.GetScheme()),
 				Host:   string(target[model.AddressLabel]),
