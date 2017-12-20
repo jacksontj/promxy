@@ -45,8 +45,15 @@ func (h *ProxyQuerier) Close() error { return nil }
 // time range and label matchers. The iterators need to be closed
 // after usage.
 func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time, matchers ...*metric.LabelMatcher) ([]local.SeriesIterator, error) {
-	// TODO: move to logging
-	fmt.Printf("QueryRange: from=%v through=%v matchers=%v\n", from, through, matchers)
+	start := time.Now()
+	defer func() {
+		logrus.WithFields(logrus.Fields{
+			"from":             from,
+			"through": through,
+			"matchers":       matchers,
+			"took":           time.Now().Sub(start),
+		}).Info("QueryRange")
+	}()
 
 	// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
 	pql, err := MatcherToString(matchers)
