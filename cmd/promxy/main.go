@@ -8,14 +8,18 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"reflect"
 	"syscall"
 
 	"github.com/jacksontj/promxy/config"
+	"github.com/jacksontj/promxy/promclient"
+	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/jacksontj/promxy/proxystorage"
 	"github.com/jessevdk/go-flags"
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/route"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/notifier"
@@ -96,7 +100,137 @@ func main() {
 	reloadables = append(reloadables, ps)
 	proxyStorage = ps
 
-	engine := promql.NewEngine(proxyStorage, nil)
+	eOpts := promql.EngineOptions{}
+	eOpts = *promql.DefaultEngineOptions
+
+	engine := promql.NewEngine(proxyStorage, &eOpts)
+
+	eOpts.NodeReplacer = func(s *promql.EvalStmt, node promql.Node) promql.Node {
+		fmt.Println("node walk step of", node, reflect.TypeOf(node))
+		c := &http.Client{}
+		serverGroups := ps.GetSGs()
+		switch n := node.(type) {
+        // TODO: can actually replace with aggregation of aggregation, for some of them (sum, min, max, etc.)
+        // need to classify aggregation functions as "reentrant" or something
+        // If it is an aggregateExpr it has children which will need to be evaluated
+        case *promql.AggregateExpr:
+            var urlBase string
+			values := url.Values{}
+			fmt.Println(n.Expr, reflect.TypeOf(n.Expr))
+			values.Add("query", n.Expr.String())
+
+            if s.Interval > 0 {
+    			values.Add("start", s.Start.String())
+			    values.Add("end", s.End.String())
+			    values.Add("step", s.Interval.String())
+    			urlBase = "%s/api/v1/query_range"
+			} else {
+			    values.Add("time", s.End.String())
+    			urlBase = "%s/api/v1/query"
+			}
+			var result model.Value
+
+
+			for _, serverGroup := range serverGroups {
+				for _, server := range serverGroup.Targets() {
+					parsedUrl, err := url.Parse(fmt.Sprintf(urlBase, server))
+					if err != nil {
+						panic(err.Error())
+					}
+					parsedUrl.RawQuery = values.Encode()
+					serverResult, err := promclient.GetData(context.Background(), parsedUrl.String(), c, serverGroup.Cfg.Labels)
+				    if err != nil {
+				        panic(err.Error())
+				    }
+					qData, ok := serverResult.Data.(*promhttputil.QueryData)
+					fmt.Println(parsedUrl.String())
+					if !ok {
+					    fmt.Println("nope", reflect.TypeOf(serverResult.Data))
+						continue
+					}
+					if result == nil {
+						result = qData.Result
+					} else {
+						result, err = promhttputil.MergeValues(result, qData.Result)
+						if err != nil {
+							panic(err.Error())
+						}
+					}
+				}
+
+			}
+
+			iterators := promclient.IteratorsForValue(result)
+			returnIterators := make([]local.SeriesIterator, len(iterators))
+			for i, item := range iterators {
+				returnIterators[i] = item
+			}
+
+			ret := &promql.VectorSelector{}
+			ret.SetIterators(returnIterators)
+			n.Expr = ret
+			return n
+
+		case *promql.Call:
+		    fmt.Println("call", n.Type())
+
+            var urlBase string
+			values := url.Values{}
+			values.Add("query", n.String())
+
+            if s.Interval > 0 {
+    			values.Add("start", s.Start.String())
+			    values.Add("end", s.End.String())
+			    values.Add("step", s.Interval.String())
+    			urlBase = "%s/api/v1/query_range"
+			} else {
+			    values.Add("time", s.End.String())
+    			urlBase = "%s/api/v1/query"
+			}
+			var result model.Value
+
+
+			for _, serverGroup := range serverGroups {
+				for _, server := range serverGroup.Targets() {
+					parsedUrl, err := url.Parse(fmt.Sprintf(urlBase, server))
+					if err != nil {
+						panic(err.Error())
+					}
+					parsedUrl.RawQuery = values.Encode()
+					serverResult, err := promclient.GetData(context.Background(), parsedUrl.String(), c, serverGroup.Cfg.Labels)
+				    if err != nil {
+				        panic(err.Error())
+				    }
+					qData, ok := serverResult.Data.(*promhttputil.QueryData)
+					fmt.Println(parsedUrl.String())
+					if !ok {
+					    fmt.Println("nope", reflect.TypeOf(serverResult.Data))
+						continue
+					}
+					if result == nil {
+						result = qData.Result
+					} else {
+						result, err = promhttputil.MergeValues(result, qData.Result)
+						if err != nil {
+							panic(err.Error())
+						}
+					}
+				}
+
+			}
+
+			iterators := promclient.IteratorsForValue(result)
+			returnIterators := make([]local.SeriesIterator, len(iterators))
+			for i, item := range iterators {
+				returnIterators[i] = item
+			}
+
+			ret := &promql.VectorSelector{}
+			ret.SetIterators(returnIterators)
+			return ret
+		}
+		return nil
+	}
 
 	// Register alertmanager stuff
 	var (
