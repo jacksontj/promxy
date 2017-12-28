@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/jacksontj/promxy/promclient"
-	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
@@ -30,7 +29,7 @@ func init() {
 }
 
 type ProxyQuerier struct {
-	ServerGroups []*servergroup.ServerGroup
+	ServerGroups servergroup.ServerGroups
 	// TODO: use
 	Client *http.Client
 	// TODO: support limits to the hosts we query
@@ -63,7 +62,6 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 
 	// Create the query params
 	var urlBase string
-	var call string
 	values := url.Values{}
 
 	// TODO: config (ideally step would be passed down :/ )
@@ -84,8 +82,7 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 	// If our calculated step is lower than what we expect raw to be, lets get raw
 	if step < (SCRAPE_INTERVAL * 2) {
 		// We want to do a normal query (for raw data)
-		urlBase = "%s/api/v1/query"
-		call = "query"
+		urlBase = "/api/v1/query"
 
 		// We want to grab only the raw datapoints, so we do that through the query interface
 		// passing in a duration that is at least as long as ours (the added second is to deal
@@ -96,8 +93,7 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 
 	} else { // If step is significanltly less (2x) we'll do that instead
 		// We want to do a queryrange to rely on step to reduce number of datapoints
-		urlBase = "%s/api/v1/query_range"
-		call = "query_range"
+		urlBase = "/api/v1/query_range"
 
 		values.Add("query", pql)
 		values.Add("start", from.String())
@@ -105,90 +101,9 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 		values.Add("step", strconv.FormatFloat(step, 'f', -1, 64))
 	}
 
-	var result model.Value
-
-	retChan := make(chan interface{})
-	retCount := 0
-	childContext, childContextCancel := context.WithCancel(ctx)
-	defer childContextCancel()
-
-	// Query each in the groups and get data
-	for _, serverGroup := range h.ServerGroups {
-		for _, server := range serverGroup.Targets() {
-			retCount++
-
-			parsedUrl, err := url.Parse(fmt.Sprintf(urlBase, server))
-			if err != nil {
-				return nil, err
-			}
-			parsedUrl.RawQuery = values.Encode()
-
-			go func(ctx context.Context, parsedUrl *url.URL, ls model.LabelSet, retChan chan interface{}) {
-				start := time.Now()
-				serverResult, err := promclient.GetData(ctx, parsedUrl.String(), h.Client, ls)
-				took := time.Now().Sub(start)
-				var ret interface{}
-				if err != nil {
-					ret = err
-					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, call, "error").Observe(float64(took))
-				} else {
-					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, call, "success").Observe(float64(took))
-					ret = serverResult
-				}
-
-				select {
-				case retChan <- ret:
-					return
-				case <-ctx.Done():
-					return
-				}
-			}(childContext, parsedUrl, serverGroup.Cfg.Labels, retChan)
-		}
-	}
-
-	errCount := 0
-	for i := 0; i < retCount; i++ {
-		select {
-		// If the context was closed, we are erroring out (usually client disconnect)
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		// Otherwise we are waiting on a return
-		case ret := <-retChan:
-			switch retTyped := ret.(type) {
-			// If there was an error we'll just continue
-			case error:
-				// Don't stop on error, just incr counter
-				errCount++
-			case *promhttputil.Response:
-				// TODO: check response code, how do we want to handle it?
-				if retTyped.Status != promhttputil.StatusSuccess {
-					errCount++
-					continue
-				}
-
-				// TODO: what to do in failure
-				qData, ok := retTyped.Data.(*promhttputil.QueryData)
-				if !ok {
-					errCount++
-					continue
-				}
-
-				// TODO: check qData.ResultType
-
-				if result == nil {
-					result = qData.Result
-				} else {
-					result, err = promhttputil.MergeValues(result, qData.Result)
-					if err != nil {
-						return nil, err
-					}
-				}
-			}
-		}
-	}
-
-	if errCount == retCount {
-		return nil, fmt.Errorf("Unable to fetch from downstream servers")
+	result, err := h.ServerGroups.GetData(ctx, urlBase, values, h.Client)
+	if err != nil {
+		return nil, err
 	}
 
 	iterators := promclient.IteratorsForValue(result)
@@ -225,87 +140,9 @@ func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenes
 	values.Add("time", ts.String())
 	values.Add("_", ts.Add(-stalenessDelta).String())
 
-	var result model.Value
-
-	retChan := make(chan interface{})
-	retCount := 0
-	childContext, childContextCancel := context.WithCancel(ctx)
-	defer childContextCancel()
-
-	// Query each in the groups and get data
-	for _, serverGroup := range h.ServerGroups {
-		for _, server := range serverGroup.Targets() {
-			retCount++
-
-			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/query", server))
-			if err != nil {
-				return nil, err
-			}
-			parsedUrl.RawQuery = values.Encode()
-
-			go func(ctx context.Context, parsedUrl *url.URL, ls model.LabelSet, retChan chan interface{}) {
-				start := time.Now()
-				serverResult, err := promclient.GetData(ctx, parsedUrl.String(), h.Client, ls)
-				took := time.Now().Sub(start)
-				var ret interface{}
-				if err != nil {
-					ret = err
-					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "query", "success").Observe(float64(took))
-				} else {
-					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "query", "error").Observe(float64(took))
-					ret = serverResult
-				}
-				select {
-				case retChan <- ret:
-					return
-				case <-ctx.Done():
-					return
-				}
-			}(childContext, parsedUrl, serverGroup.Cfg.Labels, retChan)
-		}
-	}
-
-	errCount := 0
-	for i := 0; i < retCount; i++ {
-		select {
-		// If the context was closed, we are erroring out (usually client disconnect)
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		// Otherwise we are waiting on a return
-		case ret := <-retChan:
-			switch retTyped := ret.(type) {
-			// If there was an error we'll just continue
-			case error:
-				// Don't stop on error, just incr counter
-				errCount++
-			case *promhttputil.Response:
-				// TODO: check response code, how do we want to handle it?
-				if retTyped.Status != promhttputil.StatusSuccess {
-					continue
-				}
-
-				// TODO: what to do in failure
-				qData, ok := retTyped.Data.(*promhttputil.QueryData)
-				if !ok {
-					continue
-				}
-
-				// TODO: check qData.ResultType
-
-				if result == nil {
-					result = qData.Result
-				} else {
-					result, err = promhttputil.MergeValues(result, qData.Result)
-					if err != nil {
-						return nil, err
-					}
-				}
-			}
-		}
-	}
-
-	if errCount == retCount {
-		return nil, fmt.Errorf("Unable to fetch from downstream servers")
+	result, err := h.ServerGroups.GetData(ctx, "/api/v1/query", values, h.Client)
+	if err != nil {
+		return nil, err
 	}
 
 	iterators := promclient.IteratorsForValue(result)
@@ -354,67 +191,9 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 		values.Add("match[]", pql)
 	}
 
-	result := &promclient.SeriesResult{}
-
-	retChan := make(chan interface{})
-	retCount := 0
-	childContext, childContextCancel := context.WithCancel(ctx)
-	defer childContextCancel()
-
-	// Query each in the groups and get data
-	for _, serverGroup := range h.ServerGroups {
-		for _, server := range serverGroup.Targets() {
-			retCount++
-
-			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/series", server))
-			if err != nil {
-				return nil, err
-			}
-			parsedUrl.RawQuery = values.Encode()
-
-			go func(ctx context.Context, retChan chan interface{}) {
-				start := time.Now()
-				serverResult, err := promclient.GetSeries(ctx, parsedUrl.String(), h.Client)
-				took := time.Now().Sub(start)
-				var ret interface{}
-				if err != nil {
-					ret = err
-					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "series", "error").Observe(float64(took))
-				} else {
-					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "series", "success").Observe(float64(took))
-					ret = serverResult
-				}
-				select {
-				case retChan <- ret:
-					return
-				case <-ctx.Done():
-					return
-				}
-			}(childContext, retChan)
-		}
-	}
-
-	errCount := 0
-	for i := 0; i < retCount; i++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case ret := <-retChan:
-			switch retTyped := ret.(type) {
-			case error:
-				errCount++
-			case *promclient.SeriesResult:
-				// TODO check status
-				if err := result.Merge(retTyped); err != nil {
-					// TODO: be smarter about checking if we have enough from a specific server_group
-					errCount++
-				}
-			}
-		}
-	}
-
-	if errCount == retCount {
-		return nil, fmt.Errorf("Unable to fetch from downstream servers")
+	result, err := h.ServerGroups.GetSeries(ctx, "/api/v1/series", values, h.Client)
+	if err != nil {
+		return nil, err
 	}
 
 	metrics := make([]metric.Metric, len(result.Data))
@@ -450,67 +229,9 @@ func (h *ProxyQuerier) LabelValuesForLabelName(ctx context.Context, name model.L
 		}).Info("LabelValuesForLabelName")
 	}()
 
-	result := &promclient.LabelResult{}
-
-	retChan := make(chan interface{})
-	retCount := 0
-	childContext, childContextCancel := context.WithCancel(ctx)
-	defer childContextCancel()
-
-	// Query each in the groups and get data
-	for _, serverGroup := range h.ServerGroups {
-		for _, server := range serverGroup.Targets() {
-			retCount++
-
-			parsedUrl, err := url.Parse(fmt.Sprintf("%s/api/v1/label/%s/values", server, name))
-			if err != nil {
-				return nil, err
-			}
-
-			go func(ctx context.Context, retChan chan interface{}) {
-				start := time.Now()
-				serverResult, err := promclient.GetValuesForLabelName(ctx, parsedUrl.String(), h.Client)
-				took := time.Now().Sub(start)
-				var ret interface{}
-				if err != nil {
-					ret = err
-					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "label_values", "error").Observe(float64(took))
-				} else {
-					proxyQuerierSummary.WithLabelValues(parsedUrl.Host, "label_values", "success").Observe(float64(took))
-					ret = serverResult
-				}
-				select {
-				case retChan <- ret:
-					return
-				case <-ctx.Done():
-					return
-				}
-			}(childContext, retChan)
-		}
-	}
-
-	errCount := 0
-
-	for i := 0; i < retCount; i++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case ret := <-retChan:
-			switch retTyped := ret.(type) {
-			case error:
-				errCount++
-			case *promclient.LabelResult:
-				// TODO check status
-				if err := result.Merge(retTyped); err != nil {
-					// TODO: be smarter about checking if we have enough from a specific server_group
-					errCount++
-				}
-			}
-		}
-	}
-
-	if errCount == retCount {
-		return nil, fmt.Errorf("Unable to fetch from downstream servers")
+	result, err := h.ServerGroups.GetValuesForLabelName(ctx, "/api/v1/label/"+string(name)+"/values", h.Client)
+	if err != nil {
+		return nil, err
 	}
 
 	return result.Data, nil

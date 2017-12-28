@@ -2,15 +2,33 @@ package servergroup
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"net/url"
 	"sync/atomic"
+	"time"
 
+	"github.com/jacksontj/promxy/promclient"
+	"github.com/jacksontj/promxy/promhttputil"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/relabel"
 )
+
+var (
+	// TODO: have a marker for "which" servergroup
+	serverGroupSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Name: "server_group_request",
+		Help: "Summary of calls to servergroup instances",
+	}, []string{"host", "call", "status"})
+)
+
+func init() {
+	prometheus.MustRegister(serverGroupSummary)
+}
 
 // TODO: pass in parent context
 func New() *ServerGroup {
@@ -89,4 +107,195 @@ func (s *ServerGroup) Targets() []string {
 	} else {
 		return nil
 	}
+}
+
+//
+func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Values, client *http.Client) (model.Value, error) {
+	targets := s.Targets()
+
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+	resultChan := make(chan *promhttputil.Response, len(targets))
+	errChan := make(chan error, len(targets))
+
+	for _, target := range targets {
+		parsedUrl, err := url.Parse(target + path)
+		if err != nil {
+			return nil, err
+		}
+		parsedUrl.RawQuery = values.Encode()
+		go func() {
+			start := time.Now()
+			result, err := promclient.GetData(childContext, parsedUrl.String(), client, s.Cfg.Labels)
+			took := time.Now().Sub(start)
+			if err != nil {
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(float64(took))
+				errChan <- err
+			} else {
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "success").Observe(float64(took))
+				resultChan <- result
+			}
+		}()
+	}
+
+	// Wait for results as we get them
+	var result model.Value
+	var lastError error
+	errCount := 0
+	for i := 0; i < len(targets); i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+
+		case err := <-errChan:
+			lastError = err
+			errCount++
+
+		case childResult := <-resultChan:
+			// TODO: check response code, how do we want to handle it?
+			if childResult.Status != promhttputil.StatusSuccess {
+				errCount++
+				continue
+			}
+
+			// TODO: what to do in failure
+			qData, ok := childResult.Data.(*promhttputil.QueryData)
+			if !ok {
+				errCount++
+				continue
+			}
+
+			// TODO: check qData.ResultType
+			if result == nil {
+				result = qData.Result
+			} else {
+				var err error
+				result, err = promhttputil.MergeValues(result, qData.Result)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	if errCount == len(targets) {
+		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
+	}
+
+	return result, nil
+}
+
+func (s *ServerGroup) GetSeries(ctx context.Context, path string, values url.Values, client *http.Client) (*promclient.SeriesResult, error) {
+	targets := s.Targets()
+
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+	resultChan := make(chan *promclient.SeriesResult, len(targets))
+	errChan := make(chan error, len(targets))
+
+	for _, target := range targets {
+		parsedUrl, err := url.Parse(target + path)
+		if err != nil {
+			return nil, err
+		}
+		parsedUrl.RawQuery = values.Encode()
+		go func() {
+			start := time.Now()
+			result, err := promclient.GetSeries(childContext, parsedUrl.String(), client)
+			took := time.Now().Sub(start)
+			if err != nil {
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getseries", "error").Observe(float64(took))
+				errChan <- err
+			} else {
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getseries", "success").Observe(float64(took))
+				resultChan <- result
+			}
+		}()
+	}
+
+	// Wait for results as we get them
+	result := &promclient.SeriesResult{}
+	var lastError error
+	errCount := 0
+	for i := 0; i < len(targets); i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case err := <-errChan:
+			lastError = err
+			errCount++
+		case childResult := <-resultChan:
+			if result == nil {
+				result = childResult
+			} else {
+				if err := result.Merge(childResult); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	// If we got only errors, lets return that
+	if errCount == len(targets) {
+		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
+	}
+
+	return result, nil
+}
+
+func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string, client *http.Client) (*promclient.LabelResult, error) {
+	targets := s.Targets()
+
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+	resultChan := make(chan *promclient.LabelResult, len(targets))
+	errChan := make(chan error, len(targets))
+
+	for _, target := range targets {
+		parsedUrl, err := url.Parse(target + path)
+		if err != nil {
+			return nil, err
+		}
+		go func() {
+			start := time.Now()
+			result, err := promclient.GetValuesForLabelName(childContext, parsedUrl.String(), client)
+			took := time.Now().Sub(start)
+			if err != nil {
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "error").Observe(float64(took))
+				errChan <- err
+			} else {
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "success").Observe(float64(took))
+				resultChan <- result
+			}
+		}()
+	}
+
+	// Wait for results as we get them
+	result := &promclient.LabelResult{}
+	var lastError error
+	errCount := 0
+	for i := 0; i < len(targets); i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case err := <-errChan:
+			lastError = err
+			errCount++
+		case childResult := <-resultChan:
+			if result == nil {
+				result = childResult
+			} else {
+				if err := result.Merge(childResult); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	// If we got only errors, lets return that
+	if errCount == len(targets) {
+		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
+	}
+
+	return result, nil
 }
