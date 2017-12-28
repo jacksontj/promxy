@@ -338,21 +338,21 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 
 	// http://10.0.1.115:8082/api/v1/series?match[]=scrape_samples_scraped&start=1507432802&end=1507433102
 
-	// TODO: check on this? For now the assumption is that we can merge all of the lists
-	matchers := make([]*metric.LabelMatcher, 0, len(matcherSets))
-	for _, matcherList := range matcherSets {
-		matchers = append(matchers, matcherList...)
-	}
-
-	pql, err := MatcherToString(matchers)
-	if err != nil {
-		return nil, err
-	}
-
 	values := url.Values{}
-	values.Add("match[]", pql)
-	values.Add("start", from.String())
-	values.Add("end", through.String())
+	// Only add time ranges if they aren't the edges
+	if from.After(model.Earliest) || through.Before(model.Latest) {
+		values.Add("start", from.String())
+		values.Add("end", through.String())
+	}
+
+	// Add matchers
+	for _, matcherList := range matcherSets {
+		pql, err := MatcherToString(matcherList)
+		if err != nil {
+			return nil, err
+		}
+		values.Add("match[]", pql)
+	}
 
 	result := &promclient.SeriesResult{}
 
