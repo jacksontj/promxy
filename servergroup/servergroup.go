@@ -115,7 +115,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Value
 
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChan := make(chan *promhttputil.Response, len(targets))
+	resultChan := make(chan *promclient.DataResult, len(targets))
 	errChan := make(chan error, len(targets))
 
 	for _, target := range targets {
@@ -158,19 +158,12 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Value
 				continue
 			}
 
-			// TODO: what to do in failure
-			qData, ok := childResult.Data.(*promhttputil.QueryData)
-			if !ok {
-				errCount++
-				continue
-			}
-
 			// TODO: check qData.ResultType
 			if result == nil {
-				result = qData.Result
+				result = childResult.Data.Result
 			} else {
 				var err error
-				result, err = promhttputil.MergeValues(result, qData.Result)
+				result, err = promhttputil.MergeValues(result, childResult.Data.Result)
 				if err != nil {
 					return nil, err
 				}
