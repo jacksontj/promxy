@@ -3,12 +3,15 @@ package promclient
 import (
 	"fmt"
 
+	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/prometheus/common/model"
 )
 
 type SeriesResult struct {
-	Status string           `json:"status"`
-	Data   []model.LabelSet `json:"data"`
+	Status    string                 `json:"status"`
+	Data      []model.LabelSet       `json:"data"`
+	ErrorType promhttputil.ErrorType `json:"errorType,omitempty"`
+	Error     string                 `json:"error,omitempty"`
 }
 
 func (s *SeriesResult) Merge(o *SeriesResult) error {

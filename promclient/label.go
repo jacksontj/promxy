@@ -3,12 +3,15 @@ package promclient
 import (
 	"fmt"
 
+	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/prometheus/common/model"
 )
 
 type LabelResult struct {
-	Status string             `json:"status"`
-	Data   []model.LabelValue `json:"data"`
+	Status    string                 `json:"status"`
+	Data      []model.LabelValue     `json:"data"`
+	ErrorType promhttputil.ErrorType `json:"errorType,omitempty"`
+	Error     string                 `json:"error,omitempty"`
 }
 
 func (l *LabelResult) Merge(o *LabelResult) error {
