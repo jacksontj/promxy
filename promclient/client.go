@@ -2,14 +2,14 @@ package promclient
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/jacksontj/promxy/promhttputil"
+	"github.com/mailru/easyjson"
 	"github.com/prometheus/common/model"
 )
 
-func DoRequest(ctx context.Context, url string, client *http.Client, responseStruct interface{}) error {
+func DoRequest(ctx context.Context, url string, client *http.Client, responseStruct easyjson.Unmarshaler) error {
 	// Create request
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -25,7 +25,7 @@ func DoRequest(ctx context.Context, url string, client *http.Client, responseStr
 		return err
 	}
 
-	return json.NewDecoder(resp.Body).Decode(responseStruct)
+	return easyjson.UnmarshalFromReader(resp.Body, responseStruct)
 }
 
 // HTTP client for prometheus
