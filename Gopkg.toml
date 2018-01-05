@@ -39,8 +39,9 @@
   source = "github.com/jacksontj/common"
 
 [[constraint]]
+  branch = "release-1.8_fork_promxy"
   name = "github.com/prometheus/prometheus"
-  version = "1.8.0"
+  source = "github.com/jacksontj/prometheus"
 
 [[constraint]]
   name = "github.com/sirupsen/logrus"
