@@ -1,9 +1,9 @@
 package promhttputil
 
 import (
-	"encoding/json"
 	"fmt"
 
+	"github.com/mailru/easyjson/jlexer"
 	"github.com/prometheus/common/model"
 )
 
@@ -33,50 +33,65 @@ type QueryData struct {
 	Result     model.Value     `json:"result"`
 }
 
-func (r *QueryData) UnmarshalJSON(data []byte) error {
-	type Raw struct {
-		ResultType model.ValueType  `json:"resultType"`
-		Result     *json.RawMessage `json:"result"`
-	}
-	rawData := &Raw{}
-	if err := json.Unmarshal(data, rawData); err != nil {
-		return err
-	}
-	r.ResultType = rawData.ResultType
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *QueryData) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	v.UnmarshalEasyJSON(&r)
+	return r.Error()
+}
 
-	switch r.ResultType {
-	case model.ValNone:
-		return nil
-	case model.ValScalar:
-		tmp := &model.Scalar{}
-		if err := json.Unmarshal(*rawData.Result, tmp); err == nil {
-			r.Result = tmp
-		} else {
-			return err
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (out *QueryData) UnmarshalEasyJSON(in *jlexer.Lexer) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
 		}
-	case model.ValVector:
-		tmp := model.Vector{}
-		if err := json.Unmarshal(*rawData.Result, &tmp); err == nil {
-			r.Result = tmp
-		} else {
-			return err
-		}
-	case model.ValMatrix:
-		tmp := model.Matrix{}
-		if err := json.Unmarshal(*rawData.Result, &tmp); err == nil {
-			r.Result = tmp
-		} else {
-			return err
-		}
-	case model.ValString:
-		tmp := &model.String{}
-		if err := json.Unmarshal(*rawData.Result, tmp); err == nil {
-			r.Result = tmp
-		} else {
-			return err
-		}
-	default:
-		return fmt.Errorf("Unknown result type: %v", r.ResultType)
+		in.Skip()
+		return
 	}
-	return nil
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeString()
+		in.WantColon()
+		if in.IsNull() {
+			in.Skip()
+			in.WantComma()
+			continue
+		}
+		switch key {
+		case "resultType":
+			out.ResultType.UnmarshalJSON(in.Raw())
+		case "result":
+			switch out.ResultType {
+			case model.ValNone:
+				return
+			case model.ValScalar:
+				tmp := &model.Scalar{}
+				tmp.UnmarshalJSON(in.Raw())
+				out.Result = tmp
+			case model.ValVector:
+				tmp := model.Vector{}
+				tmp.UnmarshalEasyJSON(in)
+				out.Result = tmp
+			case model.ValMatrix:
+				tmp := model.Matrix{}
+				tmp.UnmarshalEasyJSON(in)
+				out.Result = tmp
+			case model.ValString:
+				tmp := &model.String{}
+				tmp.UnmarshalJSON(in.Raw())
+				out.Result = tmp
+			default:
+				in.AddError(fmt.Errorf("Unknown result type: %v", out.ResultType))
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
 }

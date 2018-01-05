@@ -7,8 +7,9 @@ import (
 	"github.com/prometheus/common/model"
 )
 
+//easyjson:json
 type LabelResult struct {
-	Status    string                 `json:"status"`
+	Status    promhttputil.Status    `json:"status"`
 	Data      []model.LabelValue     `json:"data"`
 	ErrorType promhttputil.ErrorType `json:"errorType,omitempty"`
 	Error     string                 `json:"error,omitempty"`

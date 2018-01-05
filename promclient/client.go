@@ -25,13 +25,7 @@ func DoRequest(ctx context.Context, url string, client *http.Client, responseStr
 		return err
 	}
 
-	// TODO: check content headers? Prom seems to only do JSON so not necessary
-	// for now
-	if err := json.NewDecoder(resp.Body).Decode(responseStruct); err != nil {
-		return err
-	}
-
-	return nil
+	return json.NewDecoder(resp.Body).Decode(responseStruct)
 }
 
 // HTTP client for prometheus
