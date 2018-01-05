@@ -71,3 +71,13 @@
 [[constraint]]
   name = "github.com/ugorji/go"
   revision = "f1f1a805ed361a0e078bb537e4ea78cd37dcf065"
+
+
+# Force some transitive stuffs
+[[override]]
+  name = "github.com/hashicorp/consul"
+  version = "v0.9.3"
+
+[[override]]
+  name = "github.com/hashicorp/serf"
+  version = "v0.8.1"

@@ -161,7 +161,7 @@
   branch = "master"
   name = "github.com/hashicorp/go-cleanhttp"
   packages = ["."]
-  revision = "3573b8b52aa7b37b9358d966a898feb387f62437"
+  revision = "d5fe4b57a186c716b0e00b8c301cbd9b4182694d"
 
 [[projects]]
   branch = "master"
@@ -257,7 +257,7 @@
   branch = "release-1.8_fork_promxy"
   name = "github.com/prometheus/prometheus"
   packages = ["config","discovery","discovery/azure","discovery/consul","discovery/dns","discovery/ec2","discovery/file","discovery/gce","discovery/kubernetes","discovery/marathon","discovery/openstack","discovery/triton","discovery/zookeeper","notifier","promql","relabel","retrieval","rules","storage","storage/local","storage/local/chunk","storage/local/codable","storage/local/index","storage/metric","storage/remote","template","util/flock","util/httputil","util/stats","util/strutil","util/testutil","util/treecache","web/api/v1"]
-  revision = "a755ae57e8aa5b8fb1087a015f973a069f25439d"
+  revision = "51b06b8d70baa085a0d94b62105a818242ab33ef"
   source = "github.com/jacksontj/prometheus"
 
 [[projects]]
@@ -375,6 +375,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3a90c8a090cf65d33ebcf5debea4f312f68555e31f190873909f3fde832e94d9"
+  inputs-digest = "68e740a07290e265f97da591069dcc3dffcb78d4e7a543d5579aa16f54b6fb2a"
   solver-name = "gps-cdcl"
   solver-version = 1
