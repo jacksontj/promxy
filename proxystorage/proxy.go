@@ -24,6 +24,8 @@ import (
 type proxyStorageState struct {
 	serverGroups []*servergroup.ServerGroup
 	client       *http.Client
+
+	q local.Querier
 }
 
 func (p *proxyStorageState) Ready() {
@@ -80,12 +82,17 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		logrus.Errorf("Unable to load client from config: %s", err)
 	}
 
-    // TODO: remove after fixes to upstream
+	// TODO: remove after fixes to upstream
 	// Override the dial timeout
 	transport := client.Transport.(*http.Transport)
 	transport.DialContext = (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext
 
 	newState.client = client
+
+	newState.q = &proxyquerier.ProxyQuerier{
+		newState.serverGroups,
+		newState.client,
+	}
 
 	if failed {
 		for _, sg := range newState.serverGroups {
@@ -125,10 +132,7 @@ func (p *ProxyStorage) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 
 func (p *ProxyStorage) Querier() (local.Querier, error) {
 	state := p.GetState()
-	return &proxyquerier.ProxyQuerier{
-		state.serverGroups,
-		state.client,
-	}, nil
+	return state.q, nil
 }
 
 // TODO: IMPLEMENT??
