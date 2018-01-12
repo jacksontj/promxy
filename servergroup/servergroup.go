@@ -155,6 +155,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Value
 			// TODO: check response code, how do we want to handle it?
 			if childResult.Status != promhttputil.StatusSuccess {
 				errCount++
+				lastError = fmt.Errorf("Error response from downstream: %s", childResult.Status)
 				continue
 			}
 
