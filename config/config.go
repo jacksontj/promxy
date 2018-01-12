@@ -3,6 +3,7 @@ package proxyconfig
 import (
 	"fmt"
 	"io/ioutil"
+	"time"
 
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/prometheus/config"
@@ -38,4 +39,17 @@ type PromxyConfig struct {
 	HTTPConfig config.HTTPClientConfig `yaml:"http_client"`
 	// Our own configs
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
+
+	ProxyQuerierConfig ProxyQuerierConfig `yaml:"proxy_querier"`
+}
+
+type ProxyQuerierConfig struct {
+	// Configs to control downsampling on QueryRange
+	QueryRangeConfig *ProxyQuerierQueryRangeConfig `yaml:"query_range"`
+}
+
+// TODO: make per-serverGroup configurable?
+type ProxyQuerierQueryRangeConfig struct {
+	MaxDatapoints  int           `yaml:"max_datapoints"`
+	ScrapeInterval time.Duration `yaml:"scrape_interval"`
 }

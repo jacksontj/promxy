@@ -36,7 +36,7 @@ type ProxyQuerier struct {
 	// TODO: support limits to the hosts we query
 	// Configurable -- N hosts to query M required to complete
 
-	Config *proxyconfig.Config
+	Config *proxyconfig.ProxyQuerierConfig
 }
 
 // Close closes the querier. Behavior for subsequent calls to Querier methods
@@ -67,23 +67,26 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 	var urlBase string
 	values := url.Values{}
 
-	// TODO: config (ideally step would be passed down :/ )
-	MAX_DATAPOINTS := float64(500)
-	SCRAPE_INTERVAL := float64(15)
+	// Initialize step as 0
+	step := float64(0)
 
-	// If regular 15s scraping ends up with more than 500 points, switch to using a step
-	// which gives us roughly that
-	step := through.Sub(from).Seconds() / MAX_DATAPOINTS
+	// for easier reading
+	cfg := h.Config.QueryRangeConfig
 
-	// TODO: config?
-	// There is a hard-coded 5m "staleness" number in promql. As such you can't
-	// have a step of longer than 5m otherwise you get holes in the graph
-	if step > 200 {
-		step = 200
+	if cfg != nil {
+		// If regular 15s scraping ends up with more than 500 points, switch to using a step
+		// which gives us roughly that
+		step = through.Sub(from).Seconds() / float64(cfg.MaxDatapoints)
+
+		// There is a hard-coded 5m "staleness" number in promql. As such you can't
+		// have a step of longer than 5m otherwise you get holes in the graph
+		if step > 200 {
+			step = 200
+		}
 	}
 
 	// If our calculated step is lower than what we expect raw to be, lets get raw
-	if step < (SCRAPE_INTERVAL * 2) {
+	if cfg == nil || step < (cfg.ScrapeInterval.Seconds()*2) {
 		// We want to do a normal query (for raw data)
 		urlBase = "/api/v1/query"
 
