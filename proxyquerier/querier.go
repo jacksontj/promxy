@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/client_golang/prometheus"
@@ -34,6 +35,8 @@ type ProxyQuerier struct {
 	Client *http.Client
 	// TODO: support limits to the hosts we query
 	// Configurable -- N hosts to query M required to complete
+
+	Config *proxyconfig.Config
 }
 
 // Close closes the querier. Behavior for subsequent calls to Querier methods
