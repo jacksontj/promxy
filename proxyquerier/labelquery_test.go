@@ -21,9 +21,8 @@ func TestMatcherToString(t *testing.T) {
 					Value: "scrape_duration_seconds",
 				},
 			},
-			result: "scrape_duration_seconds",
+			result: `{__name__="scrape_duration_seconds"}`,
 		},
-
 		{
 			matchers: []*metric.LabelMatcher{
 				{
@@ -37,7 +36,17 @@ func TestMatcherToString(t *testing.T) {
 					Value: "prometheus",
 				},
 			},
-			result: `scrape_duration_seconds{job="prometheus"}`,
+			result: `{__name__="scrape_duration_seconds",job="prometheus"}`,
+		},
+		{
+			matchers: []*metric.LabelMatcher{
+				{
+					Type:  metric.RegexMatch,
+					Name:  model.MetricNameLabel,
+					Value: ".+",
+				},
+			},
+			result: `{__name__=~".+"}`,
 		},
 	}
 
