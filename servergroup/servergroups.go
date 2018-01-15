@@ -21,14 +21,14 @@ func (s ServerGroups) GetData(ctx context.Context, path string, values url.Value
 
 	// Scatter out all the queries
 	for _, serverGroup := range s {
-		go func() {
+		go func(serverGroup *ServerGroup) {
 			result, err := serverGroup.GetData(childContext, path, values, client)
 			if err != nil {
 				errChan <- err
 			} else {
 				resultChan <- result
 			}
-		}()
+		}(serverGroup)
 	}
 
 	// Wait for results as we get them
@@ -71,14 +71,14 @@ func (s ServerGroups) GetSeries(ctx context.Context, path string, values url.Val
 
 	// Scatter out all the queries
 	for _, serverGroup := range s {
-		go func() {
+		go func(serverGroup *ServerGroup) {
 			result, err := serverGroup.GetSeries(childContext, path, values, client)
 			if err != nil {
 				errChan <- err
 			} else {
 				resultChan <- result
 			}
-		}()
+		}(serverGroup)
 	}
 
 	// Wait for results as we get them
@@ -119,14 +119,14 @@ func (s ServerGroups) GetValuesForLabelName(ctx context.Context, path string, cl
 
 	// Scatter out all the queries
 	for _, serverGroup := range s {
-		go func() {
+		go func(serverGroup *ServerGroup) {
 			result, err := serverGroup.GetValuesForLabelName(childContext, path, client)
 			if err != nil {
 				errChan <- err
 			} else {
 				resultChan <- result
 			}
-		}()
+		}(serverGroup)
 	}
 
 	// Wait for results as we get them

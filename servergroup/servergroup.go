@@ -124,9 +124,9 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Value
 			return nil, err
 		}
 		parsedUrl.RawQuery = values.Encode()
-		go func() {
+		go func(stringUrl string) {
 			start := time.Now()
-			result, err := promclient.GetData(childContext, parsedUrl.String(), client, s.Cfg.Labels)
+			result, err := promclient.GetData(childContext, stringUrl, client, s.Cfg.Labels)
 			took := time.Now().Sub(start)
 			if err != nil {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(float64(took))
@@ -135,7 +135,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Value
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "success").Observe(float64(took))
 				resultChan <- result
 			}
-		}()
+		}(parsedUrl.String())
 	}
 
 	// Wait for results as we get them
@@ -193,9 +193,9 @@ func (s *ServerGroup) GetSeries(ctx context.Context, path string, values url.Val
 			return nil, err
 		}
 		parsedUrl.RawQuery = values.Encode()
-		go func() {
+		go func(stringUrl string) {
 			start := time.Now()
-			result, err := promclient.GetSeries(childContext, parsedUrl.String(), client)
+			result, err := promclient.GetSeries(childContext, stringUrl, client)
 			took := time.Now().Sub(start)
 			if err != nil {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getseries", "error").Observe(float64(took))
@@ -204,7 +204,7 @@ func (s *ServerGroup) GetSeries(ctx context.Context, path string, values url.Val
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getseries", "success").Observe(float64(took))
 				resultChan <- result
 			}
-		}()
+		}(parsedUrl.String())
 	}
 
 	// Wait for results as we get them
@@ -250,9 +250,9 @@ func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string, cl
 		if err != nil {
 			return nil, err
 		}
-		go func() {
+		go func(stringUrl string) {
 			start := time.Now()
-			result, err := promclient.GetValuesForLabelName(childContext, parsedUrl.String(), client)
+			result, err := promclient.GetValuesForLabelName(childContext, stringUrl, client)
 			took := time.Now().Sub(start)
 			if err != nil {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "error").Observe(float64(took))
@@ -261,7 +261,7 @@ func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string, cl
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "success").Observe(float64(took))
 				resultChan <- result
 			}
-		}()
+		}(parsedUrl.String())
 	}
 
 	// Wait for results as we get them
