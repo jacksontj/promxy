@@ -257,7 +257,7 @@
   branch = "release-1.8_fork_promxy"
   name = "github.com/prometheus/prometheus"
   packages = ["config","discovery","discovery/azure","discovery/consul","discovery/dns","discovery/ec2","discovery/file","discovery/gce","discovery/kubernetes","discovery/marathon","discovery/openstack","discovery/triton","discovery/zookeeper","notifier","promql","relabel","retrieval","rules","storage","storage/local","storage/local/chunk","storage/local/codable","storage/local/index","storage/metric","storage/remote","template","util/flock","util/httputil","util/stats","util/strutil","util/testutil","util/treecache","web/api/v1"]
-  revision = "51b06b8d70baa085a0d94b62105a818242ab33ef"
+  revision = "1fafcea4c7f800ab6fb520fd0308d2e2c2ac4c17"
   source = "github.com/jacksontj/prometheus"
 
 [[projects]]
