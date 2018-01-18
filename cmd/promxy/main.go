@@ -175,5 +175,7 @@ func main() {
 	}()
 
 	// TODO: listen address/port option
-	http.ListenAndServe(":8082", r)
+	if err := http.ListenAndServe(":8082", r); err != nil {
+		log.Fatalf("Error listening: %v", err)
+	}
 }
