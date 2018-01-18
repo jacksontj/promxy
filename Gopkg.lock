@@ -244,7 +244,7 @@
   branch = "tjackson_fork"
   name = "github.com/prometheus/common"
   packages = ["expfmt","internal/bitbucket.org/ww/goautoneg","log","model","route","version"]
-  revision = "0fb8af015ceb98744e04510bd8e8366abfb37546"
+  revision = "8c8c200a91f4ccb0e03b1955d52d8de228866190"
   source = "github.com/jacksontj/common"
 
 [[projects]]
