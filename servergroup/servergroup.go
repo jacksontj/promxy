@@ -172,7 +172,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Value
 		}
 	}
 
-	if errCount == len(targets) {
+	if errCount != 0 && errCount == len(targets) {
 		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
 	}
 
