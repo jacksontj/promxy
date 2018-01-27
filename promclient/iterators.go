@@ -66,7 +66,8 @@ func (s *SeriesIterator) ValueAtOrBeforeTime(t model.Time) model.SamplePair {
 		}
 		return model.ZeroSamplePair
 	default:
-		panic("Unknown data type!")
+		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.v))
+		panic(msg)
 	}
 
 	return model.ZeroSamplePair

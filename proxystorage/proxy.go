@@ -8,13 +8,17 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"reflect"
+	"strconv"
 	"sync/atomic"
 	"time"
 
 	"github.com/jacksontj/promxy/config"
+	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/proxyquerier"
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage/local"
 	"github.com/prometheus/prometheus/storage/metric"
 	promhttputil "github.com/prometheus/prometheus/util/httputil"
@@ -53,7 +57,7 @@ type ProxyStorage struct {
 
 // TODO: remove
 func (p *ProxyStorage) GetSGs() []*servergroup.ServerGroup {
-    return p.GetState().serverGroups
+	return p.GetState().serverGroups
 }
 
 func (p *ProxyStorage) GetState() *proxyStorageState {
@@ -139,6 +143,232 @@ func (p *ProxyStorage) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 func (p *ProxyStorage) Querier() (local.Querier, error) {
 	state := p.GetState()
 	return state.q, nil
+}
+
+// This replaces promql Nodes with more efficient-to-fetch ones. This works by taking lower-layer
+// chunks of the query, farming them out to prometheus hosts, then stitching the results back together.
+// An example would be a sum, we can sum multiple sums and come up with the same result -- so we do.
+// There are a few ground rules for this:
+//      - Children cannot be AggregateExpr: aggregates have their own combining logic, so its not safe to send a subquery with additional aggregations
+//      - offsets within the subtree must match: if they don't then we'll get mismatched data, so we wait until we are far enough down the tree that they converge
+//      - Don't reduce accuracy/granularity: the intention of this is to get the correct data faster, meaning correctness overrules speed.
+func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, node promql.Node) (promql.Node, error) {
+	// If there is a child that is an aggregator we cannot do anything (as they have their own
+	// rules around combining). We'll skip this node and let a lower layer take this on
+	aggFinder := &BooleanFinder{Func: func(node promql.Node) bool {
+		_, ok := node.(*promql.AggregateExpr)
+		return ok
+	}}
+
+	if _, err := promql.Walk(ctx, aggFinder, s, node, nil); err != nil {
+		return nil, err
+	}
+
+	if aggFinder.Found {
+		return nil, nil
+	}
+
+	// If the tree below us is not all the same offset, then we can't do anything below -- we'll need
+	// to wait until further in execution where they all match
+	var offset time.Duration
+
+	visitor := &OffsetFinder{}
+	if _, err := promql.Walk(ctx, visitor, s, node, nil); err != nil {
+		return nil, err
+	}
+	// If we couldn't find an offset, then something is wrong-- lets skip
+	// Also if there was an error, skip
+	if !visitor.Found || visitor.Error != nil {
+		return nil, nil
+	}
+	offset = visitor.Offset
+
+	state := p.GetState()
+	serverGroups := servergroup.ServerGroups(state.serverGroups)
+	switch n := node.(type) {
+	// Some AggregateExprs can be composed (meaning they are "reentrant". If the aggregation op
+	// is reentrant/composable then we'll do so, otherwise we let it fall through to normal query mechanisms
+	case *promql.AggregateExpr:
+		fmt.Println("AggregateExpr", n)
+
+		var result model.Value
+		var err error
+
+		// Not all Aggregation functions are composable, so we'll do what we can
+		switch n.Op.String() {
+		// All "reentrant" cases (meaning they can be done repeatedly and the outcome doesn't change)
+		case "sum", "min", "max", "topk", "bottomk":
+			var urlBase string
+			values := url.Values{}
+			values.Add("query", n.String())
+
+			if s.Interval > 0 {
+				values.Add("start", s.Start.Add(-offset-promql.StalenessDelta).String())
+				values.Add("end", s.End.Add(-offset).String())
+				values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'E', -1, 64))
+				urlBase = "/api/v1/query_range"
+			} else {
+				values.Add("time", s.Start.Add(-offset).String())
+				urlBase = "/api/v1/query"
+			}
+
+			result, err = serverGroups.GetData(ctx, urlBase, values, state.client)
+			if err != nil {
+				return nil, err
+			}
+
+		// Convert avg into sum() / count()
+		case "avg":
+			// Replace with sum() / count()
+			return &promql.BinaryExpr{
+				Op: 24, // Divide  TODO
+				LHS: &promql.AggregateExpr{
+					Op:               41, // sum() TODO
+					Expr:             n.Expr,
+					Param:            n.Param,
+					Grouping:         n.Grouping,
+					Without:          n.Without,
+					KeepCommonLabels: n.KeepCommonLabels,
+				},
+
+				RHS: &promql.AggregateExpr{
+					Op:               40, // count() TODO
+					Expr:             n.Expr,
+					Param:            n.Param,
+					Grouping:         n.Grouping,
+					Without:          n.Without,
+					KeepCommonLabels: n.KeepCommonLabels,
+				},
+				VectorMatching: &promql.VectorMatching{Card: promql.CardOneToOne},
+			}, nil
+
+		// For count we simply need to change this to a sum over the data we get back
+		case "count":
+			var urlBase string
+			values := url.Values{}
+			values.Add("query", n.String())
+
+			if s.Interval > 0 {
+				values.Add("start", s.Start.Add(-offset-promql.StalenessDelta).String())
+				values.Add("end", s.End.Add(-offset).String())
+				values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'E', -1, 64))
+				urlBase = "/api/v1/query_range"
+			} else {
+				values.Add("time", s.Start.Add(-offset).String())
+				urlBase = "/api/v1/query"
+			}
+
+			result, err = serverGroups.GetData(ctx, urlBase, values, state.client)
+			if err != nil {
+				return nil, err
+			}
+			// TODO: have a reverse method in promql/lex.go
+			n.Op = 41 // SUM
+
+		case "stddev": // TODO: something?
+		case "stdvar": // TODO: something?
+
+			// Do nothing, we want to allow the VectorSelector to fall through to do a query_range.
+			// Unless we find another way to decompose the query, this is all we can do
+		case "count_values":
+			// DO NOTHING
+
+		case "quantile": // TODO: something?
+
+		}
+
+		if result != nil {
+			iterators := promclient.IteratorsForValue(result)
+			returnIterators := make([]local.SeriesIterator, len(iterators))
+			for i, item := range iterators {
+				returnIterators[i] = item
+			}
+
+			ret := &promql.VectorSelector{Offset: offset}
+			ret.SetIterators(returnIterators)
+			n.Expr = ret
+			return n, nil
+		}
+
+	// Call is for things such as rate() etc. This can be sent directly to the
+	// prometheus node to answer
+	case *promql.Call:
+		fmt.Println("call", n, n.Type())
+		var urlBase string
+		values := url.Values{}
+		values.Add("query", n.String())
+
+		if s.Interval > 0 {
+			values.Add("start", s.Start.Add(-offset-promql.StalenessDelta).String())
+			values.Add("end", s.End.Add(-offset).String())
+			values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'E', -1, 64))
+			urlBase = "/api/v1/query_range"
+		} else {
+			values.Add("time", s.Start.Add(-offset).String())
+			urlBase = "/api/v1/query"
+		}
+
+		result, err := serverGroups.GetData(ctx, urlBase, values, state.client)
+		if err != nil {
+			return nil, err
+		}
+		iterators := promclient.IteratorsForValue(result)
+		returnIterators := make([]local.SeriesIterator, len(iterators))
+		for i, item := range iterators {
+			returnIterators[i] = item
+		}
+
+		ret := &promql.VectorSelector{Offset: offset}
+		ret.SetIterators(returnIterators)
+		return ret, nil
+
+		// If we are simply fetching a Vector then we can fetch the data using the same step that
+		// the query came in as (reducing the amount of data we need to fetch)
+	// If we are simply fetching data, lets do that
+	case *promql.VectorSelector:
+		// Don't attempt to fetch internally replaced things
+		if n.HasIterators() {
+			return nil, nil
+		}
+		fmt.Println("vectorSelector", n)
+		var urlBase string
+		values := url.Values{}
+		values.Add("query", n.String())
+
+		if s.Interval > 0 {
+			values.Add("start", s.Start.Add(-n.Offset-promql.StalenessDelta).String())
+			values.Add("end", s.End.Add(-n.Offset).String())
+			values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'E', -1, 64))
+			urlBase = "/api/v1/query_range"
+		} else {
+			values.Add("time", s.Start.Add(-n.Offset).String())
+			urlBase = "/api/v1/query"
+		}
+
+		result, err := serverGroups.GetData(ctx, urlBase, values, state.client)
+		if err != nil {
+			return nil, err
+		}
+		iterators := promclient.IteratorsForValue(result)
+		returnIterators := make([]local.SeriesIterator, len(iterators))
+		for i, item := range iterators {
+			returnIterators[i] = item
+		}
+
+		n.SetIterators(returnIterators)
+		return n, nil
+
+	// If we hit this someone is asking for a matrix directly, if so then we don't
+	// have anyway to ask for less-- since this is exactly what they are asking for
+	case *promql.MatrixSelector:
+		// DO NOTHING
+
+	default:
+		fmt.Println("default", n, reflect.TypeOf(n))
+
+	}
+	return nil, nil
+
 }
 
 // TODO: IMPLEMENT??
