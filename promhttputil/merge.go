@@ -18,6 +18,10 @@ func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
 
 	case model.Matrix:
 		for _, item := range aTyped {
+			// If the current metric has no labels, set them
+			if item.Metric == nil {
+				item.Metric = model.Metric(model.LabelSet(make(map[model.LabelName]model.LabelValue)))
+			}
 			for k, v := range l {
 				item.Metric[k] = v
 			}
