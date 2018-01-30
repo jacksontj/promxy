@@ -257,7 +257,7 @@
   branch = "release-1.8_fork_promxy"
   name = "github.com/prometheus/prometheus"
   packages = ["config","discovery","discovery/azure","discovery/consul","discovery/dns","discovery/ec2","discovery/file","discovery/gce","discovery/kubernetes","discovery/marathon","discovery/openstack","discovery/triton","discovery/zookeeper","notifier","promql","relabel","retrieval","rules","storage","storage/local","storage/local/chunk","storage/local/codable","storage/local/index","storage/metric","storage/remote","template","util/flock","util/httputil","util/stats","util/strutil","util/testutil","util/treecache","web/api/v1"]
-  revision = "1fafcea4c7f800ab6fb520fd0308d2e2c2ac4c17"
+  revision = "14dcfeb8307d46894ac2d5bb1ab84b4db186a31a"
   source = "github.com/jacksontj/prometheus"
 
 [[projects]]
@@ -375,6 +375,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "68e740a07290e265f97da591069dcc3dffcb78d4e7a543d5579aa16f54b6fb2a"
+  inputs-digest = "d750911387996ab1af85cad4cd757b9604a8026200ed85d31939ae95b0900e96"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -8,7 +8,7 @@ import (
 
 	yaml "gopkg.in/yaml.v2"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/proxystorage"
 	"github.com/prometheus/common/route"

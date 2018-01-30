@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/jacksontj/promxy/config"
+	"github.com/jacksontj/promxy/logging"
 	"github.com/jacksontj/promxy/proxystorage"
 	"github.com/jessevdk/go-flags"
 	"github.com/julienschmidt/httprouter"
@@ -179,8 +180,11 @@ func main() {
 		}
 	}()
 
+	// Set up access logger
+	loggedRouter := logging.NewApacheLoggingHandler(r, os.Stdout)
+
 	// TODO: listen address/port option
-	if err := http.ListenAndServe(":8082", r); err != nil {
+	if err := http.ListenAndServe(":8082", loggedRouter); err != nil {
 		log.Fatalf("Error listening: %v", err)
 	}
 }
