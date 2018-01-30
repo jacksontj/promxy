@@ -54,7 +54,7 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 			"through":  through,
 			"matchers": matchers,
 			"took":     time.Now().Sub(start),
-		}).Info("QueryRange")
+		}).Debug("QueryRange")
 	}()
 
 	// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
@@ -131,7 +131,7 @@ func (h *ProxyQuerier) QueryInstant(ctx context.Context, ts model.Time, stalenes
 			"stalenessDelta": stalenessDelta,
 			"matchers":       matchers,
 			"took":           time.Now().Sub(start),
-		}).Info("QueryInstant")
+		}).Debug("QueryInstant")
 	}()
 
 	// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
@@ -176,7 +176,7 @@ func (h *ProxyQuerier) MetricsForLabelMatchers(ctx context.Context, from, throug
 			"through":     through,
 			"matcherSets": matcherSets,
 			"took":        time.Now().Sub(start),
-		}).Info("MetricsForLabelMatchers")
+		}).Debug("MetricsForLabelMatchers")
 	}()
 
 	// http://10.0.1.115:8082/api/v1/series?match[]=scrape_samples_scraped&start=1507432802&end=1507433102
@@ -221,7 +221,7 @@ func (h *ProxyQuerier) LastSampleForLabelMatchers(ctx context.Context, cutoff mo
 	logrus.WithFields(logrus.Fields{
 		"cutoff":      cutoff,
 		"matcherSets": matcherSets,
-	}).Info("MetricsForLastSampleForLabelMatchersLabelMatchers")
+	}).Debug("MetricsForLastSampleForLabelMatchersLabelMatchers")
 	return nil, fmt.Errorf("Not implemented")
 }
 
@@ -232,7 +232,7 @@ func (h *ProxyQuerier) LabelValuesForLabelName(ctx context.Context, name model.L
 		logrus.WithFields(logrus.Fields{
 			"name": name,
 			"took": time.Now().Sub(start),
-		}).Info("LabelValuesForLabelName")
+		}).Debug("LabelValuesForLabelName")
 	}()
 
 	result, err := h.ServerGroups.GetValuesForLabelName(ctx, "/api/v1/label/"+string(name)+"/values", h.Client)

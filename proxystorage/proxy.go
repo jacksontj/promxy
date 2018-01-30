@@ -189,7 +189,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 	// Some AggregateExprs can be composed (meaning they are "reentrant". If the aggregation op
 	// is reentrant/composable then we'll do so, otherwise we let it fall through to normal query mechanisms
 	case *promql.AggregateExpr:
-		fmt.Println("AggregateExpr", n)
+		logrus.Debugf("AggregateExpr %v", n)
 
 		var result model.Value
 		var err error
@@ -293,7 +293,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 	// Call is for things such as rate() etc. This can be sent directly to the
 	// prometheus node to answer
 	case *promql.Call:
-		fmt.Println("call", n, n.Type())
+		logrus.Debugf("call %v %v", n, n.Type())
 		var urlBase string
 		values := url.Values{}
 		values.Add("query", n.String())
@@ -330,7 +330,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		if n.HasIterators() {
 			return nil, nil
 		}
-		fmt.Println("vectorSelector", n)
+		logrus.Debugf("vectorSelector %v", n)
 		var urlBase string
 		values := url.Values{}
 		values.Add("query", n.String())
@@ -364,7 +364,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		// DO NOTHING
 
 	default:
-		fmt.Println("default", n, reflect.TypeOf(n))
+		logrus.Debugf("default %v %s", n, reflect.TypeOf(n))
 
 	}
 	return nil, nil
