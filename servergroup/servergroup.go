@@ -152,10 +152,10 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Value
 			errCount++
 
 		case childResult := <-resultChan:
-			// TODO: check response code, how do we want to handle it?
+			// If the server responded with a non-success, lets mark that as an error
 			if childResult.Status != promhttputil.StatusSuccess {
+				lastError = fmt.Errorf(childResult.Error)
 				errCount++
-				lastError = fmt.Errorf("Error response from downstream: %s", childResult.Status)
 				continue
 			}
 
@@ -219,6 +219,13 @@ func (s *ServerGroup) GetSeries(ctx context.Context, path string, values url.Val
 			lastError = err
 			errCount++
 		case childResult := <-resultChan:
+			// If the server responded with a non-success, lets mark that as an error
+			if childResult.Status != promhttputil.StatusSuccess {
+				lastError = fmt.Errorf(childResult.Error)
+				errCount++
+				continue
+			}
+
 			if result == nil {
 				result = childResult
 			} else {
@@ -276,6 +283,13 @@ func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string, cl
 			lastError = err
 			errCount++
 		case childResult := <-resultChan:
+			// If the server responded with a non-success, lets mark that as an error
+			if childResult.Status != promhttputil.StatusSuccess {
+				lastError = fmt.Errorf(childResult.Error)
+				errCount++
+				continue
+			}
+
 			if result == nil {
 				result = childResult
 			} else {
