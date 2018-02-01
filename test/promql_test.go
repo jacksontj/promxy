@@ -108,7 +108,7 @@ func TestUpstreamEvaluations(t *testing.T) {
 		eOpts := promql.EngineOptions{}
 		eOpts = *promql.DefaultEngineOptions
 		engine := promql.NewEngine(ps, &eOpts)
-		test.SetEngine(engine)
+		test.SetQueryEngine(engine)
 
 		err = test.Run()
 		if err != nil {
@@ -144,7 +144,7 @@ func TestEvaluations(t *testing.T) {
 		eOpts := promql.EngineOptions{}
 		eOpts = *promql.DefaultEngineOptions
 		engine := promql.NewEngine(ps, &eOpts)
-		test.SetEngine(engine)
+		test.SetQueryEngine(engine)
 
 		err = test.Run()
 		if err != nil {
