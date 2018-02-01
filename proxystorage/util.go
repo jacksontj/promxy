@@ -43,6 +43,20 @@ func (o *OffsetFinder) Visit(node promql.Node) (w promql.Visitor) {
 	}
 }
 
+// When we send the queries below, we want to actually *remove* the offset.
+type OffsetRemover struct{}
+
+func (o *OffsetRemover) Visit(node promql.Node) (w promql.Visitor) {
+	switch n := node.(type) {
+	case *promql.VectorSelector:
+		n.Offset = 0
+
+	case *promql.MatrixSelector:
+		n.Offset = 0
+	}
+	return o
+}
+
 // Use given func to determine if something is in there or notret := &promql.VectorSelector{Offset: offset}
 type BooleanFinder struct {
 	Func  func(promql.Node) bool

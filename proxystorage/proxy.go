@@ -183,6 +183,16 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 	}
 	offset = visitor.Offset
 
+	// Function to recursivelt remove offset. This is needed as we're using
+	// the node API to String() the query to downstreams. Promql's iterators require
+	// that the time be the abolute time, wheras the API returns them based on the
+	// range you ask for (with the offset being implicit)
+	// TODO: rename
+	removeOffset := func() error {
+		_, err := promql.Walk(ctx, &OffsetRemover{}, s, node, nil)
+		return err
+	}
+
 	state := p.GetState()
 	serverGroups := servergroup.ServerGroups(state.serverGroups)
 	switch n := node.(type) {
@@ -200,12 +210,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		case "sum", "min", "max", "topk", "bottomk":
 			var urlBase string
 			values := url.Values{}
+			removeOffset()
 			values.Add("query", n.String())
 
 			if s.Interval > 0 {
 				values.Add("start", s.Start.Add(-offset-promql.StalenessDelta).String())
 				values.Add("end", s.End.Add(-offset).String())
-				values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'E', -1, 64))
+				values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'f', -1, 64))
 				urlBase = "/api/v1/query_range"
 			} else {
 				values.Add("time", s.Start.Add(-offset).String())
@@ -246,12 +257,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		case "count":
 			var urlBase string
 			values := url.Values{}
+			removeOffset()
 			values.Add("query", n.String())
 
 			if s.Interval > 0 {
 				values.Add("start", s.Start.Add(-offset-promql.StalenessDelta).String())
 				values.Add("end", s.End.Add(-offset).String())
-				values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'E', -1, 64))
+				values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'f', -1, 64))
 				urlBase = "/api/v1/query_range"
 			} else {
 				values.Add("time", s.Start.Add(-offset).String())
@@ -296,12 +308,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		logrus.Debugf("call %v %v", n, n.Type())
 		var urlBase string
 		values := url.Values{}
+		removeOffset()
 		values.Add("query", n.String())
 
 		if s.Interval > 0 {
 			values.Add("start", s.Start.Add(-offset-promql.StalenessDelta).String())
 			values.Add("end", s.End.Add(-offset).String())
-			values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'E', -1, 64))
+			values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'f', -1, 64))
 			urlBase = "/api/v1/query_range"
 		} else {
 			values.Add("time", s.Start.Add(-offset).String())
@@ -333,15 +346,16 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		logrus.Debugf("vectorSelector %v", n)
 		var urlBase string
 		values := url.Values{}
+		removeOffset()
 		values.Add("query", n.String())
-
+		n.Offset = offset
 		if s.Interval > 0 {
-			values.Add("start", s.Start.Add(-n.Offset-promql.StalenessDelta).String())
-			values.Add("end", s.End.Add(-n.Offset).String())
-			values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'E', -1, 64))
+			values.Add("start", s.Start.Add(-offset-promql.StalenessDelta).String())
+			values.Add("end", s.End.Add(-offset).String())
+			values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'f', -1, 64))
 			urlBase = "/api/v1/query_range"
 		} else {
-			values.Add("time", s.Start.Add(-n.Offset).String())
+			values.Add("time", s.Start.Add(-offset).String())
 			urlBase = "/api/v1/query"
 		}
 
