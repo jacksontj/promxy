@@ -164,7 +164,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Value
 				result = childResult.Data.Result
 			} else {
 				var err error
-				result, err = promhttputil.MergeValues(result, childResult.Data.Result)
+				result, err = promhttputil.MergeValues(s.Cfg.GetAntiAffinity(), result, childResult.Data.Result)
 				if err != nil {
 					return nil, err
 				}

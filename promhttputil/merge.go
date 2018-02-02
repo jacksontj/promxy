@@ -34,7 +34,7 @@ func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
 
 // TODO: always make copies? Now we sometimes return one, or make a copy, or do nothing
 // Merge 2 values and
-func MergeValues(a, b model.Value) (model.Value, error) {
+func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, error) {
 	if a.Type() != b.Type() {
 		return nil, fmt.Errorf("Error!")
 	}
@@ -106,7 +106,7 @@ func MergeValues(a, b model.Value) (model.Value, error) {
 			// If we've seen this fingerPrint before, lets make sure that a value exists
 			if index, ok := fingerPrintMap[finger]; ok {
 				// TODO: check this error? For now the only one is sig collision, which we check
-				newValue[index], _ = MergeSampleStream(newValue[index], stream)
+				newValue[index], _ = MergeSampleStream(antiAffinityBuffer, newValue[index], stream)
 			} else {
 				newValue = append(newValue, stream)
 				fingerPrintMap[finger] = len(newValue) - 1
@@ -126,7 +126,7 @@ func MergeValues(a, b model.Value) (model.Value, error) {
 	return nil, fmt.Errorf("Unknown type! %v", reflect.TypeOf(a))
 }
 
-func MergeSampleStream(a, b *model.SampleStream) (*model.SampleStream, error) {
+func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream) (*model.SampleStream, error) {
 	if a.Metric.Fingerprint() != b.Metric.Fingerprint() {
 		return nil, fmt.Errorf("Cannot merge mismatch fingerprints")
 	}
@@ -148,8 +148,6 @@ func MergeSampleStream(a, b *model.SampleStream) (*model.SampleStream, error) {
 	// we have. This means we can tolerate 5s on either side (which can be used by either
 	// clock skew or from this scrape skew).
 
-	// TODO: config
-	antiAffinityBuffer := model.TimeFromUnix(10) // 10s
 	var lastTime model.Time
 
 	for {

@@ -47,7 +47,7 @@ func (s ServerGroups) GetData(ctx context.Context, path string, values url.Value
 			if result == nil {
 				result = childResult
 			} else {
-				result, err = promhttputil.MergeValues(result, childResult)
+				result, err = promhttputil.MergeValues(model.TimeFromUnix(0), result, childResult)
 				if err != nil {
 					return nil, err
 				}
