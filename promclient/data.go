@@ -12,15 +12,6 @@ type DataResult struct {
 	Error     string                 `json:"error,omitempty"`
 }
 
-func (s *DataResult) Merge(o *DataResult) error {
-	result, err := promhttputil.MergeValues(s.Data.Result, o.Data.Result)
-	if err != nil {
-		return err
-	}
-	s.Data.Result = result
-	return nil
-}
-
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *DataResult) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
