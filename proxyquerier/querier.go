@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 
-	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/client_golang/prometheus"
@@ -33,10 +31,6 @@ type ProxyQuerier struct {
 	ServerGroups servergroup.ServerGroups
 	// TODO: use
 	Client *http.Client
-	// TODO: support limits to the hosts we query
-	// Configurable -- N hosts to query M required to complete
-
-	Config *proxyconfig.ProxyQuerierConfig
 }
 
 // Close closes the querier. Behavior for subsequent calls to Querier methods
@@ -64,48 +58,17 @@ func (h *ProxyQuerier) QueryRange(ctx context.Context, from, through model.Time,
 	}
 
 	// Create the query params
-	var urlBase string
 	values := url.Values{}
 
-	// Initialize step as 0
-	step := float64(0)
+	// We want to do a normal query (for raw data)
+	urlBase := "/api/v1/query"
 
-	// for easier reading
-	cfg := h.Config.QueryRangeConfig
-
-	if cfg != nil {
-		// If regular 15s scraping ends up with more than 500 points, switch to using a step
-		// which gives us roughly that
-		step = through.Sub(from).Seconds() / float64(cfg.MaxDatapoints)
-
-		// There is a hard-coded 5m "staleness" number in promql. As such you can't
-		// have a step of longer than 5m otherwise you get holes in the graph
-		if step > 200 {
-			step = 200
-		}
-	}
-
-	// If our calculated step is lower than what we expect raw to be, lets get raw
-	if cfg == nil || step < (cfg.ScrapeInterval.Seconds()*2) {
-		// We want to do a normal query (for raw data)
-		urlBase = "/api/v1/query"
-
-		// We want to grab only the raw datapoints, so we do that through the query interface
-		// passing in a duration that is at least as long as ours (the added second is to deal
-		// with any rounding error etc since the duration is a floating point and we are casting
-		// to an int64
-		values.Add("query", pql+fmt.Sprintf("[%ds]", int64(through.Sub(from).Seconds())+1))
-		values.Add("time", through.String())
-
-	} else { // If step is significanltly less (2x) we'll do that instead
-		// We want to do a queryrange to rely on step to reduce number of datapoints
-		urlBase = "/api/v1/query_range"
-
-		values.Add("query", pql)
-		values.Add("start", from.String())
-		values.Add("end", through.String())
-		values.Add("step", strconv.FormatFloat(step, 'f', -1, 64))
-	}
+	// We want to grab only the raw datapoints, so we do that through the query interface
+	// passing in a duration that is at least as long as ours (the added second is to deal
+	// with any rounding error etc since the duration is a floating point and we are casting
+	// to an int64
+	values.Add("query", pql+fmt.Sprintf("[%ds]", int64(through.Sub(from).Seconds())+1))
+	values.Add("time", through.String())
 
 	result, err := h.ServerGroups.GetData(ctx, urlBase, values, h.Client)
 	if err != nil {

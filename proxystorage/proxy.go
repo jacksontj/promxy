@@ -101,7 +101,6 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	newState.q = &proxyquerier.ProxyQuerier{
 		newState.serverGroups,
 		newState.client,
-		&c.ProxyQuerierConfig,
 	}
 
 	if failed {
