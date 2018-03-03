@@ -1,4 +1,5 @@
 # Promxy
+[![GoDoc](https://godoc.org/github.com/jacksontj/promxy?status.svg)](https://godoc.org/github.com/jacksontj/promxy)
 
 ## High-level overview
 Promxy is a prometheus proxy that makes many shards of prometheus
