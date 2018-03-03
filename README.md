@@ -1,5 +1,4 @@
-# promxy
-A prometheus aggregating HTTP proxy.
+# Promxy
 
 ## High-level overview
 Promxy is a prometheus proxy that makes many shards of prometheus
