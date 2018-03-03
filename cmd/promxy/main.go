@@ -30,6 +30,7 @@ import (
 //http://localhost:8080/api/v1/query?query=scrape_duration_seconds%5B1m%5D&time=1507256489.103&_=1507256486365
 
 var opts struct {
+	BindAddr   string `long:"bind-addr" description:"address for promxy to listen on" default:":8082"`
 	ConfigFile string `long:"config" description:"path to the config file" required:"true"`
 	LogLevel   string `long:"log-level" description:"Log level" default:"info"`
 }
@@ -184,7 +185,7 @@ func main() {
 	loggedRouter := logging.NewApacheLoggingHandler(r, os.Stdout)
 
 	// TODO: listen address/port option
-	if err := http.ListenAndServe(":8082", loggedRouter); err != nil {
+	if err := http.ListenAndServe(opts.BindAddr, loggedRouter); err != nil {
 		log.Fatalf("Error listening: %v", err)
 	}
 }
