@@ -24,4 +24,4 @@ With that configuration modified and ready, all that is left is to run promxy:
 ```
 
 # Questions/Bugs/etc.
-Feedback is **greatly** appreciated. If you find a bug, have a feature request, or just a general question feel free top open up an issue!
+Feedback is **greatly** appreciated. If you find a bug, have a feature request, or just have a general question feel free to open up an issue!
