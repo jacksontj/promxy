@@ -32,7 +32,6 @@ func DoRequest(ctx context.Context, url string, client *http.Client, responseStr
 func GetData(ctx context.Context, url string, client *http.Client, labelset model.LabelSet) (*DataResult, error) {
 	promResp := &DataResult{}
 	if err := DoRequest(ctx, url, client, promResp); err == nil {
-		// TODO: have the client support serverGroup direct
 		if err := promhttputil.ValueAddLabelSet(promResp.Data.Result, labelset); err != nil {
 			return nil, err
 		}

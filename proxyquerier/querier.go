@@ -29,7 +29,6 @@ func init() {
 
 type ProxyQuerier struct {
 	ServerGroups servergroup.ServerGroups
-	// TODO: use
 	Client *http.Client
 }
 

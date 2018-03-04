@@ -149,7 +149,6 @@ func main() {
 
 	// TODO: configurable path
 	r.HandlerFunc("GET", "/metrics", prometheus.Handler().ServeHTTP)
-	// TODO: additional endpoints?
 
 	r.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Have our fallback rules
@@ -184,7 +183,6 @@ func main() {
 	// Set up access logger
 	loggedRouter := logging.NewApacheLoggingHandler(r, os.Stdout)
 
-	// TODO: listen address/port option
 	if err := http.ListenAndServe(opts.BindAddr, loggedRouter); err != nil {
 		log.Fatalf("Error listening: %v", err)
 	}

@@ -55,11 +55,6 @@ type ProxyStorage struct {
 	state atomic.Value
 }
 
-// TODO: remove
-func (p *ProxyStorage) GetSGs() []*servergroup.ServerGroup {
-	return p.GetState().serverGroups
-}
-
 func (p *ProxyStorage) GetState() *proxyStorageState {
 	tmp := p.state.Load()
 	if sg, ok := tmp.(*proxyStorageState); ok {

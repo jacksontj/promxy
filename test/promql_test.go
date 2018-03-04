@@ -161,7 +161,6 @@ func TestEvaluations(t *testing.T) {
 	}
 }
 
-// TODO: move
 func newTestFromFile(t testutil.T, filename string) (*promql.Test, error) {
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {

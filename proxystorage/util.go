@@ -7,7 +7,6 @@ import (
 	"github.com/prometheus/prometheus/promql"
 )
 
-// TODO: move?
 type OffsetFinder struct {
 	Found  bool
 	Offset time.Duration
