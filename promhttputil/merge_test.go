@@ -314,7 +314,7 @@ func TestMergeValues(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result, err := MergeValues(test.a, test.b)
+		result, err := MergeValues(model.Time(0), test.a, test.b)
 		if err != test.err {
 			t.Fatalf("mismatch err in %s expected=%v actual=%v", test.name, test.err, err)
 		}
