@@ -29,7 +29,7 @@ func init() {
 
 type ProxyQuerier struct {
 	ServerGroups servergroup.ServerGroups
-	Client *http.Client
+	Client       *http.Client
 }
 
 // Close closes the querier. Behavior for subsequent calls to Querier methods

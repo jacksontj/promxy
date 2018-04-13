@@ -11,7 +11,7 @@ import (
 func IteratorsForValue(v model.Value) []*SeriesIterator {
 	switch valueTyped := v.(type) {
 	case *model.Scalar:
-		return []*SeriesIterator{&SeriesIterator{v}}
+		return []*SeriesIterator{{v}}
 	case *model.String:
 		panic("Not implemented")
 	case model.Vector:
@@ -80,7 +80,7 @@ func (s *SeriesIterator) RangeValues(interval metric.Interval) []model.SamplePai
 	case *model.Sample: // From a vector
 		if int64(valueTyped.Timestamp) >= int64(interval.OldestInclusive) && int64(valueTyped.Timestamp) <= int64(interval.NewestInclusive) {
 			return []model.SamplePair{
-				model.SamplePair{
+				{
 					valueTyped.Timestamp,
 					valueTyped.Value,
 				},

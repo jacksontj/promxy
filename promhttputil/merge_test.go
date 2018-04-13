@@ -183,7 +183,7 @@ func TestMergeValues(t *testing.T) {
 			a: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
-					[]model.SamplePair{model.SamplePair{
+					[]model.SamplePair{{
 						model.Time(100),
 						model.SampleValue(10),
 					}},
@@ -192,7 +192,7 @@ func TestMergeValues(t *testing.T) {
 			b: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
-					[]model.SamplePair{model.SamplePair{
+					[]model.SamplePair{{
 						model.Time(100),
 						model.SampleValue(10),
 					}},
@@ -201,7 +201,7 @@ func TestMergeValues(t *testing.T) {
 			r: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
-					[]model.SamplePair{model.SamplePair{
+					[]model.SamplePair{{
 						model.Time(100),
 						model.SampleValue(10),
 					}},
@@ -214,14 +214,14 @@ func TestMergeValues(t *testing.T) {
 			a: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
-					[]model.SamplePair{model.SamplePair{
+					[]model.SamplePair{{
 						model.Time(100),
 						model.SampleValue(10),
 					}},
 				},
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hostb")}),
-					[]model.SamplePair{model.SamplePair{
+					[]model.SamplePair{{
 						model.Time(100),
 						model.SampleValue(10),
 					}},
@@ -230,7 +230,7 @@ func TestMergeValues(t *testing.T) {
 			b: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
-					[]model.SamplePair{model.SamplePair{
+					[]model.SamplePair{{
 						model.Time(100),
 						model.SampleValue(10),
 					}},
@@ -239,14 +239,14 @@ func TestMergeValues(t *testing.T) {
 			r: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
-					[]model.SamplePair{model.SamplePair{
+					[]model.SamplePair{{
 						model.Time(100),
 						model.SampleValue(10),
 					}},
 				},
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hostb")}),
-					[]model.SamplePair{model.SamplePair{
+					[]model.SamplePair{{
 						model.Time(100),
 						model.SampleValue(10),
 					}},
@@ -260,7 +260,7 @@ func TestMergeValues(t *testing.T) {
 			a: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
-					[]model.SamplePair{model.SamplePair{
+					[]model.SamplePair{{
 						model.Time(100),
 						model.SampleValue(10),
 					}},
@@ -269,7 +269,7 @@ func TestMergeValues(t *testing.T) {
 			b: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
-					[]model.SamplePair{model.SamplePair{
+					[]model.SamplePair{{
 						model.Time(200),
 						model.SampleValue(10),
 					}},
@@ -278,11 +278,11 @@ func TestMergeValues(t *testing.T) {
 			r: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
-					[]model.SamplePair{model.SamplePair{
+					[]model.SamplePair{{
 						model.Time(100),
 						model.SampleValue(10),
 					},
-						model.SamplePair{
+						{
 							model.Time(200),
 							model.SampleValue(10),
 						}},
