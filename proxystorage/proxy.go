@@ -179,7 +179,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 	// Function to recursivelt remove offset. This is needed as we're using
 	// the node API to String() the query to downstreams. Promql's iterators require
-	// that the time be the abolute time, wheras the API returns them based on the
+	// that the time be the absolute time, whereas the API returns them based on the
 	// range you ask for (with the offset being implicit)
 	// TODO: rename
 	removeOffset := func() error {

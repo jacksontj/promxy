@@ -50,7 +50,7 @@ func reloadConfig(rls ...proxyconfig.Reloadable) error {
 	}
 
 	if failed {
-		return fmt.Errorf("One or more errors occured while applying new configuration")
+		return fmt.Errorf("One or more errors occurred while applying new configuration")
 	}
 	return nil
 }
