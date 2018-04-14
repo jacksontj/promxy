@@ -59,3 +59,7 @@
 [[override]]
   name = "github.com/hashicorp/serf"
   version = "v0.8.1"
+
+[[override]]
+  name = "gopkg.in/fsnotify.v1"
+  source = "github.com/fsnotify/fsnotify"
