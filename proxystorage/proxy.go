@@ -18,9 +18,10 @@ import (
 	"github.com/jacksontj/promxy/proxyquerier"
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/promql"
-	"github.com/prometheus/prometheus/storage/local"
-	"github.com/prometheus/prometheus/storage/metric"
+	"github.com/prometheus/prometheus/storage"
 	promhttputil "github.com/prometheus/prometheus/util/httputil"
 	"github.com/sirupsen/logrus"
 )
@@ -28,8 +29,6 @@ import (
 type proxyStorageState struct {
 	serverGroups []*servergroup.ServerGroup
 	client       *http.Client
-
-	q local.Querier
 }
 
 func (p *proxyStorageState) Ready() {
@@ -80,7 +79,8 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	}
 
 	// stage the client swap as well
-	client, err := promhttputil.NewClientFromConfig(c.PromxyConfig.HTTPConfig)
+	// TODO: better name
+	client, err := promhttputil.NewClientFromConfig(c.PromxyConfig.HTTPConfig, "somename")
 	if err != nil {
 		failed = true
 		logrus.Errorf("Unable to load client from config: %s", err)
@@ -92,11 +92,6 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	transport.DialContext = (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext
 
 	newState.client = client
-
-	newState.q = &proxyquerier.ProxyQuerier{
-		newState.serverGroups,
-		newState.client,
-	}
 
 	if failed {
 		for _, sg := range newState.serverGroups {
@@ -134,10 +129,39 @@ func (p *ProxyStorage) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	proxy.ServeHTTP(w, r)
 }
 
-func (p *ProxyStorage) Querier() (local.Querier, error) {
+func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
 	state := p.GetState()
-	return state.q, nil
+	return &proxyquerier.ProxyQuerier{
+		ctx,
+		timestamp.Time(mint),
+		timestamp.Time(maxt),
+		state.serverGroups,
+		state.client,
+	}, nil
 }
+
+func (p *ProxyStorage) StartTime() (int64, error) {
+	return 0, nil
+}
+
+// TODO: remove?
+type appenderStub struct{}
+
+func (a *appenderStub) Add(l labels.Labels, t int64, v float64) (uint64, error) { return 0, nil }
+
+func (a *appenderStub) AddFast(l labels.Labels, ref uint64, t int64, v float64) error { return nil }
+
+// Commit submits the collected samples and purges the batch.
+func (a *appenderStub) Commit() error { return nil }
+
+func (a *appenderStub) Rollback() error { return nil }
+
+func (p *ProxyStorage) Appender() (storage.Appender, error) {
+	return &appenderStub{}, nil
+}
+
+// TODO: actually close things?
+func (p *ProxyStorage) Close() error { return nil }
 
 // This replaces promql Nodes with more efficient-to-fetch ones. This works by taking lower-layer
 // chunks of the query, farming them out to prometheus hosts, then stitching the results back together.
@@ -154,7 +178,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		return ok
 	}}
 
-	if _, err := promql.Walk(ctx, aggFinder, s, node, nil); err != nil {
+	if _, err := promql.Walk(ctx, aggFinder, s, node, nil, nil); err != nil {
 		return nil, err
 	}
 
@@ -167,7 +191,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 	var offset time.Duration
 
 	visitor := &OffsetFinder{}
-	if _, err := promql.Walk(ctx, visitor, s, node, nil); err != nil {
+	if _, err := promql.Walk(ctx, visitor, s, node, nil, nil); err != nil {
 		return nil, err
 	}
 	// If we couldn't find an offset, then something is wrong-- lets skip
@@ -183,7 +207,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 	// range you ask for (with the offset being implicit)
 	// TODO: rename
 	removeOffset := func() error {
-		_, err := promql.Walk(ctx, &OffsetRemover{}, s, node, nil)
+		_, err := promql.Walk(ctx, &OffsetRemover{}, s, node, nil, nil)
 		return err
 	}
 
@@ -208,12 +232,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			values.Add("query", n.String())
 
 			if s.Interval > 0 {
-				values.Add("start", s.Start.Add(-offset-promql.StalenessDelta).String())
-				values.Add("end", s.End.Add(-offset).String())
+				values.Add("start", model.Time(timestamp.FromTime(s.Start.Add(-offset-promql.LookbackDelta))).String())
+				values.Add("end", model.Time(timestamp.FromTime(s.End.Add(-offset))).String())
 				values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'f', -1, 64))
 				urlBase = "/api/v1/query_range"
 			} else {
-				values.Add("time", s.Start.Add(-offset).String())
+				values.Add("time", model.Time(timestamp.FromTime(s.Start.Add(-offset))).String())
 				urlBase = "/api/v1/query"
 			}
 
@@ -228,21 +252,19 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			return &promql.BinaryExpr{
 				Op: 24, // Divide  TODO
 				LHS: &promql.AggregateExpr{
-					Op:               41, // sum() TODO
-					Expr:             n.Expr,
-					Param:            n.Param,
-					Grouping:         n.Grouping,
-					Without:          n.Without,
-					KeepCommonLabels: n.KeepCommonLabels,
+					Op:       41, // sum() TODO
+					Expr:     n.Expr,
+					Param:    n.Param,
+					Grouping: n.Grouping,
+					Without:  n.Without,
 				},
 
 				RHS: &promql.AggregateExpr{
-					Op:               40, // count() TODO
-					Expr:             n.Expr,
-					Param:            n.Param,
-					Grouping:         n.Grouping,
-					Without:          n.Without,
-					KeepCommonLabels: n.KeepCommonLabels,
+					Op:       40, // count() TODO
+					Expr:     n.Expr,
+					Param:    n.Param,
+					Grouping: n.Grouping,
+					Without:  n.Without,
 				},
 				VectorMatching: &promql.VectorMatching{Card: promql.CardOneToOne},
 			}, nil
@@ -255,12 +277,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			values.Add("query", n.String())
 
 			if s.Interval > 0 {
-				values.Add("start", s.Start.Add(-offset-promql.StalenessDelta).String())
-				values.Add("end", s.End.Add(-offset).String())
+				values.Add("start", model.Time(timestamp.FromTime(s.Start.Add(-offset-promql.LookbackDelta))).String())
+				values.Add("end", model.Time(timestamp.FromTime(s.End.Add(-offset))).String())
 				values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'f', -1, 64))
 				urlBase = "/api/v1/query_range"
 			} else {
-				values.Add("time", s.Start.Add(-offset).String())
+				values.Add("time", model.Time(timestamp.FromTime(s.Start.Add(-offset))).String())
 				urlBase = "/api/v1/query"
 			}
 
@@ -285,13 +307,14 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 		if result != nil {
 			iterators := promclient.IteratorsForValue(result)
-			returnIterators := make([]local.SeriesIterator, len(iterators))
-			for i, item := range iterators {
-				returnIterators[i] = item
+
+			series := make([]storage.Series, len(iterators))
+			for i, iterator := range iterators {
+				series[i] = &proxyquerier.Series{iterator}
 			}
 
 			ret := &promql.VectorSelector{Offset: offset}
-			ret.SetIterators(returnIterators)
+			ret.SetSeries(series)
 			n.Expr = ret
 			return n, nil
 		}
@@ -306,12 +329,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		values.Add("query", n.String())
 
 		if s.Interval > 0 {
-			values.Add("start", s.Start.Add(-offset-promql.StalenessDelta).String())
-			values.Add("end", s.End.Add(-offset).String())
+			values.Add("start", model.Time(timestamp.FromTime(s.Start.Add(-offset-promql.LookbackDelta))).String())
+			values.Add("end", model.Time(timestamp.FromTime(s.End.Add(-offset))).String())
 			values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'f', -1, 64))
 			urlBase = "/api/v1/query_range"
 		} else {
-			values.Add("time", s.Start.Add(-offset).String())
+			values.Add("time", model.Time(timestamp.FromTime(s.Start.Add(-offset))).String())
 			urlBase = "/api/v1/query"
 		}
 
@@ -320,13 +343,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			return nil, err
 		}
 		iterators := promclient.IteratorsForValue(result)
-		returnIterators := make([]local.SeriesIterator, len(iterators))
-		for i, item := range iterators {
-			returnIterators[i] = item
+		series := make([]storage.Series, len(iterators))
+		for i, iterator := range iterators {
+			series[i] = &proxyquerier.Series{iterator}
 		}
 
 		ret := &promql.VectorSelector{Offset: offset}
-		ret.SetIterators(returnIterators)
+		ret.SetSeries(series)
 		return ret, nil
 
 		// If we are simply fetching a Vector then we can fetch the data using the same step that
@@ -334,7 +357,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 	// If we are simply fetching data, lets do that
 	case *promql.VectorSelector:
 		// Don't attempt to fetch internally replaced things
-		if n.HasIterators() {
+		if n.HasSeries() {
 			return nil, nil
 		}
 		logrus.Debugf("vectorSelector %v", n)
@@ -344,12 +367,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		values.Add("query", n.String())
 		n.Offset = offset
 		if s.Interval > 0 {
-			values.Add("start", s.Start.Add(-offset-promql.StalenessDelta).String())
-			values.Add("end", s.End.Add(-offset).String())
+			values.Add("start", model.Time(timestamp.FromTime(s.Start.Add(-offset-promql.LookbackDelta))).String())
+			values.Add("end", model.Time(timestamp.FromTime(s.End.Add(-offset))).String())
 			values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'f', -1, 64))
 			urlBase = "/api/v1/query_range"
 		} else {
-			values.Add("time", s.Start.Add(-offset).String())
+			values.Add("time", model.Time(timestamp.FromTime(s.Start.Add(-offset))).String())
 			urlBase = "/api/v1/query"
 		}
 
@@ -358,12 +381,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			return nil, err
 		}
 		iterators := promclient.IteratorsForValue(result)
-		returnIterators := make([]local.SeriesIterator, len(iterators))
-		for i, item := range iterators {
-			returnIterators[i] = item
+		series := make([]storage.Series, len(iterators))
+		for i, iterator := range iterators {
+			series[i] = &proxyquerier.Series{iterator}
 		}
 
-		n.SetIterators(returnIterators)
+		n.SetSeries(series)
 		return n, nil
 
 	// If we hit this someone is asking for a matrix directly, if so then we don't
@@ -378,55 +401,3 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 	return nil, nil
 
 }
-
-// TODO: IMPLEMENT??
-
-// Append appends a sample to the underlying storage. Depending on the
-// storage implementation, there are different guarantees for the fate
-// of the sample after Append has returned. Remote storage
-// implementation will simply drop samples if they cannot keep up with
-// sending samples. Local storage implementations will only drop metrics
-// upon unrecoverable errors.
-func (p *ProxyStorage) Append(*model.Sample) error { return nil }
-
-// NeedsThrottling returns true if the underlying storage wishes to not
-// receive any more samples. Append will still work but might lead to
-// undue resource usage. It is recommended to call NeedsThrottling once
-// before an upcoming batch of Append calls (e.g. a full scrape of a
-// target or the evaluation of a rule group) and only proceed with the
-// batch if NeedsThrottling returns false. In that way, the result of a
-// scrape or of an evaluation of a rule group will always be appended
-// completely or not at all, and the work of scraping or evaluation will
-// not be performed in vain. Also, a call of NeedsThrottling is
-// potentially expensive, so limiting the number of calls is reasonable.
-//
-// Only SampleAppenders for which it is considered critical to receive
-// each and every sample should ever return true. SampleAppenders that
-// tolerate not receiving all samples should always return false and
-// instead drop samples as they see fit to avoid overload.
-func (p *ProxyStorage) NeedsThrottling() bool { return false }
-
-// Drop all time series associated with the given label matchers. Returns
-// the number series that were dropped.
-func (p *ProxyStorage) DropMetricsForLabelMatchers(context.Context, ...*metric.LabelMatcher) (int, error) {
-	// TODO: implement
-	return 0, nil
-}
-
-// Run the various maintenance loops in goroutines. Returns when the
-// storage is ready to use. Keeps everything running in the background
-// until Stop is called.
-func (p *ProxyStorage) Start() error {
-	return nil
-}
-
-// Stop shuts down the Storage gracefully, flushes all pending
-// operations, stops all maintenance loops,and frees all resources.
-func (p *ProxyStorage) Stop() error {
-	return nil
-}
-
-// WaitForIndexing returns once all samples in the storage are
-// indexed. Indexing is needed for FingerprintsForLabelMatchers and
-// LabelValuesForLabelName and may lag behind.
-func (p *ProxyStorage) WaitForIndexing() {}

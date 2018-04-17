@@ -1,10 +1,13 @@
 package test
 
 import (
+	"context"
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	yaml "gopkg.in/yaml.v2"
 
@@ -13,6 +16,7 @@ import (
 	"github.com/prometheus/common/route"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/testutil"
 	"github.com/prometheus/prometheus/web/api/v1"
 	"github.com/sirupsen/logrus"
@@ -68,7 +72,17 @@ func startAPIForTest(test *promql.Test, listen string) (*http.Server, chan struc
 	// Return 503 until ready (for us there isn't much startup, so this might not need to be implemented
 	readyFunc := func(f http.HandlerFunc) http.HandlerFunc { return f }
 
-	api := v1.NewAPI(test.QueryEngine(), test.Storage(), nil, nil, cfgFunc, readyFunc)
+	api := v1.NewAPI(
+		promql.NewEngine(nil, nil, 20, 10*time.Minute),
+		test.Storage(),
+		nil,
+		nil,
+		cfgFunc,
+		nil,
+		readyFunc,
+		nil,
+		true,
+	)
 
 	apiRouter := route.New()
 	api.Register(apiRouter.WithPrefix("/api/v1"))
@@ -94,31 +108,44 @@ func TestUpstreamEvaluations(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, fn := range files {
-		test, err := newTestFromFile(t, fn)
-		if err != nil {
-			t.Errorf("error creating test for %s: %s", fn, err)
+
+		// Upstream prom is using a StaleNan to determine if a given timeseries has gone
+		// NaN -- the problem being that for range vectors they filter out all "stale" samples
+		// meaning that it isn't possible to get a "raw" dump of data through the v1 API
+		// The only option that exists in reality is the "remote read" API -- which will
+		// require bench testing the marshaling etc. (in case it has all the same perf problems
+		// that the JSON API had
+		if strings.Contains(fn, "staleness.test") {
+			continue
 		}
+		t.Run(fn, func(t *testing.T) {
+			test, err := newTestFromFile(t, fn)
+			if err != nil {
+				t.Errorf("error creating test for %s: %s", fn, err)
+			}
 
-		// Create API for the storage engine
-		srv, stopChan := startAPIForTest(test, ":8083")
-		// Create ProxyStorage against it
-		ps := getProxyStorage(rawPSConfig)
+			// Create API for the storage engine
+			srv, stopChan := startAPIForTest(test, ":8083")
 
-		// Replace the test engine with the promxy one
-		eOpts := promql.EngineOptions{}
-		eOpts = *promql.DefaultEngineOptions
-		engine := promql.NewEngine(ps, &eOpts)
-		test.SetQueryEngine(engine)
+			ps := getProxyStorage(rawPSConfig)
+			lStorage := &LayeredStorage{ps, test.Storage()}
+			// Replace the test storage with the promxy one
+			test.SetStorage(lStorage)
+			// TODO: enable
+			//test.QueryEngine().NodeReplacer = ps.NodeReplacer
+			//test.QueryEngine().Timeout = time.Second * 30
 
-		err = test.Run()
-		if err != nil {
-			t.Errorf("error running test %s: %s", fn, err)
-		}
-		test.Close()
+			err = test.Run()
+			if err != nil {
+				t.Errorf("error running test %s: %s", fn, err)
+			}
+			test.Close()
 
-		// stop server
-		srv.Shutdown(nil)
-		<-stopChan
+			// stop server
+			ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+			srv.Shutdown(ctx)
+			<-stopChan
+		})
 	}
 }
 
@@ -128,36 +155,38 @@ func TestEvaluations(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, fn := range files {
-		test, err := newTestFromFile(t, fn)
-		if err != nil {
-			t.Errorf("error creating test for %s: %s", fn, err)
-		}
+		t.Run(fn, func(t *testing.T) {
+			test, err := newTestFromFile(t, fn)
+			if err != nil {
+				t.Errorf("error creating test for %s: %s", fn, err)
+			}
 
-		// Create API for the storage engine
-		srv, stopChan := startAPIForTest(test, ":8083")
-		srv2, stopChan2 := startAPIForTest(test, ":8084")
+			// Create API for the storage engine
+			srv, stopChan := startAPIForTest(test, ":8083")
+			srv2, stopChan2 := startAPIForTest(test, ":8084")
 
-		// Create ProxyStorage against it
-		ps := getProxyStorage(rawDoublePSConfig)
+			ps := getProxyStorage(rawDoublePSConfig)
+			lStorage := &LayeredStorage{ps, test.Storage()}
+			// Replace the test storage with the promxy one
+			test.SetStorage(lStorage)
+			// TODO: enable
+			//test.QueryEngine().NodeReplacer = ps.NodeReplacer
 
-		// Replace the test engine with the promxy one
-		eOpts := promql.EngineOptions{}
-		eOpts = *promql.DefaultEngineOptions
-		engine := promql.NewEngine(ps, &eOpts)
-		test.SetQueryEngine(engine)
+			err = test.Run()
+			if err != nil {
+				t.Errorf("error running test %s: %s", fn, err)
+			}
 
-		err = test.Run()
-		if err != nil {
-			t.Errorf("error running test %s: %s", fn, err)
-		}
-		test.Close()
+			test.Close()
 
-		// stop server
-		srv.Shutdown(nil)
-		srv2.Shutdown(nil)
+			// stop server
+			ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+			srv.Shutdown(ctx)
+			srv2.Shutdown(ctx)
 
-		<-stopChan
-		<-stopChan2
+			<-stopChan
+			<-stopChan2
+		})
 	}
 }
 
@@ -167,4 +196,25 @@ func newTestFromFile(t testutil.T, filename string) (*promql.Test, error) {
 		return nil, err
 	}
 	return promql.NewTest(t, string(content))
+}
+
+// Create a wrapper for the storage that will proxy reads but not writes
+
+type LayeredStorage struct {
+	proxyStorage storage.Storage
+	baseStorage  storage.Storage
+}
+
+func (p *LayeredStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+	return p.proxyStorage.Querier(ctx, mint, maxt)
+}
+func (p *LayeredStorage) StartTime() (int64, error) {
+	return p.baseStorage.StartTime()
+}
+
+func (p *LayeredStorage) Appender() (storage.Appender, error) {
+	return p.baseStorage.Appender()
+}
+func (p *LayeredStorage) Close() error {
+	return p.baseStorage.Close()
 }

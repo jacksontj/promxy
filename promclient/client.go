@@ -7,9 +7,11 @@ import (
 	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/mailru/easyjson"
 	"github.com/prometheus/common/model"
+	"github.com/sirupsen/logrus"
 )
 
 func DoRequest(ctx context.Context, url string, client *http.Client, responseStruct easyjson.Unmarshaler) error {
+	logrus.Debugf("sending request downstream: %s", url)
 	// Create request
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

@@ -3,35 +3,34 @@ package proxyquerier
 import (
 	"testing"
 
-	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/storage/metric"
+	"github.com/prometheus/prometheus/pkg/labels"
 )
 
 func TestMatcherToString(t *testing.T) {
 	tests := []struct {
-		matchers []*metric.LabelMatcher
+		matchers []*labels.Matcher
 		result   string
 		err      error
 	}{
 		{
-			matchers: []*metric.LabelMatcher{
+			matchers: []*labels.Matcher{
 				{
-					Type:  metric.Equal,
-					Name:  model.MetricNameLabel,
+					Type:  labels.MatchEqual,
+					Name:  labels.MetricName,
 					Value: "scrape_duration_seconds",
 				},
 			},
 			result: `{__name__="scrape_duration_seconds"}`,
 		},
 		{
-			matchers: []*metric.LabelMatcher{
+			matchers: []*labels.Matcher{
 				{
-					Type:  metric.Equal,
-					Name:  model.MetricNameLabel,
+					Type:  labels.MatchEqual,
+					Name:  labels.MetricName,
 					Value: "scrape_duration_seconds",
 				},
 				{
-					Type:  metric.Equal,
+					Type:  labels.MatchEqual,
 					Name:  "job",
 					Value: "prometheus",
 				},
@@ -39,10 +38,10 @@ func TestMatcherToString(t *testing.T) {
 			result: `{__name__="scrape_duration_seconds",job="prometheus"}`,
 		},
 		{
-			matchers: []*metric.LabelMatcher{
+			matchers: []*labels.Matcher{
 				{
-					Type:  metric.RegexMatch,
-					Name:  model.MetricNameLabel,
+					Type:  labels.MatchRegexp,
+					Name:  labels.MetricName,
 					Value: ".+",
 				},
 			},

@@ -70,18 +70,6 @@ eval instant at 50m sum(http_requests) by (job) + min(http_requests) by (job) + 
   {job="app-server"} 7150
   {job="api-server"} 2750
 
-# Test alternative "by"-clause order with "keep_common".
-eval instant at 50m sum by (group) keep_common (http_requests{job="api-server"})
-  {group="canary", job="api-server"} 1400
-  {group="production", job="api-server"} 600
-
-# Test both alternative "by"-clause orders in one expression.
-# Public health warning: stick to one form within an expression (or even
-# in an organization), or risk serious user confusion.
-eval instant at 50m sum(sum by (group) keep_common (http_requests{job="api-server"})) by (job)
-  {job="api-server"} 2000
-
-
 
 # Standard deviation and variance.
 eval instant at 50m stddev(http_requests)

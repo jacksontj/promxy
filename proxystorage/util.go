@@ -13,7 +13,7 @@ type OffsetFinder struct {
 	Error  error
 }
 
-func (o *OffsetFinder) Visit(node promql.Node) (w promql.Visitor) {
+func (o *OffsetFinder) Visit(node promql.Node, _ []promql.Node) (w promql.Visitor) {
 	switch n := node.(type) {
 	case *promql.VectorSelector:
 		if !o.Found {
@@ -45,7 +45,7 @@ func (o *OffsetFinder) Visit(node promql.Node) (w promql.Visitor) {
 // When we send the queries below, we want to actually *remove* the offset.
 type OffsetRemover struct{}
 
-func (o *OffsetRemover) Visit(node promql.Node) (w promql.Visitor) {
+func (o *OffsetRemover) Visit(node promql.Node, _ []promql.Node) (w promql.Visitor) {
 	switch n := node.(type) {
 	case *promql.VectorSelector:
 		n.Offset = 0
@@ -62,7 +62,7 @@ type BooleanFinder struct {
 	Found bool
 }
 
-func (f *BooleanFinder) Visit(node promql.Node) (w promql.Visitor) {
+func (f *BooleanFinder) Visit(node promql.Node, _ []promql.Node) (w promql.Visitor) {
 	if f.Func(node) {
 		f.Found = true
 		return nil

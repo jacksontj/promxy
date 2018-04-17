@@ -5,6 +5,7 @@ import (
 
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
+	sd_config "github.com/prometheus/prometheus/discovery/config"
 )
 
 type Config struct {
@@ -18,7 +19,7 @@ type Config struct {
 	RelabelConfigs []*config.RelabelConfig `yaml:"relabel_configs,omitempty"`
 	// Hosts is a set of ServiceDiscoveryConfig options that allow promxy to discover
 	// all hosts in the server_group
-	Hosts config.ServiceDiscoveryConfig `yaml:",inline"`
+	Hosts sd_config.ServiceDiscoveryConfig `yaml:",inline"`
 	// TODO cache this as a model.Time after unmarshal
 	// AntiAffinity defines how large of a gap in the timeseries will cause promxy
 	// to merge series from 2 hosts in a server_group. This required for a couple reasons
