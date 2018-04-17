@@ -3,27 +3,28 @@ package promclient
 import (
 	"fmt"
 	"reflect"
+	"sort"
 
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/storage/metric"
+	"github.com/prometheus/prometheus/pkg/labels"
 )
 
 func IteratorsForValue(v model.Value) []*SeriesIterator {
 	switch valueTyped := v.(type) {
 	case *model.Scalar:
-		return []*SeriesIterator{{v}}
+		return []*SeriesIterator{NewSeriesIterator(v)}
 	case *model.String:
 		panic("Not implemented")
 	case model.Vector:
 		iterators := make([]*SeriesIterator, len(valueTyped))
 		for i, sample := range valueTyped {
-			iterators[i] = &SeriesIterator{sample}
+			iterators[i] = NewSeriesIterator(sample)
 		}
 		return iterators
 	case model.Matrix:
 		iterators := make([]*SeriesIterator, len(valueTyped))
 		for i, stream := range valueTyped {
-			iterators[i] = &SeriesIterator{stream}
+			iterators[i] = NewSeriesIterator(stream)
 		}
 		return iterators
 	case nil:
@@ -37,94 +38,108 @@ func IteratorsForValue(v model.Value) []*SeriesIterator {
 
 // Iterators for client return data
 
-func NewSeriesIterator(v model.Value) *SeriesIterator {
-	return &SeriesIterator{v}
+// TODO: should be model.value ?
+func NewSeriesIterator(v interface{}) *SeriesIterator {
+	return &SeriesIterator{V: v, offset:-1}
 }
 
-type SeriesIterator struct{ v interface{} }
+type SeriesIterator struct {
+	V      interface{}
+	offset int
+}
 
-// Gets the value that is closest before the given time. In case a value
-// exists at precisely the given time, that value is returned. If no
-// applicable value exists, model.ZeroSamplePair is returned.
-func (s *SeriesIterator) ValueAtOrBeforeTime(t model.Time) model.SamplePair {
-	switch valueTyped := s.v.(type) {
+// Seek advances the iterator forward to the value at or after
+// the given timestamp.
+func (s *SeriesIterator) Seek(t int64) bool {
+	switch valueTyped := s.V.(type) {
 	case *model.Sample: // From a vector
-		if int64(valueTyped.Timestamp) <= int64(t) {
-			return model.SamplePair{
-				valueTyped.Timestamp,
-				valueTyped.Value,
+		return int64(valueTyped.Timestamp) >= t
+	case *model.SampleStream: // from a Matrix
+		for i := s.offset; i < len(valueTyped.Values); i++ {
+			s.offset = i
+			if int64(valueTyped.Values[s.offset].Timestamp) >= t {
+				return true
 			}
-		} else {
-			return model.ZeroSamplePair
 		}
+		return false
+	default:
+		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
+		panic(msg)
+	}
+	return false
+}
+
+// TODO: implement all this
+// At returns the current timestamp/value pair.
+func (s *SeriesIterator) At() (t int64, v float64) {
+	switch valueTyped := s.V.(type) {
+	case *model.Sample: // From a vector
+		return int64(valueTyped.Timestamp), float64(valueTyped.Value)
 	case *model.SampleStream: // from a Matrix
 		// We assume the list of values is in order, so we'll iterate backwards
-		for i := len(valueTyped.Values) - 1; i >= 0; i-- {
-			if int64(valueTyped.Values[i].Timestamp) <= int64(t) {
-				return valueTyped.Values[i]
-			}
-		}
-		return model.ZeroSamplePair
+		return int64(valueTyped.Values[s.offset].Timestamp), float64(valueTyped.Values[s.offset].Value)
 	default:
-		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.v))
+		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
 		panic(msg)
 	}
 
-	return model.ZeroSamplePair
+	return 0, 0
 }
 
-// TODO: test? not sure how to hit this
-// Gets all values contained within a given interval.
-func (s *SeriesIterator) RangeValues(interval metric.Interval) []model.SamplePair {
-	switch valueTyped := s.v.(type) {
+// Next advances the iterator by one.
+func (s *SeriesIterator) Next() bool {
+	switch valueTyped := s.V.(type) {
 	case *model.Sample: // From a vector
-		if int64(valueTyped.Timestamp) >= int64(interval.OldestInclusive) && int64(valueTyped.Timestamp) <= int64(interval.NewestInclusive) {
-			return []model.SamplePair{
-				{
-					valueTyped.Timestamp,
-					valueTyped.Value,
-				},
-			}
-		} else {
-			return nil
-		}
+	    if s.offset < 0 {
+	        s.offset = 0
+	        return true
+	    }
+	    return false
 	case *model.SampleStream: // from a Matrix
-		pairs := make([]model.SamplePair, 0, len(valueTyped.Values))
-		for _, value := range valueTyped.Values {
-			if int64(value.Timestamp) >= int64(interval.OldestInclusive) && int64(value.Timestamp) <= int64(interval.NewestInclusive) {
-				pairs = append(pairs, value)
-			}
-		}
-		if len(pairs) > 0 {
-			return pairs
+		if s.offset < (len(valueTyped.Values) - 1) {
+			s.offset++
+			return true
 		} else {
-			return nil
+			return false
 		}
-
 	default:
-		panic("Unknown data type!")
+		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
+		panic(msg)
 	}
+	return false
+}
+
+// Err returns the current error.
+func (s *SeriesIterator) Err() error {
+	return nil
 }
 
 // Returns the metric of the series that the iterator corresponds to.
-func (s *SeriesIterator) Metric() metric.Metric {
-	switch valueTyped := s.v.(type) {
+func (s *SeriesIterator) Labels() labels.Labels {
+	switch valueTyped := s.V.(type) {
 	case *model.Scalar:
 		panic("Unknown metric() scalar?")
 	case *model.Sample: // From a vector
-		return metric.Metric{
-			Copied: true,
-			Metric: valueTyped.Metric,
+		ret := make(labels.Labels, 0, len(valueTyped.Metric))
+		for k, v := range valueTyped.Metric {
+			ret = append(ret, labels.Label{string(k), string(v)})
 		}
+		// TODO: move this into prom
+		// there is no reason me (the series iterator) should have to sort these
+		// if prom needs them sorted sometimes it should be responsible for doing so
+		sort.Sort(ret)
+		return ret
 	case *model.SampleStream:
-		return metric.Metric{
-			Copied: true,
-			Metric: valueTyped.Metric,
+		ret := make(labels.Labels, 0, len(valueTyped.Metric))
+		for k, v := range valueTyped.Metric {
+			ret = append(ret, labels.Label{string(k), string(v)})
 		}
+		// TODO: move this into prom
+		// there is no reason me (the series iterator) should have to sort these
+		// if prom needs them sorted sometimes it should be responsible for doing so
+		sort.Sort(ret)
+		return ret
 	default:
 		panic("Unknown data type!")
 	}
 }
-
-// Closes the iterator and releases the underlying data.
-func (s *SeriesIterator) Close() {}

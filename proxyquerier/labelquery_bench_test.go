@@ -3,19 +3,18 @@ package proxyquerier
 import (
 	"testing"
 
-	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/storage/metric"
+	"github.com/prometheus/prometheus/pkg/labels"
 )
 
 func BenchmarkMatcherToString(b *testing.B) {
-	matchers := []*metric.LabelMatcher{
+	matchers := []*labels.Matcher{
 		{
-			Type:  metric.Equal,
-			Name:  model.MetricNameLabel,
+			Type:  labels.MatchEqual,
+			Name:  labels.MetricName,
 			Value: "scrape_duration_seconds",
 		},
 		{
-			Type:  metric.Equal,
+			Type:  labels.MatchEqual,
 			Name:  "job",
 			Value: "prometheus",
 		},

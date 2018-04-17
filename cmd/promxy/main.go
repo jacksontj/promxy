@@ -7,9 +7,12 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
+	kitlog "github.com/go-kit/kit/log"
 	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/logging"
 	"github.com/jacksontj/promxy/proxystorage"
@@ -17,12 +20,14 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
+	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/route"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/rules"
-	"github.com/prometheus/prometheus/storage/local"
+	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/strutil"
 	"github.com/prometheus/prometheus/web/api/v1"
 	"github.com/sirupsen/logrus"
 )
@@ -89,7 +94,7 @@ func main() {
 	}
 	logrus.SetFormatter(formatter)
 
-	var proxyStorage local.Storage
+	var proxyStorage storage.Storage
 
 	ps, err := proxystorage.NewProxyStorage()
 	if err != nil {
@@ -98,18 +103,10 @@ func main() {
 	reloadables = append(reloadables, ps)
 	proxyStorage = ps
 
-	eOpts := promql.EngineOptions{}
-	eOpts = *promql.DefaultEngineOptions
+	// TODO: config for the timeout
+	engine := promql.NewEngine(nil, nil, 20, 120*time.Second)
 
-	engine := promql.NewEngine(proxyStorage, &eOpts)
-
-	eOpts.NodeReplacer = ps.NodeReplacer
-
-	// Register alertmanager stuff
-	var (
-		// TODO: config option
-		Notifier = notifier.New(&notifier.Options{QueueCapacity: 10000}, log.Base())
-	)
+	engine.NodeReplacer = ps.NodeReplacer
 
 	// TODO: config option
 	u, err := url.Parse("http://localhost:8082")
@@ -117,25 +114,50 @@ func main() {
 		logrus.Fatalf("Err: %v", err)
 	}
 
+	// Alert notifier
+	lvl := promlog.AllowedLevel{}
+	if err := lvl.Set("info"); err != nil {
+		panic(err)
+	}
+	logger := promlog.New(lvl)
+	notifierManager := notifier.NewManager(&notifier.Options{Registerer: prometheus.DefaultRegisterer}, kitlog.With(logger, "component", "notifier"))
 	ruleManager := rules.NewManager(&rules.ManagerOptions{
-		Notifier:       Notifier,             // Client to send alerts to alertmanager
-		SampleAppender: proxyStorage,         // appender for recording rules
-		QueryEngine:    engine,               // Engine for querying
-		Context:        context.Background(), // base context for all background tasks
-		ExternalURL:    u,                    // URL listed as URL for "who fired this alert"
+		Context:     context.Background(), // base context for all background tasks
+		ExternalURL: u,                    // URL listed as URL for "who fired this alert"
+		NotifyFunc:  sendAlerts(notifierManager, u.String()),
 	})
-
-	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(Notifier))
-	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(ruleManager))
 	go ruleManager.Run()
-	go Notifier.Run()
+
+	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(&ApplyConfigFunc{func(cfg *config.Config) error {
+		// Get all rule files matching the configuration oaths.
+		var files []string
+		for _, pat := range cfg.RuleFiles {
+			fs, err := filepath.Glob(pat)
+			if err != nil {
+				// The only error can be a bad pattern.
+				return fmt.Errorf("error retrieving rule files for %s: %s", pat, err)
+			}
+			files = append(files, fs...)
+		}
+		return ruleManager.Update(time.Duration(cfg.GlobalConfig.EvaluationInterval), files)
+	}}))
 
 	// TODO:
 	cfgFunc := func() config.Config { return config.DefaultConfig }
 	// Return 503 until ready (for us there isn't much startup, so this might not need to be implemented
 	readyFunc := func(f http.HandlerFunc) http.HandlerFunc { return f }
 
-	api := v1.NewAPI(engine, proxyStorage, nil, nil, cfgFunc, readyFunc)
+	api := v1.NewAPI(
+		engine,
+		proxyStorage,
+		nil,
+		nil,
+		cfgFunc,
+		nil,
+		readyFunc,
+		nil,
+		true,
+	)
 
 	apiRouter := route.New()
 	api.Register(apiRouter.WithPrefix("/api/v1"))
@@ -183,7 +205,46 @@ func main() {
 	// Set up access logger
 	loggedRouter := logging.NewApacheLoggingHandler(r, os.Stdout)
 
+	logrus.Infof("promxy starting")
 	if err := http.ListenAndServe(opts.BindAddr, loggedRouter); err != nil {
 		log.Fatalf("Error listening: %v", err)
 	}
+}
+
+// sendAlerts implements the rules.NotifyFunc for a Notifier.
+// It filters any non-firing alerts from the input.
+func sendAlerts(n *notifier.Manager, externalURL string) rules.NotifyFunc {
+	return func(ctx context.Context, expr string, alerts ...*rules.Alert) error {
+		var res []*notifier.Alert
+
+		for _, alert := range alerts {
+			// Only send actually firing alerts.
+			if alert.State == rules.StatePending {
+				continue
+			}
+			a := &notifier.Alert{
+				StartsAt:     alert.FiredAt,
+				Labels:       alert.Labels,
+				Annotations:  alert.Annotations,
+				GeneratorURL: externalURL + strutil.TableLinkForExpression(expr),
+			}
+			if !alert.ResolvedAt.IsZero() {
+				a.EndsAt = alert.ResolvedAt
+			}
+			res = append(res, a)
+		}
+
+		if len(alerts) > 0 {
+			n.Send(res...)
+		}
+		return nil
+	}
+}
+
+type ApplyConfigFunc struct {
+	f func(*config.Config) error
+}
+
+func (a *ApplyConfigFunc) ApplyConfig(cfg *config.Config) error {
+	return a.f(cfg)
 }

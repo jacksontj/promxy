@@ -94,6 +94,12 @@
   revision = "4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9"
 
 [[projects]]
+  name = "github.com/cespare/xxhash"
+  packages = ["."]
+  revision = "5c37fe3735342a2e0d01c87a907579987c8936cc"
+  version = "v1.0.0"
+
+[[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
   revision = "346938d642f2ec3594ed81d874461961cd0faa76"
@@ -137,6 +143,21 @@
   version = "v1.29.2"
 
 [[projects]]
+  name = "github.com/go-kit/kit"
+  packages = [
+    "log",
+    "log/level"
+  ]
+  revision = "ca4112baa34cb55091301bdc13b1420a122b1b9e"
+  version = "v0.7.0"
+
+[[projects]]
+  name = "github.com/go-logfmt/logfmt"
+  packages = ["."]
+  revision = "390ab7935ee28ec6b286364bba9b4dd6410cb3d5"
+  version = "v0.3.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/go-openapi/jsonpointer"
   packages = ["."]
@@ -161,10 +182,19 @@
   revision = "f3f9494671f93fcff853e3c6e9e948b3eb71e590"
 
 [[projects]]
+  name = "github.com/go-stack/stack"
+  packages = ["."]
+  revision = "259ab82a6cad3992b4e21ff5cac294ccb06474bc"
+  version = "v1.7.0"
+
+[[projects]]
   name = "github.com/gogo/protobuf"
   packages = [
+    "gogoproto",
     "proto",
-    "sortkeys"
+    "protoc-gen-gogo/descriptor",
+    "sortkeys",
+    "types"
   ]
   revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
   version = "v0.5"
@@ -178,7 +208,16 @@
 [[projects]]
   branch = "master"
   name = "github.com/golang/protobuf"
-  packages = ["proto"]
+  packages = [
+    "jsonpb",
+    "proto",
+    "protoc-gen-go/descriptor",
+    "ptypes",
+    "ptypes/any",
+    "ptypes/duration",
+    "ptypes/struct",
+    "ptypes/timestamp"
+  ]
   revision = "130e6b02ab059e7b717a096f397c5b60111cae74"
 
 [[projects]]
@@ -211,6 +250,16 @@
     "pagination"
   ]
   revision = "cf1eac7a125ddf65747326ed1d0e364a6f05831e"
+
+[[projects]]
+  name = "github.com/grpc-ecosystem/grpc-gateway"
+  packages = [
+    "runtime",
+    "runtime/internal",
+    "utilities"
+  ]
+  revision = "07f5e79768022f9a3265235f0db4ac8c3f675fec"
+  version = "v1.3.1"
 
 [[projects]]
   name = "github.com/hashicorp/consul"
@@ -261,6 +310,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/kr/logfmt"
+  packages = ["."]
+  revision = "b84e30acd515aadc4b783ad4ff83aff3299bdfe0"
+
+[[projects]]
+  branch = "master"
   name = "github.com/mailru/easyjson"
   packages = [
     ".",
@@ -292,6 +347,24 @@
   revision = "b8bc1bf767474819792c23f32d8286a45736f1c6"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/mwitkow/go-conntrack"
+  packages = ["."]
+  revision = "cc309e4a22231782e8893f3c35ced0967807a33e"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/nightlyone/lockfile"
+  packages = ["."]
+  revision = "6a197d5ea61168f2ac821de2b7f011b250904900"
+
+[[projects]]
+  name = "github.com/oklog/ulid"
+  packages = ["."]
+  revision = "d311cb43c92434ec4072dfbbda3400741d0a6337"
+  version = "v0.3.0"
+
+[[projects]]
   name = "github.com/opentracing/opentracing-go"
   packages = [
     ".",
@@ -299,6 +372,12 @@
   ]
   revision = "1949ddbfd147afd4d964a9f00b24eb291e0e7c38"
   version = "v1.0.2"
+
+[[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -313,17 +392,19 @@
   revision = "6f3806018612930941127f2a7c6c453ba2c527d2"
 
 [[projects]]
-  branch = "tjackson_fork"
+  branch = "tjackson_fork_22"
   name = "github.com/prometheus/common"
   packages = [
+    "config",
     "expfmt",
     "internal/bitbucket.org/ww/goautoneg",
     "log",
     "model",
+    "promlog",
     "route",
     "version"
   ]
-  revision = "8c8c200a91f4ccb0e03b1955d52d8de228866190"
+  revision = "ced8cc405cc4476542fb62641ebe80f07fb5c31d"
   source = "github.com/jacksontj/common"
 
 [[projects]]
@@ -336,12 +417,13 @@
   revision = "e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2"
 
 [[projects]]
-  branch = "release-1.8_fork_promxy"
+  branch = "release-2.2_fork_promxy"
   name = "github.com/prometheus/prometheus"
   packages = [
     "config",
     "discovery",
     "discovery/azure",
+    "discovery/config",
     "discovery/consul",
     "discovery/dns",
     "discovery/ec2",
@@ -350,31 +432,49 @@
     "discovery/kubernetes",
     "discovery/marathon",
     "discovery/openstack",
+    "discovery/targetgroup",
     "discovery/triton",
     "discovery/zookeeper",
     "notifier",
+    "pkg/labels",
+    "pkg/pool",
+    "pkg/relabel",
+    "pkg/rulefmt",
+    "pkg/textparse",
+    "pkg/timestamp",
+    "pkg/value",
+    "prompb",
     "promql",
     "relabel",
-    "retrieval",
     "rules",
+    "scrape",
     "storage",
-    "storage/local",
-    "storage/local/chunk",
-    "storage/local/codable",
-    "storage/local/index",
-    "storage/metric",
     "storage/remote",
+    "storage/tsdb",
     "template",
-    "util/flock",
     "util/httputil",
     "util/stats",
     "util/strutil",
     "util/testutil",
     "util/treecache",
+    "util/yaml",
     "web/api/v1"
   ]
-  revision = "e7f57af602eedc58b9e2b3a203363c4ff416ff45"
+  revision = "c273622aee389f75e3763f6d7cf60819dbc9e27b"
   source = "github.com/jacksontj/prometheus"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/prometheus/tsdb"
+  packages = [
+    ".",
+    "chunkenc",
+    "chunks",
+    "fileutil",
+    "index",
+    "labels"
+  ]
+  revision = "def6e5a57439cffe7b44a619c05bce4ac513a63e"
 
 [[projects]]
   branch = "master"
@@ -393,25 +493,6 @@
   packages = ["."]
   revision = "e57e3eeb33f795204c1ca35f56c44f83227c6e66"
   version = "v1.0.0"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/syndtr/goleveldb"
-  packages = [
-    "leveldb",
-    "leveldb/cache",
-    "leveldb/comparer",
-    "leveldb/errors",
-    "leveldb/filter",
-    "leveldb/iterator",
-    "leveldb/journal",
-    "leveldb/memdb",
-    "leveldb/opt",
-    "leveldb/storage",
-    "leveldb/table",
-    "leveldb/util"
-  ]
-  revision = "b89cc31ef7977104127d34c1bd31ebd1a9db2199"
 
 [[projects]]
   name = "github.com/ugorji/go"
@@ -433,7 +514,9 @@
     "http2",
     "http2/hpack",
     "idna",
-    "lex/httplex"
+    "internal/timeseries",
+    "lex/httplex",
+    "trace"
   ]
   revision = "a04bdaca5b32abe1c069418fb7088ae607de5bd0"
 
@@ -448,6 +531,12 @@
     "jwt"
   ]
   revision = "bb50c06baba3d0c76f9d125c0719093e315b5b44"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/sync"
+  packages = ["errgroup"]
+  revision = "1d60e4601c6fd243af51cc01ddf169918a5407ca"
 
 [[projects]]
   branch = "master"
@@ -515,6 +604,45 @@
   ]
   revision = "150dc57a1b433e64154302bdc40b6bb8aefa313a"
   version = "v1.0.0"
+
+[[projects]]
+  branch = "master"
+  name = "google.golang.org/genproto"
+  packages = [
+    "googleapis/api/annotations",
+    "googleapis/rpc/status"
+  ]
+  revision = "7fd901a49ba6a7f87732eb344f6e3c5b19d1b200"
+
+[[projects]]
+  name = "google.golang.org/grpc"
+  packages = [
+    ".",
+    "balancer",
+    "balancer/base",
+    "balancer/roundrobin",
+    "codes",
+    "connectivity",
+    "credentials",
+    "encoding",
+    "encoding/proto",
+    "grpclb/grpc_lb_v1/messages",
+    "grpclog",
+    "internal",
+    "keepalive",
+    "metadata",
+    "naming",
+    "peer",
+    "resolver",
+    "resolver/dns",
+    "resolver/passthrough",
+    "stats",
+    "status",
+    "tap",
+    "transport"
+  ]
+  revision = "d11072e7ca9811b1100b80ca0269ac831f06d024"
+  version = "v1.11.3"
 
 [[projects]]
   name = "gopkg.in/alecthomas/kingpin.v2"
@@ -672,6 +800,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "36a29bdef8f62910467012f7dde0d86937f267de107a22930b83af0750231e58"
+  inputs-digest = "1a291534b6fe392fc49b27e3b19f1bff7e26609c7288d83baa6ef9edceebce8a"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -34,12 +34,12 @@
   version = "0.8.0"
 
 [[constraint]]
-  branch = "tjackson_fork"
+  branch = "tjackson_fork_22"
   name = "github.com/prometheus/common"
   source = "github.com/jacksontj/common"
 
 [[constraint]]
-  branch = "release-1.8_fork_promxy"
+  branch = "release-2.2_fork_promxy"
   name = "github.com/prometheus/prometheus"
   source = "github.com/jacksontj/prometheus"
 
