@@ -39,6 +39,7 @@ type Config struct {
 }
 
 type PromxyConfig struct {
+	RemoteRead bool `yaml:"remote_read"`
 	// HTTP client config for promxy to use when connecting to the various server_groups
 	// this is the same config as prometheus
 	HTTPConfig config_util.HTTPClientConfig `yaml:"http_client"`
