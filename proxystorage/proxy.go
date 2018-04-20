@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -22,13 +21,11 @@ import (
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
-	promhttputil "github.com/prometheus/prometheus/util/httputil"
 	"github.com/sirupsen/logrus"
 )
 
 type proxyStorageState struct {
 	serverGroups []*servergroup.ServerGroup
-	client       *http.Client
 	cfg          *proxyconfig.PromxyConfig
 }
 
@@ -80,21 +77,6 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		newState.serverGroups[i] = tmp
 	}
 
-	// stage the client swap as well
-	// TODO: better name
-	client, err := promhttputil.NewClientFromConfig(c.PromxyConfig.HTTPConfig, "somename")
-	if err != nil {
-		failed = true
-		logrus.Errorf("Unable to load client from config: %s", err)
-	}
-
-	// TODO: remove after fixes to upstream
-	// Override the dial timeout
-	transport := client.Transport.(*http.Transport)
-	transport.DialContext = (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext
-
-	newState.client = client
-
 	if failed {
 		for _, sg := range newState.serverGroups {
 			sg.Cancel()
@@ -126,7 +108,7 @@ func (p *ProxyStorage) ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	parsedUrl, _ := url.Parse(server)
 
 	proxy := httputil.NewSingleHostReverseProxy(parsedUrl)
-	proxy.Transport = state.client.Transport
+	proxy.Transport = serverGroup.Client.Transport
 
 	proxy.ServeHTTP(w, r)
 }
@@ -138,7 +120,6 @@ func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Q
 		timestamp.Time(mint),
 		timestamp.Time(maxt),
 		state.serverGroups,
-		state.client,
 
 		state.cfg,
 	}, nil
@@ -245,7 +226,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 				urlBase = "/api/v1/query"
 			}
 
-			result, err = serverGroups.GetData(ctx, urlBase, values, state.client)
+			result, err = serverGroups.GetData(ctx, urlBase, values)
 			if err != nil {
 				return nil, err
 			}
@@ -290,7 +271,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 				urlBase = "/api/v1/query"
 			}
 
-			result, err = serverGroups.GetData(ctx, urlBase, values, state.client)
+			result, err = serverGroups.GetData(ctx, urlBase, values)
 			if err != nil {
 				return nil, err
 			}
@@ -342,7 +323,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			urlBase = "/api/v1/query"
 		}
 
-		result, err := serverGroups.GetData(ctx, urlBase, values, state.client)
+		result, err := serverGroups.GetData(ctx, urlBase, values)
 		if err != nil {
 			return nil, err
 		}
@@ -380,7 +361,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			urlBase = "/api/v1/query"
 		}
 
-		result, err := serverGroups.GetData(ctx, urlBase, values, state.client)
+		result, err := serverGroups.GetData(ctx, urlBase, values)
 		if err != nil {
 			return nil, err
 		}
