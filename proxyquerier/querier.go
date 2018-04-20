@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/client_golang/prometheus"
@@ -34,6 +35,8 @@ type ProxyQuerier struct {
 	End          time.Time
 	ServerGroups servergroup.ServerGroups
 	Client       *http.Client
+
+	Cfg *proxyconfig.PromxyConfig
 }
 
 // Select returns a set of series that matches the given label matchers.
@@ -65,9 +68,16 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 	values.Add("query", pql+fmt.Sprintf("[%ds]", int64(h.End.Sub(h.Start).Seconds())+1))
 	values.Add("time", model.Time(timestamp.FromTime(h.End)).String())
 
-	result, err := h.ServerGroups.GetData(h.Ctx, urlBase, values, h.Client)
-	if err != nil {
-		return nil, err
+	var result model.Value
+	var resultErr error
+
+	if h.Cfg.RemoteRead {
+		result, resultErr = h.ServerGroups.RemoteRead(h.Ctx, h.Start, h.End, matchers)
+	} else {
+		result, resultErr = h.ServerGroups.GetData(h.Ctx, urlBase, values, h.Client)
+	}
+	if resultErr != nil {
+		return nil, resultErr
 	}
 
 	iterators := promclient.IteratorsForValue(result)

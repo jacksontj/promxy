@@ -11,10 +11,14 @@ import (
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/prometheus/client_golang/prometheus"
+	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/prometheus/discovery"
+	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/relabel"
+	"github.com/prometheus/prometheus/storage/remote"
 
 	sd_config "github.com/prometheus/prometheus/discovery/config"
 )
@@ -121,6 +125,111 @@ func (s *ServerGroup) Targets() []string {
 	} else {
 		return nil
 	}
+}
+
+func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
+	targets := s.Targets()
+
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+	resultChan := make(chan model.Value, len(targets))
+	errChan := make(chan error, len(targets))
+
+	for _, target := range targets {
+		parsedUrl, err := url.Parse(target + "/api/v1/read")
+		if err != nil {
+			return nil, err
+		}
+		go func(stringUrl *url.URL) {
+			cfg := &remote.ClientConfig{
+				URL: &config_util.URL{parsedUrl},
+				// TODO: from context?
+				Timeout: model.Duration(time.Second * 20),
+			}
+			client, err := remote.NewClient(1, cfg)
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), matchers)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			// http://localhost:8083/api/v1/query?query=%7B__name__%3D%22metric%22%7D%5B302s%5D&time=21
+			result, err := client.Read(childContext, query)
+
+			if err != nil {
+				errChan <- err
+			} else {
+				// convert result (timeseries) to SampleStream
+				matrix := make(model.Matrix, len(result.Timeseries))
+				for i, ts := range result.Timeseries {
+					metric := make(model.Metric)
+					for _, label := range ts.Labels {
+						metric[model.LabelName(label.Name)] = model.LabelValue(label.Value)
+					}
+
+					samples := make([]model.SamplePair, len(ts.Samples))
+					for x, sample := range ts.Samples {
+						samples[x] = model.SamplePair{
+							Timestamp: model.Time(sample.Timestamp),
+							Value:     model.SampleValue(sample.Value),
+						}
+					}
+
+					matrix[i] = &model.SampleStream{
+						Metric: metric,
+						Values: samples,
+					}
+				}
+
+				err = promhttputil.ValueAddLabelSet(matrix, s.Cfg.Labels)
+				if err != nil {
+					errChan <- err
+					return
+				}
+
+				resultChan <- matrix
+			}
+
+		}(parsedUrl)
+	}
+
+	// Wait for results as we get them
+	var result model.Value
+	var lastError error
+	errCount := 0
+	for i := 0; i < len(targets); i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+
+		case err := <-errChan:
+			lastError = err
+			errCount++
+
+		case childResult := <-resultChan:
+			// If the server responded with a non-success, lets mark that as an error
+			// TODO: check qData.ResultType
+			if result == nil {
+				result = childResult
+			} else {
+				var err error
+				result, err = promhttputil.MergeValues(s.Cfg.GetAntiAffinity(), result, childResult)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	if errCount != 0 && errCount == len(targets) {
+		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
+	}
+
+	return result, nil
 }
 
 //
