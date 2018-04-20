@@ -3,7 +3,6 @@ package servergroup
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -15,7 +14,8 @@ import (
 
 type ServerGroups []*ServerGroup
 
-func (s ServerGroups) RemoteRead(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
+// GetValue fetches a `model.Value` from the servergroups
+func (s ServerGroups) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
 	resultChan := make(chan model.Value, len(s))
@@ -24,58 +24,7 @@ func (s ServerGroups) RemoteRead(ctx context.Context, start, end time.Time, matc
 	// Scatter out all the queries
 	for _, serverGroup := range s {
 		go func(serverGroup *ServerGroup) {
-			result, err := serverGroup.RemoteRead(childContext, start, end, matchers)
-			if err != nil {
-				errChan <- err
-			} else {
-				resultChan <- result
-			}
-		}(serverGroup)
-	}
-
-	// Wait for results as we get them
-	var result model.Value
-	var lastError error
-	errCount := 0
-	for i := 0; i < len(s); i++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case err := <-errChan:
-			lastError = err
-			errCount++
-		case childResult := <-resultChan:
-			var err error
-			if result == nil {
-				result = childResult
-			} else {
-				result, err = promhttputil.MergeValues(model.TimeFromUnix(0), result, childResult)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-
-	// If we got only errors, lets return that
-	if errCount == len(s) {
-		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
-	}
-
-	return result, nil
-
-}
-
-func (s ServerGroups) GetData(ctx context.Context, path string, values url.Values, client *http.Client) (model.Value, error) {
-	childContext, childContextCancel := context.WithCancel(ctx)
-	defer childContextCancel()
-	resultChan := make(chan model.Value, len(s))
-	errChan := make(chan error, len(s))
-
-	// Scatter out all the queries
-	for _, serverGroup := range s {
-		go func(serverGroup *ServerGroup) {
-			result, err := serverGroup.GetData(childContext, path, values, client)
+			result, err := serverGroup.GetValue(childContext, start, end, matchers)
 			if err != nil {
 				errChan <- err
 			} else {
@@ -116,7 +65,57 @@ func (s ServerGroups) GetData(ctx context.Context, path string, values url.Value
 	return result, nil
 }
 
-func (s ServerGroups) GetValuesForLabelName(ctx context.Context, path string, client *http.Client) (*promclient.LabelResult, error) {
+func (s ServerGroups) GetData(ctx context.Context, path string, values url.Values) (model.Value, error) {
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+	resultChan := make(chan model.Value, len(s))
+	errChan := make(chan error, len(s))
+
+	// Scatter out all the queries
+	for _, serverGroup := range s {
+		go func(serverGroup *ServerGroup) {
+			result, err := serverGroup.GetData(childContext, path, values)
+			if err != nil {
+				errChan <- err
+			} else {
+				resultChan <- result
+			}
+		}(serverGroup)
+	}
+
+	// Wait for results as we get them
+	var result model.Value
+	var lastError error
+	errCount := 0
+	for i := 0; i < len(s); i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case err := <-errChan:
+			lastError = err
+			errCount++
+		case childResult := <-resultChan:
+			var err error
+			if result == nil {
+				result = childResult
+			} else {
+				result, err = promhttputil.MergeValues(model.TimeFromUnix(0), result, childResult)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	// If we got only errors, lets return that
+	if errCount == len(s) {
+		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
+	}
+
+	return result, nil
+}
+
+func (s ServerGroups) GetValuesForLabelName(ctx context.Context, path string) (*promclient.LabelResult, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
 	resultChan := make(chan *promclient.LabelResult, len(s))
@@ -125,7 +124,7 @@ func (s ServerGroups) GetValuesForLabelName(ctx context.Context, path string, cl
 	// Scatter out all the queries
 	for _, serverGroup := range s {
 		go func(serverGroup *ServerGroup) {
-			result, err := serverGroup.GetValuesForLabelName(childContext, path, client)
+			result, err := serverGroup.GetValuesForLabelName(childContext, path)
 			if err != nil {
 				errChan <- err
 			} else {

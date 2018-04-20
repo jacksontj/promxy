@@ -1,4 +1,4 @@
-package proxyquerier
+package promhttputil
 
 import (
 	"github.com/prometheus/prometheus/pkg/labels"

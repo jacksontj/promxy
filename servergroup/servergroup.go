@@ -3,6 +3,7 @@ package servergroup
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"sync/atomic"
@@ -19,6 +20,7 @@ import (
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/relabel"
 	"github.com/prometheus/prometheus/storage/remote"
+	httputil "github.com/prometheus/prometheus/util/httputil"
 
 	sd_config "github.com/prometheus/prometheus/discovery/config"
 )
@@ -66,6 +68,7 @@ type ServerGroup struct {
 	Ready  chan struct{}
 
 	Cfg           *Config
+	Client        *http.Client
 	targetManager *discovery.Manager
 
 	OriginalURLs []string
@@ -109,8 +112,23 @@ func (s *ServerGroup) Sync() {
 	}
 }
 
+// TODO: move config + client into state object to be swapped with atomics
 func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	s.Cfg = cfg
+
+	// stage the client swap as well
+	// TODO: better name
+	client, err := httputil.NewClientFromConfig(cfg.HTTPConfig, "somename")
+	if err != nil {
+		return fmt.Errorf("Unable to load client from config: %s", err)
+	}
+
+	// TODO: remove after fixes to upstream
+	// Override the dial timeout
+	transport := client.Transport.(*http.Transport)
+	transport.DialContext = (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext
+
+	s.Client = client
 
 	if err := s.targetManager.ApplyConfig(map[string]sd_config.ServiceDiscoveryConfig{"foo": cfg.Hosts}); err != nil {
 		return err
@@ -124,6 +142,33 @@ func (s *ServerGroup) Targets() []string {
 		return ret
 	} else {
 		return nil
+	}
+}
+
+func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
+	if s.Cfg.RemoteRead {
+		return s.RemoteRead(ctx, start, end, matchers)
+	} else {
+		// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
+		pql, err := promhttputil.MatcherToString(matchers)
+		if err != nil {
+			return nil, err
+		}
+
+		// Create the query params
+		values := url.Values{}
+
+		// We want to do a normal query (for raw data)
+		urlBase := "/api/v1/query"
+
+		// We want to grab only the raw datapoints, so we do that through the query interface
+		// passing in a duration that is at least as long as ours (the added second is to deal
+		// with any rounding error etc since the duration is a floating point and we are casting
+		// to an int64
+		values.Add("query", pql+fmt.Sprintf("[%ds]", int64(end.Sub(start).Seconds())+1))
+		values.Add("time", model.Time(timestamp.FromTime(end)).String())
+
+		return s.GetData(ctx, urlBase, values)
 	}
 }
 
@@ -233,7 +278,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 }
 
 //
-func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Values, client *http.Client) (model.Value, error) {
+func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Values) (model.Value, error) {
 	targets := s.Targets()
 
 	childContext, childContextCancel := context.WithCancel(ctx)
@@ -249,7 +294,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Value
 		parsedUrl.RawQuery = values.Encode()
 		go func(stringUrl string) {
 			start := time.Now()
-			result, err := promclient.GetData(childContext, stringUrl, client, s.Cfg.Labels)
+			result, err := promclient.GetData(childContext, stringUrl, s.Client, s.Cfg.Labels)
 			took := time.Now().Sub(start)
 			if err != nil {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(float64(took))
@@ -302,7 +347,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Value
 	return result, nil
 }
 
-func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string, client *http.Client) (*promclient.LabelResult, error) {
+func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) (*promclient.LabelResult, error) {
 	targets := s.Targets()
 
 	childContext, childContextCancel := context.WithCancel(ctx)
@@ -317,7 +362,7 @@ func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string, cl
 		}
 		go func(stringUrl string) {
 			start := time.Now()
-			result, err := promclient.GetValuesForLabelName(childContext, stringUrl, client)
+			result, err := promclient.GetValuesForLabelName(childContext, stringUrl, s.Client)
 			took := time.Now().Sub(start)
 			if err != nil {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "error").Observe(float64(took))
