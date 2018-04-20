@@ -29,6 +29,7 @@ import (
 type proxyStorageState struct {
 	serverGroups []*servergroup.ServerGroup
 	client       *http.Client
+	cfg          *proxyconfig.PromxyConfig
 }
 
 func (p *proxyStorageState) Ready() {
@@ -68,6 +69,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 
 	newState := &proxyStorageState{
 		serverGroups: make([]*servergroup.ServerGroup, len(c.ServerGroups)),
+		cfg:          &c.PromxyConfig,
 	}
 	for i, sgCfg := range c.ServerGroups {
 		tmp := servergroup.New()
@@ -137,6 +139,8 @@ func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Q
 		timestamp.Time(maxt),
 		state.serverGroups,
 		state.client,
+
+		state.cfg,
 	}, nil
 }
 

@@ -40,7 +40,7 @@ func IteratorsForValue(v model.Value) []*SeriesIterator {
 
 // TODO: should be model.value ?
 func NewSeriesIterator(v interface{}) *SeriesIterator {
-	return &SeriesIterator{V: v, offset:-1}
+	return &SeriesIterator{V: v, offset: -1}
 }
 
 type SeriesIterator struct {
@@ -90,11 +90,11 @@ func (s *SeriesIterator) At() (t int64, v float64) {
 func (s *SeriesIterator) Next() bool {
 	switch valueTyped := s.V.(type) {
 	case *model.Sample: // From a vector
-	    if s.offset < 0 {
-	        s.offset = 0
-	        return true
-	    }
-	    return false
+		if s.offset < 0 {
+			s.offset = 0
+			return true
+		}
+		return false
 	case *model.SampleStream: // from a Matrix
 		if s.offset < (len(valueTyped.Values) - 1) {
 			s.offset++

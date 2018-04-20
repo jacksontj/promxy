@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +25,17 @@ import (
 
 const rawPSConfig = `
 promxy:
+  http_client:
+    tls_config:
+      insecure_skip_verify: true
+  server_groups:
+    - static_configs:
+        - targets:
+          - localhost:8083`
+
+const rawPSRemoteReadConfig = `
+promxy:
+  remote_read: true
   http_client:
     tls_config:
       insecure_skip_verify: true
@@ -107,45 +119,48 @@ func TestUpstreamEvaluations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, fn := range files {
+	for i, psConfig := range []string{rawPSConfig, rawPSRemoteReadConfig} {
+		for _, fn := range files {
 
-		// Upstream prom is using a StaleNan to determine if a given timeseries has gone
-		// NaN -- the problem being that for range vectors they filter out all "stale" samples
-		// meaning that it isn't possible to get a "raw" dump of data through the v1 API
-		// The only option that exists in reality is the "remote read" API -- which will
-		// require bench testing the marshaling etc. (in case it has all the same perf problems
-		// that the JSON API had
-		if strings.Contains(fn, "staleness.test") {
-			continue
+			// Upstream prom is using a StaleNan to determine if a given timeseries has gone
+			// NaN -- the problem being that for range vectors they filter out all "stale" samples
+			// meaning that it isn't possible to get a "raw" dump of data through the v1 API
+			// The only option that exists in reality is the "remote read" API -- which suffers
+			// from the same memory-balooning problems that the HTTP+JSON API originally had.
+			// It has **less** of a problem (its 2x memory instead of 14x) so it is a viable option.
+			// NOTE: Skipped only when promxy isn't configured to use the remote_read API
+			if psConfig == rawPSConfig && strings.Contains(fn, "staleness.test") {
+				continue
+			}
+			t.Run(strconv.Itoa(i)+fn, func(t *testing.T) {
+				test, err := newTestFromFile(t, fn)
+				if err != nil {
+					t.Errorf("error creating test for %s: %s", fn, err)
+				}
+
+				// Create API for the storage engine
+				srv, stopChan := startAPIForTest(test, ":8083")
+
+				ps := getProxyStorage(psConfig)
+				lStorage := &LayeredStorage{ps, test.Storage()}
+				// Replace the test storage with the promxy one
+				test.SetStorage(lStorage)
+				// TODO: enable
+				//test.QueryEngine().NodeReplacer = ps.NodeReplacer
+				//test.QueryEngine().Timeout = time.Second * 30
+
+				err = test.Run()
+				if err != nil {
+					t.Errorf("error running test %s: %s", fn, err)
+				}
+				test.Close()
+
+				// stop server
+				ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+				srv.Shutdown(ctx)
+				<-stopChan
+			})
 		}
-		t.Run(fn, func(t *testing.T) {
-			test, err := newTestFromFile(t, fn)
-			if err != nil {
-				t.Errorf("error creating test for %s: %s", fn, err)
-			}
-
-			// Create API for the storage engine
-			srv, stopChan := startAPIForTest(test, ":8083")
-
-			ps := getProxyStorage(rawPSConfig)
-			lStorage := &LayeredStorage{ps, test.Storage()}
-			// Replace the test storage with the promxy one
-			test.SetStorage(lStorage)
-			// TODO: enable
-			//test.QueryEngine().NodeReplacer = ps.NodeReplacer
-			//test.QueryEngine().Timeout = time.Second * 30
-
-			err = test.Run()
-			if err != nil {
-				t.Errorf("error running test %s: %s", fn, err)
-			}
-			test.Close()
-
-			// stop server
-			ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
-			srv.Shutdown(ctx)
-			<-stopChan
-		})
 	}
 }
 
