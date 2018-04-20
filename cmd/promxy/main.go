@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "net/http/pprof"
+
 	kitlog "github.com/go-kit/kit/log"
 	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/logging"
@@ -176,6 +178,8 @@ func main() {
 		// Have our fallback rules
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			apiRouter.ServeHTTP(w, r)
+		} else if strings.HasPrefix(r.URL.Path, "/debug") {
+			http.DefaultServeMux.ServeHTTP(w, r)
 		} else {
 			// For all remainingunknown paths we'll simply proxy them to *a* prometheus host
 			prometheus.InstrumentHandlerFunc("proxy", ps.ProxyHandler)(w, r)
