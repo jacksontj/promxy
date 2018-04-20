@@ -3,12 +3,35 @@ package servergroup
 import (
 	"time"
 
+	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
 	sd_config "github.com/prometheus/prometheus/discovery/config"
 )
 
 type Config struct {
+	// RemoteRead directs promxy to load data (from the storage API) through the
+	// remoteread API on prom.
+	// Pros:
+	//  - StaleNaNs work
+	//  - ~2x faster (in my local testing, more so if you are using default JSON marshaler in prom)
+	//
+	// Cons:
+	//  - proto marshaling prom side doesn't stream, so the data being sent
+	//      over the wire will be 2x its size in memory on the remote prom host.
+	//  - "experimental" API (according to docs) -- meaning this might break
+	//      without much (if any) warning
+	//
+	// Upstream prom added a StaleNan to determine if a given timeseries has gone
+	// NaN -- the problem being that for range vectors they filter out all "stale" samples
+	// meaning that it isn't possible to get a "raw" dump of data through the query/query_range v1 API
+	// The only option that exists in reality is the "remote read" API -- which suffers
+	// from the same memory-balooning problems that the HTTP+JSON API originally had.
+	// It has **less** of a problem (its 2x memory instead of 14x) so it is a viable option.
+	RemoteRead bool `yaml:"remote_read"`
+	// HTTP client config for promxy to use when connecting to the various server_groups
+	// this is the same config as prometheus
+	HTTPConfig config_util.HTTPClientConfig `yaml:"http_client"`
 	// Scheme defines how promxy talks to this server group (http, https, etc.)
 	Scheme string `yaml:"scheme"`
 	// Labels is a set of labels that will be added to all metrics retrieved

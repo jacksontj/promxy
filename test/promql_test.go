@@ -31,35 +31,41 @@ promxy:
   server_groups:
     - static_configs:
         - targets:
-          - localhost:8083`
+          - localhost:8083
+`
 
 const rawPSRemoteReadConfig = `
 promxy:
-  remote_read: true
-  http_client:
-    tls_config:
-      insecure_skip_verify: true
   server_groups:
     - static_configs:
         - targets:
-          - localhost:8083`
+          - localhost:8083
+      remote_read: true
+      http_client:
+        tls_config:
+          insecure_skip_verify: true
+`
 
 const rawDoublePSConfig = `
 promxy:
-  http_client:
-    tls_config:
-      insecure_skip_verify: true
   server_groups:
     - static_configs:
         - targets:
           - localhost:8083
       labels:
         az: a
+      http_client:
+        tls_config:
+          insecure_skip_verify: true
     - static_configs:
         - targets:
           - localhost:8084
       labels:
-        az: b`
+        az: b
+      http_client:
+        tls_config:
+          insecure_skip_verify: true
+`
 
 func getProxyStorage(cfg string) *proxystorage.ProxyStorage {
 	ps, err := proxystorage.NewProxyStorage()
@@ -147,7 +153,6 @@ func TestUpstreamEvaluations(t *testing.T) {
 				test.SetStorage(lStorage)
 				// TODO: enable
 				//test.QueryEngine().NodeReplacer = ps.NodeReplacer
-				//test.QueryEngine().Timeout = time.Second * 30
 
 				err = test.Run()
 				if err != nil {
