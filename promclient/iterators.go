@@ -36,9 +36,8 @@ func IteratorsForValue(v model.Value) []*SeriesIterator {
 	}
 }
 
-// Iterators for client return data
-
-// TODO: should be model.value ?
+// NewSeriesIterator return a series iterator for the given value
+// TODO: error return if the type is incorrect?
 func NewSeriesIterator(v interface{}) *SeriesIterator {
 	return &SeriesIterator{V: v, offset: -1}
 }
@@ -69,7 +68,6 @@ func (s *SeriesIterator) Seek(t int64) bool {
 	return false
 }
 
-// TODO: implement all this
 // At returns the current timestamp/value pair.
 func (s *SeriesIterator) At() (t int64, v float64) {
 	switch valueTyped := s.V.(type) {

@@ -8,6 +8,7 @@ import (
 )
 
 // TODO: have the api.go thing export these
+// attempted once already -- https://github.com/prometheus/prometheus/pull/3615
 type Status string
 
 const (

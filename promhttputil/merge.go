@@ -7,6 +7,7 @@ import (
 	"github.com/prometheus/common/model"
 )
 
+// ValueAddLabelSet adds the labelset `l` to the value `a`
 func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
 	switch aTyped := a.(type) {
 	case model.Vector:
@@ -32,8 +33,8 @@ func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
 
 }
 
+// MergeValues merges values `a` and `b` with the given antiAffinityBuffer
 // TODO: always make copies? Now we sometimes return one, or make a copy, or do nothing
-// Merge 2 values and
 func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, error) {
 	if a.Type() != b.Type() {
 		return nil, fmt.Errorf("Error!")
@@ -126,6 +127,7 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, 
 	return nil, fmt.Errorf("Unknown type! %v", reflect.TypeOf(a))
 }
 
+// MergeSampleStream merges SampleStreams `a` and `b` with the given antiAffinityBuffer
 func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream) (*model.SampleStream, error) {
 	if a.Metric.Fingerprint() != b.Metric.Fingerprint() {
 		return nil, fmt.Errorf("Cannot merge mismatch fingerprints")
