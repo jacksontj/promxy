@@ -151,8 +151,7 @@ func TestUpstreamEvaluations(t *testing.T) {
 				lStorage := &LayeredStorage{ps, test.Storage()}
 				// Replace the test storage with the promxy one
 				test.SetStorage(lStorage)
-				// TODO: enable
-				//test.QueryEngine().NodeReplacer = ps.NodeReplacer
+				test.QueryEngine().NodeReplacer = ps.NodeReplacer
 
 				err = test.Run()
 				if err != nil {
@@ -189,8 +188,7 @@ func TestEvaluations(t *testing.T) {
 			lStorage := &LayeredStorage{ps, test.Storage()}
 			// Replace the test storage with the promxy one
 			test.SetStorage(lStorage)
-			// TODO: enable
-			//test.QueryEngine().NodeReplacer = ps.NodeReplacer
+			test.QueryEngine().NodeReplacer = ps.NodeReplacer
 
 			err = test.Run()
 			if err != nil {
