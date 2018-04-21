@@ -2,8 +2,10 @@
 
 ## High-level overview
 Promxy is a prometheus proxy that makes many shards of prometheus
-appear as a single node to the user. This significantly simplifies operations and use
-of prometheus at scale (when you have more than one prometheus host).
+appear as a single API endpoint to the user. This significantly simplifies operations
+and use of prometheus at scale (when you have more than one prometheus host).
+Promxy delivers this unified access endpoint without requiring **any** sidecars,
+custom-builds, or other changes to your prometheus infrastructure.
 
 ## Quickstart
 Release binaries are available on the [releases](https://github.com/jacksontj/promxy/releases) page.
