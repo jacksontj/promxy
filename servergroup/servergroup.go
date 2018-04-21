@@ -37,7 +37,6 @@ func init() {
 	prometheus.MustRegister(serverGroupSummary)
 }
 
-// TODO: pass in parent context
 func New() *ServerGroup {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	// Create the targetSet (which will maintain all of the updating etc. in the background)
@@ -123,7 +122,13 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 		return fmt.Errorf("Unable to load client from config: %s", err)
 	}
 
-	// TODO: remove after fixes to upstream
+	// TODO
+	// as of now the service_discovery mechanisms in prometheus have no mechanism of
+	// removing unhealthy hosts (through relableing or otherwise). So for now we simply
+	// set a dial timeout, assuming that if we can't TCP connect in 200ms it is probably
+	// dead. Our options for doing this better in the future are (1) configurable
+	// dial timeout (2) healthchecks (3) track "healthiness" of downstream based on our
+	// requests to it -- not through other healthchecks
 	// Override the dial timeout
 	transport := client.Transport.(*http.Transport)
 	transport.DialContext = (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext
