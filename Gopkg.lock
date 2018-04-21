@@ -460,7 +460,7 @@
     "util/yaml",
     "web/api/v1"
   ]
-  revision = "c273622aee389f75e3763f6d7cf60819dbc9e27b"
+  revision = "020b9f362927f4df16b6fd6812688e97ea1814a4"
   source = "github.com/jacksontj/prometheus"
 
 [[projects]]
