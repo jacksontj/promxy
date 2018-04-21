@@ -24,5 +24,29 @@ With that configuration modified and ready, all that is left is to run promxy:
 ./promxy --config=config.yaml
 ```
 
-# Questions/Bugs/etc.
+## FAQ
+
+### What versions of prometheus does promxy support?
+Promxy uses the `/v1` API of prometheus under-the-hood, meaning that promxy simply
+requires that API to be present. Promxy has been used with as early as prom 1.7
+and as recent as 2.2. If you run into issues with any prometheus version with the `/v1`
+API please open up an issue.
+
+### What changes are required to my prometheus infra for promxy?
+None. Promxy is simply an aggregating proxy that sends requests to prometheus-- meaning
+it requires no changes to your existing prometheus install.
+
+### What is query performance like with promxy?
+Promxy's goal is to be the same performance as the slowest prometheus server it
+has to talk to. If you have a query that is significantly slower through promxy
+than on prometheus direct please open up an issue so we can get that taken care of.
+
+
+### How does Promxy know what prometheus server to route to?
+Promxy currently does a complete scatter-gather to all configured server groups.
+There are plans to [reduce scatter-gather queries](https://github.com/jacksontj/promxy/issues/2)
+but in practice the current scatter-gather always implementation hasn't been a bottleneck.
+
+
+## Questions/Bugs/etc.
 Feedback is **greatly** appreciated. If you find a bug, have a feature request, or just have a general question feel free to open up an issue!
