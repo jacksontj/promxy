@@ -160,7 +160,8 @@ func TestUpstreamEvaluations(t *testing.T) {
 				test.Close()
 
 				// stop server
-				ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+				defer cancel()
 				srv.Shutdown(ctx)
 				<-stopChan
 			})
@@ -198,7 +199,8 @@ func TestEvaluations(t *testing.T) {
 			test.Close()
 
 			// stop server
-			ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
 			srv.Shutdown(ctx)
 			srv2.Shutdown(ctx)
 
