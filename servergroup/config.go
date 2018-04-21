@@ -9,6 +9,8 @@ import (
 	sd_config "github.com/prometheus/prometheus/discovery/config"
 )
 
+// Config is the configuration for a ServerGroup that promxy will talk to.
+// This is where the vast majority of options exist.
 type Config struct {
 	// RemoteRead directs promxy to load data (from the storage API) through the
 	// remoteread API on prom.
@@ -59,15 +61,13 @@ type Config struct {
 func (c *Config) GetScheme() string {
 	if c.Scheme == "" {
 		return "http"
-	} else {
-		return c.Scheme
 	}
+	return c.Scheme
 }
 
 func (c *Config) GetAntiAffinity() model.Time {
 	if c.AntiAffinity == nil {
 		return model.TimeFromUnix(10) // 10s
-	} else {
-		return model.TimeFromUnix(int64((*c.AntiAffinity).Seconds()))
 	}
+	return model.TimeFromUnix(int64((*c.AntiAffinity).Seconds()))
 }

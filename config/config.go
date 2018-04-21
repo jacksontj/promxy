@@ -27,7 +27,9 @@ func ConfigFromFile(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// Common configuration for all storage nodes
+// Config is the entire config file. This includes both the Prometheus Config
+// as well as the Promxy config. This is done by "inline-ing" the promxy
+// config into the prometheus config under the "promxy" key
 type Config struct {
 	// Prometheus configs -- this includes configurations for
 	// recording rules, alerting rules, etc.
@@ -37,7 +39,8 @@ type Config struct {
 	PromxyConfig `yaml:"promxy"`
 }
 
+// PromxyConfig is the configuration for Promxy itself
 type PromxyConfig struct {
-	// Config for each fo the server groups
+	// Config for each of the server groups promxy is configured to aggregate
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
 }
