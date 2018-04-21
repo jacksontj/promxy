@@ -194,7 +194,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 			cfg := &remote.ClientConfig{
 				URL: &config_util.URL{parsedUrl},
 				// TODO: from context?
-				Timeout: model.Duration(time.Second * 20),
+				Timeout: model.Duration(time.Minute * 2),
 			}
 			client, err := remote.NewClient(1, cfg)
 			if err != nil {
