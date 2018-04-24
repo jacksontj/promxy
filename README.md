@@ -26,6 +26,13 @@ With that configuration modified and ready, all that is left is to run promxy:
 
 ## FAQ
 
+### What is a "ServerGroup"?
+A `ServerGroup` is a set of prometheus hosts configured the same. This is a common best practice
+for prometheus infrastructure as prometheus itself doesn't support any HA/clustering. This
+allows promxy to merge data from multiple hosts in the `ServerGroup` ([all until it becomes a priority](https://github.com/jacksontj/promxy/issues/3)).
+This allows promxy to "fill" in the holes in timeseries, such as the ones created when upgrading
+prometheus or rebooting the host
+
 ### What versions of prometheus does promxy support?
 Promxy uses the `/v1` API of prometheus under-the-hood, meaning that promxy simply
 requires that API to be present. Promxy has been used with as early as prom 1.7
