@@ -7,6 +7,19 @@ and use of prometheus at scale (when you have more than one prometheus host).
 Promxy delivers this unified access endpoint without requiring **any** sidecars,
 custom-builds, or other changes to your prometheus infrastructure.
 
+## Why promxy?
+[**Detailed version**](MOTIVATION.md)
+
+**Short version**:
+Prometheus itself provides no real HA/clustering support. As such the best-practice
+is to run multiple (e.g N) hosts with the same config. Similarly prometheus has no real
+built-in query federation, which means that you end up with N sources in grafana
+that is (1) confusing grafana users and (2) no support for aggregation across the sources.
+Promxy enables an HA prometheus setup by "merging" the data from the duplicate
+hosts (so if there is a gap in one, promxy will fill with the other). In addition
+Promxy provides a single datasource for all promql queries -- meaning your grafana
+can have a single source and you can have globally aggregated promql queries.
+
 ## Quickstart
 Release binaries are available on the [releases](https://github.com/jacksontj/promxy/releases) page.
 
