@@ -111,7 +111,7 @@ func main() {
 	proxyStorage = ps
 
 	// TODO: config for the timeout
-	engine := promql.NewEngine(nil, nil, 20, 120*time.Second)
+	engine := promql.NewEngine(nil, prometheus.DefaultRegisterer, 20, 120*time.Second)
 
 	engine.NodeReplacer = ps.NodeReplacer
 
