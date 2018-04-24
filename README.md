@@ -52,7 +52,7 @@ than on prometheus direct please open up an issue so we can get that taken care 
 ### How does Promxy know what prometheus server to route to?
 Promxy currently does a complete scatter-gather to all configured server groups.
 There are plans to [reduce scatter-gather queries](https://github.com/jacksontj/promxy/issues/2)
-but in practice the current scatter-gather always implementation hasn't been a bottleneck.
+but in practice the current "scatter-gather always" implementation hasn't been a bottleneck.
 
 
 ## Questions/Bugs/etc.
