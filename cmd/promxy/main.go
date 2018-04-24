@@ -67,6 +67,12 @@ func main() {
 
 	parser := flags.NewParser(&opts, flags.Default)
 	if _, err := parser.Parse(); err != nil {
+		if errTyped, ok := err.(*flags.Error); ok {
+			switch errTyped.Type {
+			case flags.ErrHelp:
+				return
+			}
+		}
 		logrus.Fatalf("Error parsing flags: %v", err)
 	}
 
