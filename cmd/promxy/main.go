@@ -67,11 +67,10 @@ func main() {
 
 	parser := flags.NewParser(&opts, flags.Default)
 	if _, err := parser.Parse(); err != nil {
-		if errTyped, ok := err.(*flags.Error); ok {
-			switch errTyped.Type {
-			case flags.ErrHelp:
-				return
-			}
+		// If the error was from the parser, then we can simply return
+		// as Parse() prints the error already
+		if _, ok := err.(*flags.Error); ok {
+			os.Exit(1)
 		}
 		logrus.Fatalf("Error parsing flags: %v", err)
 	}
