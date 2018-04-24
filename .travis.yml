@@ -2,3 +2,6 @@ language: go
 
 go:
   - "1.x"
+
+# have an empty install to avoid travis doing a go get
+install: []
