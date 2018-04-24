@@ -202,6 +202,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 				return
 			}
 
+			start := time.Now()
 			query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), matchers)
 			if err != nil {
 				errChan <- err
@@ -209,10 +210,13 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 			}
 			// http://localhost:8083/api/v1/query?query=%7B__name__%3D%22metric%22%7D%5B302s%5D&time=21
 			result, err := client.Read(childContext, query)
+			took := time.Now().Sub(start)
 
 			if err != nil {
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "remoteread", "error").Observe(float64(took))
 				errChan <- err
 			} else {
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "remoteread", "success").Observe(float64(took))
 				// convert result (timeseries) to SampleStream
 				matrix := make(model.Matrix, len(result.Timeseries))
 				for i, ts := range result.Timeseries {
