@@ -23,10 +23,6 @@ alerting:
 ### Promxy configuration
 ##
 promxy:
-  # options for promxy's HTTP client when talking to hosts in server_groups
-  http_client:
-    tls_config:
-      insecure_skip_verify: true
   server_groups:
     - static_configs:
         - targets:
@@ -36,6 +32,10 @@ promxy:
         sg: localhost_9090
       # anti-affinity for merging values in timeseries between hosts in the server_group
       anti_affinity: 10s
+      # options for promxy's HTTP client when talking to hosts in server_groups
+      http_client:
+        tls_config:
+          insecure_skip_verify: true
     # as many additional server groups as you have
     - static_configs:
         - targets:
@@ -43,3 +43,6 @@ promxy:
       labels:
         sg: localhost_9091
       anti_affinity: 10s
+      http_client:
+        tls_config:
+          insecure_skip_verify: true
