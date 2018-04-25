@@ -40,6 +40,9 @@ var opts struct {
 	BindAddr   string `long:"bind-addr" description:"address for promxy to listen on" default:":8082"`
 	ConfigFile string `long:"config" description:"path to the config file" required:"true"`
 	LogLevel   string `long:"log-level" description:"Log level" default:"info"`
+
+	QueryTimeout        time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
+	QueryMaxConcurrency int           `long:"query.max-concurrency" description:"Maximum number of queries executed concurrently." default:"1000"`
 }
 
 func reloadConfig(rls ...proxyconfig.Reloadable) error {
@@ -111,8 +114,7 @@ func main() {
 	proxyStorage = ps
 
 	// TODO: config for the timeout
-	engine := promql.NewEngine(nil, prometheus.DefaultRegisterer, 20, 120*time.Second)
-
+	engine := promql.NewEngine(nil, prometheus.DefaultRegisterer, opts.QueryMaxConcurrency, opts.QueryTimeout)
 	engine.NodeReplacer = ps.NodeReplacer
 
 	// TODO: config option
