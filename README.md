@@ -61,6 +61,7 @@ Promxy's goal is to be the same performance as the slowest prometheus server it
 has to talk to. If you have a query that is significantly slower through promxy
 than on prometheus direct please open up an issue so we can get that taken care of.
 
+**Note**: if you are running prometheus <2.2 you may notice "slow" performance when running queries that access large amounts of data. This is due to inefficient json marshaling in prometheus. You can workaround this by configuring promxy to use the [remote_read](https://github.com/jacksontj/promxy/blob/master/servergroup/config.go#L33) API
 
 ### How does Promxy know what prometheus server to route to?
 Promxy currently does a complete scatter-gather to all configured server groups.
