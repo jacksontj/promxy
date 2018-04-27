@@ -206,6 +206,7 @@ func main() {
 		for {
 			select {
 			case <-hup:
+				log.Infof("Reloading config")
 				if err := reloadConfig(reloadables...); err != nil {
 					log.Errorf("Error reloading config: %s", err)
 				}
