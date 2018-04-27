@@ -134,6 +134,7 @@ func main() {
 		Context:     context.Background(), // base context for all background tasks
 		ExternalURL: u,                    // URL listed as URL for "who fired this alert"
 		NotifyFunc:  sendAlerts(notifierManager, u.String()),
+		Logger: logger,
 	})
 	go ruleManager.Run()
 
