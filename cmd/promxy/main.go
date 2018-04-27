@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+
 	"fmt"
 	"net/http"
 	"net/url"
@@ -24,19 +26,19 @@ import (
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/route"
+	"github.com/prometheus/common/version"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/rules"
+	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/strutil"
-	"github.com/prometheus/prometheus/web/api/v1"
+	"github.com/prometheus/prometheus/web"
 	"github.com/sirupsen/logrus"
 )
 
-//http://localhost:8080/api/v1/query?query=scrape_duration_seconds%5B1m%5D&time=1507256489.103&_=1507256486365
-
-var opts struct {
+type CLIOpts struct {
 	BindAddr   string `long:"bind-addr" description:"address for promxy to listen on" default:":8082"`
 	ConfigFile string `long:"config" description:"path to the config file" required:"true"`
 	LogLevel   string `long:"log-level" description:"Log level" default:"info"`
@@ -44,6 +46,16 @@ var opts struct {
 	QueryTimeout        time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
 	QueryMaxConcurrency int           `long:"query.max-concurrency" description:"Maximum number of queries executed concurrently." default:"1000"`
 }
+
+func (c *CLIOpts) ToFlags() map[string]string {
+	tmp := make(map[string]string)
+	// TODO: better
+	b, _ := json.Marshal(opts)
+	json.Unmarshal(b, &tmp)
+	return tmp
+}
+
+var opts CLIOpts
 
 func reloadConfig(rls ...proxyconfig.Reloadable) error {
 	cfg, err := proxyconfig.ConfigFromFile(opts.ConfigFile)
@@ -104,6 +116,11 @@ func main() {
 	}
 	logrus.SetFormatter(formatter)
 
+	// Create base context for this daemon
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create the proxy storag
 	var proxyStorage storage.Storage
 
 	ps, err := proxystorage.NewProxyStorage()
@@ -113,7 +130,6 @@ func main() {
 	reloadables = append(reloadables, ps)
 	proxyStorage = ps
 
-	// TODO: config for the timeout
 	engine := promql.NewEngine(nil, prometheus.DefaultRegisterer, opts.QueryMaxConcurrency, opts.QueryTimeout)
 	engine.NodeReplacer = ps.NodeReplacer
 
@@ -129,10 +145,11 @@ func main() {
 		panic(err)
 	}
 	logger := promlog.New(lvl)
+
 	notifierManager := notifier.NewManager(&notifier.Options{Registerer: prometheus.DefaultRegisterer}, kitlog.With(logger, "component", "notifier"))
 	ruleManager := rules.NewManager(&rules.ManagerOptions{
-		Context:     context.Background(), // base context for all background tasks
-		ExternalURL: u,                    // URL listed as URL for "who fired this alert"
+		Context:     ctx, // base context for all background tasks
+		ExternalURL: u,   // URL listed as URL for "who fired this alert"
 		QueryFunc:   rules.EngineQueryFunc(engine, proxyStorage),
 		NotifyFunc:  sendAlerts(notifierManager, u.String()),
 		Appendable:  proxyStorage,
@@ -154,34 +171,55 @@ func main() {
 		return ruleManager.Update(time.Duration(cfg.GlobalConfig.EvaluationInterval), files)
 	}}))
 
-	// TODO:
-	cfgFunc := func() config.Config { return config.DefaultConfig }
-	// Return 503 until ready (for us there isn't much startup, so this might not need to be implemented
-	readyFunc := func(f http.HandlerFunc) http.HandlerFunc { return f }
+	// We need an empty scrape manager, simply to make the API not panic and error out
+	scrapeManager := scrape.NewManager(kitlog.With(logger, "component", "scrape manager"), nil)
 
-	api := v1.NewAPI(
-		engine,
-		proxyStorage,
-		nil,
-		nil,
-		cfgFunc,
-		nil,
-		readyFunc,
-		nil,
-		true,
-	)
+	// TODO: separate package?
+	webOptions := &web.Options{
+		Context:       ctx,
+		Storage:       proxyStorage,
+		QueryEngine:   engine,
+		ScrapeManager: scrapeManager,
+		RuleManager:   ruleManager,
+		Notifier:      notifierManager,
+
+		Flags:       opts.ToFlags(),
+		RoutePrefix: "/", // TODO: options for this?
+		// TODO: use these?
+		/*
+			ListenAddress        string
+			ReadTimeout          time.Duration
+			MaxConnections       int
+			ExternalURL          *url.URL
+			MetricsPath          string
+			UseLocalAssets       bool
+			UserAssetsPath       string
+			ConsoleTemplatesPath string
+			ConsoleLibrariesPath string
+			EnableLifecycle      bool
+			EnableAdminAPI       bool
+		*/
+		Version: &web.PrometheusVersion{
+			Version:   version.Version,
+			Revision:  version.Revision,
+			Branch:    version.Branch,
+			BuildUser: version.BuildUser,
+			BuildDate: version.BuildDate,
+			GoVersion: version.GoVersion,
+		},
+	}
+
+	webHandler := web.New(logger, webOptions)
+	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(webHandler))
+	webHandler.Ready()
 
 	apiRouter := route.New()
-	api.Register(apiRouter.WithPrefix("/api/v1"))
-
-	// API go to their router
-	// Some stuff go to me
-	// rest proxy
+	webHandler.Getv1API().Register(apiRouter.WithPrefix("/api/v1"))
 
 	// Create our router
 	r := httprouter.New()
 
-	// TODO: configurable path
+	// TODO: configurable metrics path
 	r.HandlerFunc("GET", "/metrics", prometheus.Handler().ServeHTTP)
 
 	r.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -191,8 +229,8 @@ func main() {
 		} else if strings.HasPrefix(r.URL.Path, "/debug") {
 			http.DefaultServeMux.ServeHTTP(w, r)
 		} else {
-			// For all remainingunknown paths we'll simply proxy them to *a* prometheus host
-			prometheus.InstrumentHandlerFunc("proxy", ps.ProxyHandler)(w, r)
+			// all else we send direct to the local prometheus UI
+			webHandler.GetRouter().ServeHTTP(w, r)
 		}
 	})
 
@@ -213,8 +251,6 @@ func main() {
 			log.Fatalf("Error listening: %v", err)
 		}
 	}()
-
-	ctx, cancel := context.WithCancel(context.Background())
 
 	// Wait for reload or termination signals. Start the handler for SIGHUP as
 	// early as possible, but ignore it until we are ready to handle reloading

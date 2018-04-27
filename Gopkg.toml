@@ -63,3 +63,7 @@
 [[override]]
   name = "gopkg.in/fsnotify.v1"
   source = "github.com/fsnotify/fsnotify"
+
+[[override]]
+  name = "github.com/cockroachdb/cockroach"
+  revision = "84bc9597164f671c0130543778228928d6865c5c"

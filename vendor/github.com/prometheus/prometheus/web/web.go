@@ -317,6 +317,14 @@ func serveDebug(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (h *Handler) GetRouter() *route.Router {
+	return h.router
+}
+
+func (h *Handler) Getv1API() *api_v1.API {
+	return h.apiV1
+}
+
 func (h *Handler) serveStaticAsset(w http.ResponseWriter, req *http.Request) {
 	fp := route.Param(req.Context(), "filepath")
 	fp = filepath.Join("web/ui/static", fp)

@@ -3,9 +3,6 @@ package proxystorage
 import (
 	"context"
 	"fmt"
-	"math/rand"
-	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"reflect"
 	"strconv"
@@ -92,25 +89,6 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	}
 
 	return nil
-}
-
-// Handler to proxy requests to *a* server in serverGroups
-func (p *ProxyStorage) ProxyHandler(w http.ResponseWriter, r *http.Request) {
-	state := p.GetState()
-
-	serverGroup := state.serverGroups[rand.Int()%len(state.serverGroups)]
-	servers := serverGroup.Targets()
-	if len(servers) <= 0 {
-		http.Error(w, "no servers available in serverGroup", http.StatusBadGateway)
-	}
-	server := servers[rand.Int()%len(servers)]
-	// TODO: failover
-	parsedUrl, _ := url.Parse(server)
-
-	proxy := httputil.NewSingleHostReverseProxy(parsedUrl)
-	proxy.Transport = serverGroup.Client.Transport
-
-	proxy.ServeHTTP(w, r)
 }
 
 func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
