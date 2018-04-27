@@ -133,8 +133,10 @@ func main() {
 	ruleManager := rules.NewManager(&rules.ManagerOptions{
 		Context:     context.Background(), // base context for all background tasks
 		ExternalURL: u,                    // URL listed as URL for "who fired this alert"
+		QueryFunc:   rules.EngineQueryFunc(engine, proxyStorage),
 		NotifyFunc:  sendAlerts(notifierManager, u.String()),
-		Logger: logger,
+		Appendable:  proxyStorage,
+		Logger:      logger,
 	})
 	go ruleManager.Run()
 
