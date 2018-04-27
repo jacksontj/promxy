@@ -1,3 +1,12 @@
-ALERT test_alert
-    IF irate(http_requests_total[1m]) > 0
-    FOR 2s
+# example from https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/
+groups:
+- name: example
+  rules:
+  - alert: HighErrorRate
+    expr: job:request_latency_seconds:mean5m{job="myjob"} > 0.5
+    for: 10m
+    labels:
+      severity: page
+    annotations:
+      summary: High request latency
+
