@@ -197,29 +197,47 @@ func main() {
 		logrus.Fatalf("Error loading config: %s", err)
 	}
 
+	// Set up access logger
+	loggedRouter := logging.NewApacheLoggingHandler(r, os.Stdout)
+	srv := &http.Server{
+		Addr:    opts.BindAddr,
+		Handler: loggedRouter,
+	}
+
+	go func() {
+		logrus.Infof("promxy starting")
+		if err := srv.ListenAndServe(); err != nil {
+			log.Fatalf("Error listening: %v", err)
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
 	// Wait for reload or termination signals. Start the handler for SIGHUP as
 	// early as possible, but ignore it until we are ready to handle reloading
 	// our config.
-	hup := make(chan os.Signal)
-	signal.Notify(hup, syscall.SIGHUP)
-	go func() {
-		for {
-			select {
-			case <-hup:
+	sigs := make(chan os.Signal)
+	defer close(sigs)
+	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
+	for {
+		select {
+		case sig := <-sigs:
+			switch sig {
+			case syscall.SIGHUP:
 				log.Infof("Reloading config")
 				if err := reloadConfig(reloadables...); err != nil {
 					log.Errorf("Error reloading config: %s", err)
 				}
+			case syscall.SIGTERM, syscall.SIGINT:
+				log.Infof("promxy exiting")
+				cancel()
+				srv.Shutdown(ctx)
+				return
+			default:
+				log.Errorf("Uncaught signal: %v", sig)
 			}
+
 		}
-	}()
-
-	// Set up access logger
-	loggedRouter := logging.NewApacheLoggingHandler(r, os.Stdout)
-
-	logrus.Infof("promxy starting")
-	if err := http.ListenAndServe(opts.BindAddr, loggedRouter); err != nil {
-		log.Fatalf("Error listening: %v", err)
 	}
 }
 
