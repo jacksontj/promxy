@@ -100,6 +100,21 @@
   version = "v1.0.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/cockroachdb/cmux"
+  packages = ["."]
+  revision = "30d10be492927e2dcae0089c374c455d42414fcb"
+
+[[projects]]
+  name = "github.com/cockroachdb/cockroach"
+  packages = [
+    "pkg/util/httputil",
+    "pkg/util/protoutil",
+    "pkg/util/syncutil"
+  ]
+  revision = "84bc9597164f671c0130543778228928d6865c5c"
+
+[[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
   revision = "346938d642f2ec3594ed81d874461961cd0faa76"
@@ -191,6 +206,7 @@
   name = "github.com/gogo/protobuf"
   packages = [
     "gogoproto",
+    "jsonpb",
     "proto",
     "protoc-gen-gogo/descriptor",
     "sortkeys",
@@ -365,13 +381,26 @@
   version = "v0.3.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/opentracing-contrib/go-stdlib"
+  packages = ["nethttp"]
+  revision = "36723135187404d2f4002f4f189938565e64cc5c"
+
+[[projects]]
   name = "github.com/opentracing/opentracing-go"
   packages = [
     ".",
+    "ext",
     "log"
   ]
   revision = "1949ddbfd147afd4d964a9f00b24eb291e0e7c38"
   version = "v1.0.2"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/petermattis/goid"
+  packages = ["."]
+  revision = "b0b1615b78e5ee59739545bb38426383b2cda4c9"
 
 [[projects]]
   name = "github.com/pkg/errors"
@@ -458,9 +487,12 @@
     "util/testutil",
     "util/treecache",
     "util/yaml",
-    "web/api/v1"
+    "web",
+    "web/api/v1",
+    "web/api/v2",
+    "web/ui"
   ]
-  revision = "020b9f362927f4df16b6fd6812688e97ea1814a4"
+  revision = "5e5f7526eeec0c35c4cdf280b2efa0965c00d89c"
   source = "github.com/jacksontj/prometheus"
 
 [[projects]]
@@ -481,6 +513,12 @@
   name = "github.com/samuel/go-zookeeper"
   packages = ["zk"]
   revision = "e6b59f6144beb8570562539c1898a0b1fea34b41"
+
+[[projects]]
+  name = "github.com/sasha-s/go-deadlock"
+  packages = ["."]
+  revision = "03d40e5dbd5488667a13b3c2600b2f7c2886f02f"
+  version = "v0.2.0"
 
 [[projects]]
   branch = "master"
@@ -516,6 +554,7 @@
     "idna",
     "internal/timeseries",
     "lex/httplex",
+    "netutil",
     "trace"
   ]
   revision = "a04bdaca5b32abe1c069418fb7088ae607de5bd0"
@@ -800,6 +839,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "9927cb6fdccdfb5109214dec2013d3a064b6e6ac347dfcc86f41fbaa87cbc182"
+  inputs-digest = "6d309226eb6f92c04c79779c8e3b3ec609cf4b263d3bbe9e454abcb8864fe4ad"
   solver-name = "gps-cdcl"
   solver-version = 1
