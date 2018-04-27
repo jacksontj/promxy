@@ -54,6 +54,10 @@ func (s *SeriesIterator) Seek(t int64) bool {
 	case *model.Sample: // From a vector
 		return int64(valueTyped.Timestamp) >= t
 	case *model.SampleStream: // from a Matrix
+		// If someone calls Seek() on an empty SampleStream, just return false
+		if len(valueTyped.Values) == 0 {
+			return false
+		}
 		for i := s.offset; i < len(valueTyped.Values); i++ {
 			s.offset = i
 			if int64(valueTyped.Values[s.offset].Timestamp) >= t {
