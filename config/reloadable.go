@@ -21,3 +21,13 @@ func (p *PromReloadableWrap) ApplyConfig(c *Config) error {
 func WrapPromReloadable(p PromReloadable) Reloadable {
 	return &PromReloadableWrap{p}
 }
+
+// ApplyConfigFunc is a struct that wraps a single function that Applys config
+// into something that implements the `PromReloadable` interface
+type ApplyConfigFunc struct {
+	F func(*config.Config) error
+}
+
+func (a *ApplyConfigFunc) ApplyConfig(cfg *config.Config) error {
+	return a.F(cfg)
+}

@@ -140,7 +140,7 @@ func main() {
 	})
 	go ruleManager.Run()
 
-	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(&ApplyConfigFunc{func(cfg *config.Config) error {
+	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(&proxyconfig.ApplyConfigFunc{func(cfg *config.Config) error {
 		// Get all rule files matching the configuration oaths.
 		var files []string
 		for _, pat := range cfg.RuleFiles {
@@ -272,12 +272,4 @@ func sendAlerts(n *notifier.Manager, externalURL string) rules.NotifyFunc {
 		}
 		return nil
 	}
-}
-
-type ApplyConfigFunc struct {
-	f func(*config.Config) error
-}
-
-func (a *ApplyConfigFunc) ApplyConfig(cfg *config.Config) error {
-	return a.f(cfg)
 }
