@@ -17,6 +17,8 @@ import (
 
 	_ "net/http/pprof"
 
+	"crypto/md5"
+
 	kitlog "github.com/go-kit/kit/log"
 	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/logging"
@@ -29,6 +31,8 @@ import (
 	"github.com/prometheus/common/route"
 	"github.com/prometheus/common/version"
 	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/discovery"
+	sd_config "github.com/prometheus/prometheus/discovery/config"
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/rules"
@@ -125,6 +129,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Reload ready -- channel to close once we are ready to start reloaders
+	reloadReady := make(chan struct{}, 0)
+
 	// Create the proxy storag
 	var proxyStorage storage.Storage
 
@@ -158,6 +165,37 @@ func main() {
 		},
 		kitlog.With(logger, "component", "notifier"),
 	)
+	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(notifierManager))
+
+	discoveryManagerNotify := discovery.NewManager(ctx, kitlog.With(logger, "component", "discovery manager notify"))
+	reloadables = append(reloadables,
+		proxyconfig.WrapPromReloadable(&proxyconfig.ApplyConfigFunc{func(cfg *config.Config) error {
+			c := make(map[string]sd_config.ServiceDiscoveryConfig)
+			for _, v := range cfg.AlertingConfig.AlertmanagerConfigs {
+				// AlertmanagerConfigs doesn't hold an unique identifier so we use the config hash as the identifier.
+				b, err := json.Marshal(v)
+				if err != nil {
+					return err
+				}
+				c[fmt.Sprintf("%x", md5.Sum(b))] = v.ServiceDiscoveryConfig
+			}
+			return discoveryManagerNotify.ApplyConfig(c)
+		}}),
+	)
+
+	go func() {
+		if err := discoveryManagerNotify.Run(); err != nil {
+			logrus.Errorf("Error running Notify discovery manager: %v", err)
+		} else {
+			logrus.Infof("Notify discovery manager stopped")
+		}
+	}()
+	go func() {
+		<-reloadReady
+		notifierManager.Run(discoveryManagerNotify.SyncCh())
+		logrus.Infof("Notifier manager stopped")
+	}()
+
 	ruleManager := rules.NewManager(&rules.ManagerOptions{
 		Context:     ctx,         // base context for all background tasks
 		ExternalURL: externalUrl, // URL listed as URL for "who fired this alert"
@@ -248,6 +286,8 @@ func main() {
 	if err := reloadConfig(reloadables...); err != nil {
 		logrus.Fatalf("Error loading config: %s", err)
 	}
+
+	close(reloadReady)
 
 	// Set up access logger
 	loggedRouter := logging.NewApacheLoggingHandler(r, os.Stdout)
