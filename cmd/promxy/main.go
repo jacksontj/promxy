@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -42,6 +43,8 @@ type CLIOpts struct {
 	BindAddr   string `long:"bind-addr" description:"address for promxy to listen on" default:":8082"`
 	ConfigFile string `long:"config" description:"path to the config file" required:"true"`
 	LogLevel   string `long:"log-level" description:"Log level" default:"info"`
+
+	ExternalURL string `long:"web.external-url" description:"The URL under which Prometheus is externally reachable (for example, if Prometheus is served via a reverse proxy). Used for generating relative and absolute links back to Prometheus itself. If the URL has a path portion, it will be used to prefix all HTTP endpoints served by Prometheus. If omitted, relevant URL components will be derived automatically."`
 
 	QueryTimeout        time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
 	QueryMaxConcurrency int           `long:"query.max-concurrency" description:"Maximum number of queries executed concurrently." default:"1000"`
@@ -135,10 +138,10 @@ func main() {
 	engine := promql.NewEngine(nil, prometheus.DefaultRegisterer, opts.QueryMaxConcurrency, opts.QueryTimeout)
 	engine.NodeReplacer = ps.NodeReplacer
 
-	// TODO: config option
-	u, err := url.Parse("http://localhost:8082")
+	// TODO: rename
+	externalUrl, err := computeExternalURL(opts.ExternalURL, opts.BindAddr)
 	if err != nil {
-		logrus.Fatalf("Err: %v", err)
+		logrus.Fatalf("Unable to parse external URL %s", "tmp")
 	}
 
 	// Alert notifier
@@ -156,10 +159,10 @@ func main() {
 		kitlog.With(logger, "component", "notifier"),
 	)
 	ruleManager := rules.NewManager(&rules.ManagerOptions{
-		Context:     ctx, // base context for all background tasks
-		ExternalURL: u,   // URL listed as URL for "who fired this alert"
+		Context:     ctx,         // base context for all background tasks
+		ExternalURL: externalUrl, // URL listed as URL for "who fired this alert"
 		QueryFunc:   rules.EngineQueryFunc(engine, proxyStorage),
-		NotifyFunc:  sendAlerts(notifierManager, u.String()),
+		NotifyFunc:  sendAlerts(notifierManager, externalUrl.String()),
 		Appendable:  proxyStorage,
 		Logger:      logger,
 	})
@@ -193,12 +196,12 @@ func main() {
 
 		Flags:       opts.ToFlags(),
 		RoutePrefix: "/", // TODO: options for this?
+		ExternalURL: externalUrl,
 		// TODO: use these?
 		/*
 			ListenAddress        string
 			ReadTimeout          time.Duration
 			MaxConnections       int
-			ExternalURL          *url.URL
 			MetricsPath          string
 			UseLocalAssets       bool
 			UserAssetsPath       string
@@ -316,4 +319,42 @@ func sendAlerts(n *notifier.Manager, externalURL string) rules.NotifyFunc {
 		}
 		return nil
 	}
+}
+
+func startsOrEndsWithQuote(s string) bool {
+	return strings.HasPrefix(s, "\"") || strings.HasPrefix(s, "'") ||
+		strings.HasSuffix(s, "\"") || strings.HasSuffix(s, "'")
+}
+
+// computeExternalURL computes a sanitized external URL from a raw input. It infers unset
+// URL parts from the OS and the given listen address.
+func computeExternalURL(u, listenAddr string) (*url.URL, error) {
+	if u == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			return nil, err
+		}
+		_, port, err := net.SplitHostPort(listenAddr)
+		if err != nil {
+			return nil, err
+		}
+		u = fmt.Sprintf("http://%s:%s/", hostname, port)
+	}
+
+	if startsOrEndsWithQuote(u) {
+		return nil, fmt.Errorf("URL must not begin or end with quotes")
+	}
+
+	eu, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+
+	ppref := strings.TrimRight(eu.Path, "/")
+	if ppref != "" && !strings.HasPrefix(ppref, "/") {
+		ppref = "/" + ppref
+	}
+	eu.Path = ppref
+
+	return eu, nil
 }
