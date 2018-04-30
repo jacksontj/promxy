@@ -45,6 +45,8 @@ type CLIOpts struct {
 
 	QueryTimeout        time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
 	QueryMaxConcurrency int           `long:"query.max-concurrency" description:"Maximum number of queries executed concurrently." default:"1000"`
+
+	NotificationQueueCapacity int `long:"alertmanager.notification-queue-capacity" description:"The capacity of the queue for pending alert manager notifications." default:"10000"`
 }
 
 func (c *CLIOpts) ToFlags() map[string]string {
@@ -146,7 +148,13 @@ func main() {
 	}
 	logger := promlog.New(lvl)
 
-	notifierManager := notifier.NewManager(&notifier.Options{Registerer: prometheus.DefaultRegisterer}, kitlog.With(logger, "component", "notifier"))
+	notifierManager := notifier.NewManager(
+		&notifier.Options{
+			Registerer:    prometheus.DefaultRegisterer,
+			QueueCapacity: opts.NotificationQueueCapacity,
+		},
+		kitlog.With(logger, "component", "notifier"),
+	)
 	ruleManager := rules.NewManager(&rules.ManagerOptions{
 		Context:     ctx, // base context for all background tasks
 		ExternalURL: u,   // URL listed as URL for "who fired this alert"
