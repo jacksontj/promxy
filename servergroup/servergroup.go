@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/timestamp"
+	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/relabel"
 	"github.com/prometheus/prometheus/storage/remote"
 	httputil "github.com/prometheus/prometheus/util/httputil"
@@ -150,12 +151,34 @@ func (s *ServerGroup) Targets() []string {
 	}
 }
 
+func (s *ServerGroup) FilterMatchers(matchers []*labels.Matcher) ([]*labels.Matcher, bool) {
+	filteredMatchers := make([]*labels.Matcher, 0, len(matchers))
+
+	// Look over the matchers passed in, if any exist in our labels, we'll do the matcher, and then strip
+	for _, matcher := range matchers {
+		if localValue, ok := s.Cfg.Labels[model.LabelName(matcher.Name)]; ok {
+			// If the label exists locally and isn't there, then skip it
+			if !matcher.Matches(string(localValue)) {
+				return nil, false
+			}
+		} else {
+			filteredMatchers = append(filteredMatchers, matcher)
+		}
+	}
+	return filteredMatchers, true
+}
+
 func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
+	filteredMatchers, ok := s.FilterMatchers(matchers)
+	if !ok {
+		return nil, nil
+	}
+
 	if s.Cfg.RemoteRead {
-		return s.RemoteRead(ctx, start, end, matchers)
+		return s.RemoteRead(ctx, start, end, filteredMatchers)
 	} else {
 		// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
-		pql, err := promhttputil.MatcherToString(matchers)
+		pql, err := promhttputil.MatcherToString(filteredMatchers)
 		if err != nil {
 			return nil, err
 		}
@@ -286,8 +309,30 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 	return result, nil
 }
 
-//
-func (s *ServerGroup) GetData(ctx context.Context, path string, values url.Values) (model.Value, error) {
+// TODO: change the args here from url.Values to something else (probably matchers and start/end more like remote read)
+func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Values) (model.Value, error) {
+	// Make a copy of Values since we're going to mutate it
+	values := make(url.Values)
+	for k, v := range inValues {
+		values[k] = v
+	}
+
+	// Parse out the promql query into expressions etc.
+	e, err := promql.ParseExpr(values.Get("query"))
+	if err != nil {
+		return nil, err
+	}
+
+	// Walk the expression, to filter out any LabelMatchers that match etc.
+	filterVisitor := &LabelFilterVisitor{s, true}
+	if _, err := promql.Walk(ctx, filterVisitor, &promql.EvalStmt{Expr: e}, e, nil, nil); err != nil {
+		return nil, err
+	}
+	if !filterVisitor.filterMatch {
+		return nil, nil
+	}
+	values.Set("query", e.String())
+
 	targets := s.Targets()
 
 	childContext, childContextCancel := context.WithCancel(ctx)
