@@ -18,11 +18,12 @@ import (
 // Merge 2 values and
 func TestMergeValues(t *testing.T) {
 	tests := []struct {
-		name string
-		a    model.Value
-		b    model.Value
-		r    model.Value
-		err  error
+		name         string
+		a            model.Value
+		b            model.Value
+		r            model.Value
+		antiAffinity model.Time
+		err          error
 	}{
 		//
 		// Scalar tests
@@ -290,36 +291,48 @@ func TestMergeValues(t *testing.T) {
 			}),
 		},
 
-		/*
-			// Fill missing
-			{
-				name: "Matrix fill missing2",
-				a:    model.Vector([]*model.Sample{}),
-				b: model.Vector([]*model.Sample{
-					{
-						model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
-						model.SampleValue(10),
+		// Ensure that anti-affinity-buffer is working properly
+		// if we have 2 matrix values with similar times only one should be put in
+		{
+			name: "Matrix fill missing2",
+			a: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{{
 						model.Time(100),
-					},
-				}),
-				r: model.Vector([]*model.Sample{
-					{
-						model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
 						model.SampleValue(10),
+					}},
+				},
+			}),
+			b: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{{
+						model.Time(101),
+						model.SampleValue(10),
+					}},
+				},
+			}),
+			r: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{{
 						model.Time(100),
-					},
-				}),
-			}
-		*/
+						model.SampleValue(10),
+					}},
+				},
+			}),
+			antiAffinity: model.Time(2),
+		},
 	}
 
 	for _, test := range tests {
-		result, err := MergeValues(model.Time(0), test.a, test.b)
+		result, err := MergeValues(test.antiAffinity, test.a, test.b)
 		if err != test.err {
 			t.Fatalf("mismatch err in %s expected=%v actual=%v", test.name, test.err, err)
 		}
 		if !reflect.DeepEqual(result, test.r) {
-			t.Fatalf("mismatch in %s expected=\n%v actual=\n%v", test.name, test.r, result)
+			t.Fatalf("mismatch in %s \nexpected=%v\nactual=%v", test.name, test.r, result)
 		}
 	}
 
