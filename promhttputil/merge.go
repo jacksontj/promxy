@@ -186,11 +186,7 @@ func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream) 
 			continue
 		}
 
-		if lastTime == 0 {
-			lastTime = item.Timestamp
-		}
-
-		if item.Timestamp-lastTime < antiAffinityBuffer {
+		if (lastTime > 0) && item.Timestamp-lastTime < antiAffinityBuffer {
 			continue
 		}
 		lastTime = item.Timestamp
