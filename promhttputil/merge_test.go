@@ -279,22 +279,149 @@ func TestMergeValues(t *testing.T) {
 			r: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
-					[]model.SamplePair{{
-						model.Time(100),
-						model.SampleValue(10),
-					},
+					[]model.SamplePair{
+						{
+							model.Time(100),
+							model.SampleValue(10),
+						},
 						{
 							model.Time(200),
 							model.SampleValue(10),
-						}},
+						},
+					},
 				},
 			}),
+		},
+
+		// Fill missing
+		// Lots of holes, ensure they are merged correctly
+		{
+			name: "Matrix fill missing2",
+			a: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(200),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(400),
+							model.SampleValue(10),
+						},
+					},
+				},
+			}),
+			b: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(100),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(300),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(500),
+							model.SampleValue(10),
+						},
+					},
+				},
+			}),
+			r: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(100),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(200),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(300),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(400),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(500),
+							model.SampleValue(10),
+						},
+					},
+				},
+			}),
+			antiAffinity: model.Time(20),
+		},
+
+		// Fill missing
+		// In this case we have 2 series which have large gaps, but the anti-affinity
+		// defines that we should not merge them, make sure we don't
+		{
+			name: "Matrix fill missing3",
+			a: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(200),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(400),
+							model.SampleValue(10),
+						},
+					},
+				},
+			}),
+			b: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(100),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(300),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(500),
+							model.SampleValue(10),
+						},
+					},
+				},
+			}),
+			r: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(200),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(400),
+							model.SampleValue(10),
+						},
+					},
+				},
+			}),
+			antiAffinity: model.Time(100),
 		},
 
 		// Ensure that anti-affinity-buffer is working properly
 		// if we have 2 matrix values with similar times only one should be put in
 		{
-			name: "Matrix fill missing2",
+			name: "Matrix merge similar",
 			a: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
@@ -318,6 +445,41 @@ func TestMergeValues(t *testing.T) {
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
 					[]model.SamplePair{{
 						model.Time(100),
+						model.SampleValue(10),
+					}},
+				},
+			}),
+			antiAffinity: model.Time(2),
+		},
+
+		// Ensure that anti-affinity-buffer is working properly
+		// we want to prefer balues from the "first" series (as that is the one
+		// we already have. This avoids unnecessary switches between series
+		{
+			name: "Matrix merge similar 2",
+			a: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{{
+						model.Time(101),
+						model.SampleValue(10),
+					}},
+				},
+			}),
+			b: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{{
+						model.Time(100),
+						model.SampleValue(10),
+					}},
+				},
+			}),
+			r: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{{
+						model.Time(101),
 						model.SampleValue(10),
 					}},
 				},
