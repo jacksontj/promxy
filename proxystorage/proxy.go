@@ -317,40 +317,11 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 		// If we are simply fetching a Vector then we can fetch the data using the same step that
 		// the query came in as (reducing the amount of data we need to fetch)
-	// If we are simply fetching data, lets do that
+	// If we are simply fetching data, we skip here to let it fall through to the normal
+	// storage API
 	case *promql.VectorSelector:
-		// Don't attempt to fetch internally replaced things
-		if n.HasSeries() {
-			return nil, nil
-		}
-		logrus.Debugf("vectorSelector %v", n)
-		var urlBase string
-		values := url.Values{}
-		removeOffset()
-		values.Add("query", n.String())
-		n.Offset = offset
-		if s.Interval > 0 {
-			values.Add("start", model.Time(timestamp.FromTime(s.Start.Add(-offset-promql.LookbackDelta))).String())
-			values.Add("end", model.Time(timestamp.FromTime(s.End.Add(-offset))).String())
-			values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'f', -1, 64))
-			urlBase = "/api/v1/query_range"
-		} else {
-			values.Add("time", model.Time(timestamp.FromTime(s.Start.Add(-offset))).String())
-			urlBase = "/api/v1/query"
-		}
-
-		result, err := serverGroups.GetData(ctx, urlBase, values)
-		if err != nil {
-			return nil, err
-		}
-		iterators := promclient.IteratorsForValue(result)
-		series := make([]storage.Series, len(iterators))
-		for i, iterator := range iterators {
-			series[i] = &proxyquerier.Series{iterator}
-		}
-
-		n.SetSeries(series)
-		return n, nil
+		// Do Nothing
+		return nil, nil
 
 	// If we hit this someone is asking for a matrix directly, if so then we don't
 	// have anyway to ask for less-- since this is exactly what they are asking for
