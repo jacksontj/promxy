@@ -471,7 +471,11 @@ func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *EvalStmt) (
 
 func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s *EvalStmt) (storage.Querier, error) {
 	var maxOffset time.Duration
-	Inspect(ctx, s, func(node Node, _ []Node) bool {
+	// In this for Inspect parallelizes on BinaryExpr
+	l := sync.Mutex{}
+	Inspect(ctx, s, func(node Node, _ []Node) error {
+		l.Lock()
+		defer l.Unlock()
 		switch n := node.(type) {
 		case *VectorSelector:
 			if maxOffset < LookbackDelta {
@@ -488,7 +492,7 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 				maxOffset = n.Offset + n.Range
 			}
 		}
-		return true
+		return nil
 	}, nil)
 
 	mint := s.Start.Add(-maxOffset)
@@ -498,7 +502,7 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 		return nil, err
 	}
 
-	n, err := Inspect(ctx, s, func(node Node, path []Node) bool {
+	n, err := Inspect(ctx, s, func(node Node, path []Node) error {
 		params := &storage.SelectParams{
 			Step: int64(s.Interval / time.Millisecond),
 		}
@@ -511,13 +515,13 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 				set, err := querier.Select(params, n.LabelMatchers...)
 				if err != nil {
 					level.Error(ng.logger).Log("msg", "error selecting series set", "err", err)
-					return false
+					return err
 				}
 				n.series, err = expandSeriesSet(set)
 				if err != nil {
 					// TODO(fabxc): use multi-error.
 					level.Error(ng.logger).Log("msg", "error expanding series set", "err", err)
-					return false
+					return err
 				}
 			}
 			for _, s := range n.series {
@@ -532,12 +536,12 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 				set, err := querier.Select(params, n.LabelMatchers...)
 				if err != nil {
 					level.Error(ng.logger).Log("msg", "error selecting series set", "err", err)
-					return false
+					return err
 				}
 				n.series, err = expandSeriesSet(set)
 				if err != nil {
 					level.Error(ng.logger).Log("msg", "error expanding series set", "err", err)
-					return false
+					return err
 				}
 			}
 			for _, s := range n.series {
@@ -545,7 +549,7 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 				n.iterators = append(n.iterators, it)
 			}
 		}
-		return true
+		return nil
 	}, ng.NodeReplacer)
 
 	if err != nil {
