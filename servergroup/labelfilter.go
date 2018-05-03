@@ -11,7 +11,7 @@ type LabelFilterVisitor struct {
 	filterMatch bool
 }
 
-func (l *LabelFilterVisitor) Visit(node promql.Node, path []promql.Node) (w promql.Visitor) {
+func (l *LabelFilterVisitor) Visit(node promql.Node, path []promql.Node) (w promql.Visitor, err error) {
 	switch nodeTyped := node.(type) {
 	case *promql.VectorSelector:
 		for _, matcher := range nodeTyped.LabelMatchers {
@@ -26,7 +26,7 @@ func (l *LabelFilterVisitor) Visit(node promql.Node, path []promql.Node) (w prom
 		if ok {
 			nodeTyped.LabelMatchers = filteredMatchers
 		} else {
-			return nil
+			return nil, nil
 		}
 	case *promql.MatrixSelector:
 		for _, matcher := range nodeTyped.LabelMatchers {
@@ -41,9 +41,9 @@ func (l *LabelFilterVisitor) Visit(node promql.Node, path []promql.Node) (w prom
 		if ok {
 			nodeTyped.LabelMatchers = filteredMatchers
 		} else {
-			return nil
+			return nil, nil
 		}
 	}
 
-	return l
+	return l, nil
 }
