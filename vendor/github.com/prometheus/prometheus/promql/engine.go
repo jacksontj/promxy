@@ -511,6 +511,9 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 		case *VectorSelector:
 			if n.series == nil {
 				params.Func = extractFuncFromPath(path)
+				if n.Offset > 0 {
+					params.Offset = int64(n.Offset / time.Millisecond)
+				}
 
 				set, err := querier.Select(params, n.LabelMatchers...)
 				if err != nil {
@@ -532,6 +535,9 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 		case *MatrixSelector:
 			if n.series == nil {
 				params.Func = extractFuncFromPath(path)
+				if n.Offset > 0 {
+					params.Offset = int64(n.Offset / time.Millisecond)
+				}
 
 				set, err := querier.Select(params, n.LabelMatchers...)
 				if err != nil {
