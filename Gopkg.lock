@@ -492,7 +492,7 @@
     "web/api/v2",
     "web/ui"
   ]
-  revision = "0ec00ce179d56c8b8246b2d6f90c7c5a51b17d30"
+  revision = "a3e3839bb7043dbbbc74accf02cf152eb2f5609f"
   source = "github.com/jacksontj/prometheus"
 
 [[projects]]
