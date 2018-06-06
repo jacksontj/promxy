@@ -44,12 +44,7 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		}).Debug("Select")
 	}()
 
-	end := h.End
-	if selectParams.Offset > 0 {
-		end = end.Add(time.Duration(-selectParams.Offset) * time.Millisecond)
-	}
-
-	result, err := h.ServerGroups.GetValue(h.Ctx, h.Start, end, matchers)
+	result, err := h.ServerGroups.GetValue(h.Ctx, h.Start, h.End, matchers)
 	if err != nil {
 		return nil, err
 	}
