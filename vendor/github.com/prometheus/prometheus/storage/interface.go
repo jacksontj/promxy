@@ -63,9 +63,8 @@ type Querier interface {
 
 // SelectParams specifies parameters passed to data selections.
 type SelectParams struct {
-	Step   int64  // Query step size in milliseconds.
-	Func   string // String representation of surrounding function or aggregation.
-	Offset int64  // Offset in milliseconds for this particular select statement
+	Step int64  // Query step size in milliseconds.
+	Func string // String representation of surrounding function or aggregation.
 }
 
 // QueryableFunc is an adapter to allow the use of ordinary functions as
