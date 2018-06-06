@@ -471,6 +471,8 @@ func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *EvalStmt) (
 
 func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s *EvalStmt) (storage.Querier, error) {
 	var maxOffset time.Duration
+
+	offsets := make(map[time.Duration]struct{})
 	// In this for Inspect parallelizes on BinaryExpr
 	l := sync.Mutex{}
 	Inspect(ctx, s, func(node Node, _ []Node) error {
@@ -481,15 +483,21 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 			if maxOffset < LookbackDelta {
 				maxOffset = LookbackDelta
 			}
-			if n.Offset+LookbackDelta > maxOffset {
-				maxOffset = n.Offset + LookbackDelta
+			if LookbackDelta > maxOffset {
+				maxOffset = LookbackDelta
+			}
+			if n.Offset > 0 {
+				offsets[n.Offset] = struct{}{}
 			}
 		case *MatrixSelector:
 			if maxOffset < n.Range {
 				maxOffset = n.Range
 			}
-			if n.Offset+n.Range > maxOffset {
-				maxOffset = n.Offset + n.Range
+			if n.Range > maxOffset {
+				maxOffset = n.Range
+			}
+			if n.Offset > 0 {
+				offsets[n.Offset] = struct{}{}
 			}
 		}
 		return nil
@@ -502,6 +510,15 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 		return nil, err
 	}
 
+	offsetQueriers := make(map[time.Duration]storage.Querier)
+	for offset, _ := range offsets {
+		querier, err := q.Querier(ctx, timestamp.FromTime(mint.Add(-offset)), timestamp.FromTime(s.End.Add(-offset)))
+		if err != nil {
+			return nil, err
+		}
+		offsetQueriers[offset] = querier
+	}
+
 	n, err := Inspect(ctx, s, func(node Node, path []Node) error {
 		params := &storage.SelectParams{
 			Step: int64(s.Interval / time.Millisecond),
@@ -511,11 +528,13 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 		case *VectorSelector:
 			if n.series == nil {
 				params.Func = extractFuncFromPath(path)
+
+				q := querier
 				if n.Offset > 0 {
-					params.Offset = int64(n.Offset / time.Millisecond)
+					q = offsetQueriers[n.Offset]
 				}
 
-				set, err := querier.Select(params, n.LabelMatchers...)
+				set, err := q.Select(params, n.LabelMatchers...)
 				if err != nil {
 					level.Error(ng.logger).Log("msg", "error selecting series set", "err", err)
 					return err
@@ -535,11 +554,13 @@ func (ng *Engine) populateIterators(ctx context.Context, q storage.Queryable, s 
 		case *MatrixSelector:
 			if n.series == nil {
 				params.Func = extractFuncFromPath(path)
+
+				q := querier
 				if n.Offset > 0 {
-					params.Offset = int64(n.Offset / time.Millisecond)
+					q = offsetQueriers[n.Offset]
 				}
 
-				set, err := querier.Select(params, n.LabelMatchers...)
+				set, err := q.Select(params, n.LabelMatchers...)
 				if err != nil {
 					level.Error(ng.logger).Log("msg", "error selecting series set", "err", err)
 					return err
