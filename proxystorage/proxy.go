@@ -134,19 +134,25 @@ func (p *ProxyStorage) Close() error { return nil }
 //      - offsets within the subtree must match: if they don't then we'll get mismatched data, so we wait until we are far enough down the tree that they converge
 //      - Don't reduce accuracy/granularity: the intention of this is to get the correct data faster, meaning correctness overrules speed.
 func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, node promql.Node) (promql.Node, error) {
-	// If there is a child that is an aggregator we cannot do anything (as they have their own
-	// rules around combining). We'll skip this node and let a lower layer take this on
-	aggFinder := &BooleanFinder{Func: func(node promql.Node) bool {
+
+	isAgg := func(node promql.Node) bool {
 		_, ok := node.(*promql.AggregateExpr)
 		return ok
-	}}
+	}
+
+	// If there is a child that is an aggregator we cannot do anything (as they have their own
+	// rules around combining). We'll skip this node and let a lower layer take this on
+	aggFinder := &BooleanFinder{Func: isAgg}
 
 	if _, err := promql.Walk(ctx, aggFinder, s, node, nil, nil); err != nil {
 		return nil, err
 	}
 
-	if aggFinder.Found {
-		return nil, nil
+	if aggFinder.Found > 0 {
+		// If there was a single agg and that was us, then we're okay
+		if !(isAgg(node) && aggFinder.Found == 1) {
+			return nil, nil
+		}
 	}
 
 	// If the tree below us is not all the same offset, then we can't do anything below -- we'll need
