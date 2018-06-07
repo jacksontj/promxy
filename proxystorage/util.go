@@ -59,13 +59,13 @@ func (o *OffsetRemover) Visit(node promql.Node, _ []promql.Node) (promql.Visitor
 // Use given func to determine if something is in there or notret := &promql.VectorSelector{Offset: offset}
 type BooleanFinder struct {
 	Func  func(promql.Node) bool
-	Found bool
+	Found int
 }
 
 func (f *BooleanFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor, error) {
 	if f.Func(node) {
-		f.Found = true
-		return nil, nil
+		f.Found++
+		return f, nil
 	}
 	return f, nil
 }
