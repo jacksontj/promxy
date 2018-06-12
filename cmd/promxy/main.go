@@ -43,6 +43,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var (
+	reloadTime = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "process_reload_time_seconds",
+		Help: "Last reload (SIGHUP) time of the process since unix epoch in seconds.",
+	})
+)
+
 type CLIOpts struct {
 	BindAddr   string `long:"bind-addr" description:"address for promxy to listen on" default:":8082"`
 	ConfigFile string `long:"config" description:"path to the config file" required:"true"`
@@ -83,10 +90,14 @@ func reloadConfig(rls ...proxyconfig.Reloadable) error {
 	if failed {
 		return fmt.Errorf("One or more errors occurred while applying new configuration")
 	}
+	reloadTime.Set(float64(time.Now().Unix()))
 	return nil
 }
 
 func main() {
+
+	prometheus.MustRegister(reloadTime)
+
 	reloadables := make([]proxyconfig.Reloadable, 0)
 
 	parser := flags.NewParser(&opts, flags.Default)
