@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 const ApacheFormatPattern = "%s - - [%s] \"%s %d %d\" %f\n"
@@ -51,6 +54,20 @@ func NewApacheLoggingHandler(handler http.Handler, out io.Writer) http.Handler {
 	}
 }
 
+func (h *ApacheLoggingHandler) runHandler(rw http.ResponseWriter, r *http.Request) (err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			var ok bool
+			err, ok = rec.(error)
+			if !ok {
+				err = errors.Wrap(fmt.Errorf(string(debug.Stack())), "Error running handler")
+			}
+		}
+	}()
+	h.handler.ServeHTTP(rw, r)
+	return
+}
+
 func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	clientIP := r.RemoteAddr
 	if colon := strings.LastIndex(clientIP, ":"); colon != -1 {
@@ -69,7 +86,9 @@ func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request
 	}
 
 	startTime := time.Now()
-	h.handler.ServeHTTP(record, r)
+	if err := h.runHandler(record, r); err != nil {
+		http.Error(record, err.Error(), http.StatusInternalServerError)
+	}
 	finishTime := time.Now()
 
 	record.time = finishTime.UTC()
