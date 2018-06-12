@@ -36,6 +36,12 @@ func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
 // MergeValues merges values `a` and `b` with the given antiAffinityBuffer
 // TODO: always make copies? Now we sometimes return one, or make a copy, or do nothing
 func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, error) {
+	if a == nil {
+		return b, nil
+	}
+	if b == nil {
+		return a, nil
+	}
 	if a.Type() != b.Type() {
 		return nil, fmt.Errorf("Error!")
 	}

@@ -26,6 +26,29 @@ func TestMergeValues(t *testing.T) {
 		err          error
 	}{
 		//
+		// edge-cases
+		{
+			name: "nils",
+			a:    nil,
+			b:    nil,
+			r:    nil,
+		},
+
+		{
+			name: "bnil",
+			a:    &model.Scalar{model.SampleValue(10), model.Time(100)},
+			b:    nil,
+			r:    &model.Scalar{model.SampleValue(10), model.Time(100)},
+		},
+
+		{
+			name: "anil",
+			a:    nil,
+			b:    &model.Scalar{model.SampleValue(10), model.Time(100)},
+			r:    &model.Scalar{model.SampleValue(10), model.Time(100)},
+		},
+
+		//
 		// Scalar tests
 		{
 			name: "scalar dedupe",
