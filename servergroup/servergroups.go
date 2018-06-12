@@ -46,13 +46,9 @@ func (s ServerGroups) GetValue(ctx context.Context, start, end time.Time, matche
 			errCount++
 		case childResult := <-resultChan:
 			var err error
-			if result == nil {
-				result = childResult
-			} else {
-				result, err = promhttputil.MergeValues(model.TimeFromUnix(0), result, childResult)
-				if err != nil {
-					return nil, err
-				}
+			result, err = promhttputil.MergeValues(model.TimeFromUnix(0), result, childResult)
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -96,13 +92,9 @@ func (s ServerGroups) GetData(ctx context.Context, path string, values url.Value
 			errCount++
 		case childResult := <-resultChan:
 			var err error
-			if result == nil {
-				result = childResult
-			} else {
-				result, err = promhttputil.MergeValues(model.TimeFromUnix(0), result, childResult)
-				if err != nil {
-					return nil, err
-				}
+			result, err = promhttputil.MergeValues(model.TimeFromUnix(0), result, childResult)
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
