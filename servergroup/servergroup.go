@@ -205,15 +205,15 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChan := make(chan model.Value, len(targets))
-	errChan := make(chan error, len(targets))
+	resultChans := make([]chan interface{}, len(targets))
 
-	for _, target := range targets {
+	for i, target := range targets {
+		resultChans[i] = make(chan interface{}, 1)
 		parsedUrl, err := url.Parse(target + "/api/v1/read")
 		if err != nil {
 			return nil, err
 		}
-		go func(stringUrl *url.URL) {
+		go func(retChan chan interface{}, stringUrl *url.URL) {
 			cfg := &remote.ClientConfig{
 				URL: &config_util.URL{parsedUrl},
 				// TODO: from context?
@@ -221,14 +221,14 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 			}
 			client, err := remote.NewClient(1, cfg)
 			if err != nil {
-				errChan <- err
+				retChan <- err
 				return
 			}
 
 			start := time.Now()
 			query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), matchers)
 			if err != nil {
-				errChan <- err
+				retChan <- err
 				return
 			}
 			// http://localhost:8083/api/v1/query?query=%7B__name__%3D%22metric%22%7D%5B302s%5D&time=21
@@ -237,7 +237,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 
 			if err != nil {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "remoteread", "error").Observe(float64(took))
-				errChan <- err
+				retChan <- err
 			} else {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "remoteread", "success").Observe(float64(took))
 				// convert result (timeseries) to SampleStream
@@ -264,14 +264,14 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 
 				err = promhttputil.ValueAddLabelSet(matrix, s.Cfg.Labels)
 				if err != nil {
-					errChan <- err
+					retChan <- err
 					return
 				}
 
-				resultChan <- matrix
+				retChan <- matrix
 			}
 
-		}(parsedUrl)
+		}(resultChans[i], parsedUrl)
 	}
 
 	// Wait for results as we get them
@@ -283,20 +283,22 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 		case <-ctx.Done():
 			return nil, ctx.Err()
 
-		case err := <-errChan:
-			lastError = err
-			errCount++
-
-		case childResult := <-resultChan:
-			// If the server responded with a non-success, lets mark that as an error
-			// TODO: check qData.ResultType
-			if result == nil {
-				result = childResult
-			} else {
-				var err error
-				result, err = promhttputil.MergeValues(s.Cfg.GetAntiAffinity(), result, childResult)
-				if err != nil {
-					return nil, err
+		case ret := <-resultChans[i]:
+			switch retTyped := ret.(type) {
+			case error:
+				lastError = retTyped
+				errCount++
+			case model.Value:
+				// If the server responded with a non-success, lets mark that as an error
+				// TODO: check qData.ResultType
+				if result == nil {
+					result = retTyped
+				} else {
+					var err error
+					result, err = promhttputil.MergeValues(s.Cfg.GetAntiAffinity(), result, retTyped)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
@@ -337,27 +339,27 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChan := make(chan *promclient.DataResult, len(targets))
-	errChan := make(chan error, len(targets))
+	resultChans := make([]chan interface{}, len(targets))
 
-	for _, target := range targets {
+	for i, target := range targets {
+		resultChans[i] = make(chan interface{}, 1)
 		parsedUrl, err := url.Parse(target + path)
 		if err != nil {
 			return nil, err
 		}
 		parsedUrl.RawQuery = values.Encode()
-		go func(stringUrl string) {
+		go func(retChan chan interface{}, stringUrl string) {
 			start := time.Now()
 			result, err := promclient.GetData(childContext, stringUrl, s.Client, s.Cfg.Labels)
 			took := time.Now().Sub(start)
 			if err != nil {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(float64(took))
-				errChan <- err
+				retChan <- err
 			} else {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "success").Observe(float64(took))
-				resultChan <- result
+				retChan <- result
 			}
-		}(parsedUrl.String())
+		}(resultChans[i], parsedUrl.String())
 	}
 
 	// Wait for results as we get them
@@ -369,26 +371,28 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 		case <-ctx.Done():
 			return nil, ctx.Err()
 
-		case err := <-errChan:
-			lastError = err
-			errCount++
-
-		case childResult := <-resultChan:
-			// If the server responded with a non-success, lets mark that as an error
-			if childResult.Status != promhttputil.StatusSuccess {
-				lastError = fmt.Errorf(childResult.Error)
+		case ret := <-resultChans[i]:
+			switch retTyped := ret.(type) {
+			case error:
+				lastError = retTyped
 				errCount++
-				continue
-			}
+			case *promclient.DataResult:
+				// If the server responded with a non-success, lets mark that as an error
+				if retTyped.Status != promhttputil.StatusSuccess {
+					lastError = fmt.Errorf(retTyped.Error)
+					errCount++
+					continue
+				}
 
-			// TODO: check qData.ResultType
-			if result == nil {
-				result = childResult.Data.Result
-			} else {
-				var err error
-				result, err = promhttputil.MergeValues(s.Cfg.GetAntiAffinity(), result, childResult.Data.Result)
-				if err != nil {
-					return nil, err
+				// TODO: check qData.ResultType
+				if result == nil {
+					result = retTyped.Data.Result
+				} else {
+					var err error
+					result, err = promhttputil.MergeValues(s.Cfg.GetAntiAffinity(), result, retTyped.Data.Result)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
