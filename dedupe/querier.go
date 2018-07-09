@@ -1,4 +1,4 @@
-package dedupequerier
+package dedupe
 
 import (
 	"context"
@@ -42,16 +42,16 @@ func (q *Querier) Select(params *storage.SelectParams, matchers ...*labels.Match
 		set, err := q.q.Select(params, matchers...)
 
 		if err == nil {
-			return set
+			return NewConcurrentSeriesSet(set)
 		} else {
 			return err
 		}
 	})
 
 	switch resultTyped := result.(type) {
-    // TODO: make a copy (AFAIK there are no guarantees about concurrent access on this interface)
-	case storage.SeriesSet:
-		return resultTyped, nil
+	// TODO: make a copy (AFAIK there are no guarantees about concurrent access on this interface)
+	case *ConcurrentSeriesSet:
+		return resultTyped.Clone(), nil
 	case error:
 		return nil, resultTyped
 	default:
@@ -79,7 +79,6 @@ func (q *Querier) LabelValues(name string) ([]string, error) {
 	})
 
 	switch resultTyped := result.(type) {
-    // TODO: make a copy (AFAIK there are no guarantees about concurrent access on this interface)
 	case []string:
 		return resultTyped, nil
 	case error:

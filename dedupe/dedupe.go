@@ -1,4 +1,4 @@
-package dedupequerier
+package dedupe
 
 import (
 	"fmt"

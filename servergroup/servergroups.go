@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/jacksontj/promxy/dedupequerier"
+	"github.com/jacksontj/promxy/dedupe"
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/prometheus/common/model"
@@ -16,7 +16,7 @@ import (
 
 type ServerGroups []*ServerGroup
 
-var c = dedupequerier.NewDedupeController(10)
+var c = dedupe.NewDedupeController(10)
 
 // GetValue fetches a `model.Value` from the servergroups
 func (s ServerGroups) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
