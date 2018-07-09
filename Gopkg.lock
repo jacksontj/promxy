@@ -509,6 +509,12 @@
   revision = "def6e5a57439cffe7b44a619c05bce4ac513a63e"
 
 [[projects]]
+  name = "github.com/renstrom/go-jump-consistent-hash"
+  packages = ["."]
+  revision = "4add6a9a6b15cd81ba3d3b7710bab01585de9558"
+  version = "v1.0.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/samuel/go-zookeeper"
   packages = ["zk"]
@@ -839,6 +845,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "6d309226eb6f92c04c79779c8e3b3ec609cf4b263d3bbe9e454abcb8864fe4ad"
+  inputs-digest = "c848b42a888821e2e1e89c11cabf18e11fbd5e0486a1373aaa1970b25247b3d1"
   solver-name = "gps-cdcl"
   solver-version = 1
