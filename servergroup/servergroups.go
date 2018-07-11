@@ -115,13 +115,10 @@ func (s ServerGroups) GetData(ctx context.Context, path string, values url.Value
 	return result, nil
 }
 
-func (s ServerGroups) GetValuesForLabelName(ctx context.Context, path string) (*promclient.LabelResult, error) {
+func (s ServerGroups) GetValuesForLabelName(ctx context.Context, path string) ([]model.LabelValue, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
 	resultChans := make([]chan interface{}, len(s))
-
-	resultChan := make(chan *promclient.LabelResult, len(s))
-	errChan := make(chan error, len(s))
 
 	// Scatter out all the queries
 	for i, serverGroup := range s {
@@ -129,15 +126,15 @@ func (s ServerGroups) GetValuesForLabelName(ctx context.Context, path string) (*
 		go func(retChan chan interface{}, serverGroup *ServerGroup) {
 			result, err := serverGroup.GetValuesForLabelName(childContext, path)
 			if err != nil {
-				errChan <- err
+				retChan <- err
 			} else {
-				resultChan <- result
+				retChan <- result
 			}
 		}(resultChans[i], serverGroup)
 	}
 
 	// Wait for results as we get them
-	result := &promclient.LabelResult{}
+	var result []model.LabelValue
 	var lastError error
 	errCount := 0
 	for i := 0; i < len(s); i++ {
@@ -149,13 +146,11 @@ func (s ServerGroups) GetValuesForLabelName(ctx context.Context, path string) (*
 			case error:
 				lastError = retTyped
 				errCount++
-			case *promclient.LabelResult:
+			case []model.LabelValue:
 				if result == nil {
 					result = retTyped
 				} else {
-					if err := result.Merge(retTyped); err != nil {
-						return nil, err
-					}
+					promclient.MergeLabelValues(result, retTyped)
 				}
 			}
 		}
