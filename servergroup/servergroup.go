@@ -460,3 +460,90 @@ func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) ([
 
 	return result, nil
 }
+
+func (s *ServerGroup) GetSeries(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
+	filteredMatchers, ok := s.FilterMatchers(matchers)
+	if !ok {
+		return nil, nil
+	}
+
+	// Create the query params
+	values := url.Values{}
+
+	urlBase := "/api/v1/series"
+
+	// Add matchers
+	// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
+	pql, err := promhttputil.MatcherToString(filteredMatchers)
+	if err != nil {
+		return nil, err
+	}
+	values.Add("match[]", pql)
+
+	values.Add("start", model.Time(timestamp.FromTime(start)).String())
+	values.Add("end", model.Time(timestamp.FromTime(end)).String())
+
+	targets := s.Targets()
+
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+	resultChans := make([]chan interface{}, len(targets))
+
+	for i, target := range targets {
+		resultChans[i] = make(chan interface{}, 1)
+		parsedUrl, err := url.Parse(target + urlBase)
+		if err != nil {
+			return nil, err
+		}
+		parsedUrl.RawQuery = values.Encode()
+		go func(retChan chan interface{}, stringUrl string) {
+			start := time.Now()
+			result, err := promclient.GetSeries(childContext, stringUrl, s.Client, s.Cfg.Labels)
+			took := time.Now().Sub(start)
+			if err != nil {
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(float64(took))
+				retChan <- err
+			} else {
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "success").Observe(float64(took))
+				retChan <- result
+			}
+		}(resultChans[i], parsedUrl.String())
+	}
+
+	// Wait for results as we get them
+	var result model.Value
+	var lastError error
+	errCount := 0
+	for i := 0; i < len(targets); i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+
+		case ret := <-resultChans[i]:
+			switch retTyped := ret.(type) {
+			case error:
+				lastError = retTyped
+				errCount++
+			case model.Value:
+				// TODO: check qData.ResultType
+				if result == nil {
+					result = retTyped
+				} else {
+					var err error
+					result, err = promhttputil.MergeValues(s.Cfg.GetAntiAffinity(), result, retTyped)
+					if err != nil {
+						return nil, err
+					}
+				}
+			default:
+				return nil, fmt.Errorf("Unknown return type")
+			}
+		}
+	}
+
+	if errCount != 0 && errCount == len(targets) {
+		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
+	}
+
+	return result, nil
+}

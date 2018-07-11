@@ -48,13 +48,26 @@ func GetData(ctx context.Context, url string, client *http.Client, labelset mode
 	}
 }
 
-func GetSeries(ctx context.Context, url string, client *http.Client) ([]model.LabelSet, error) {
+func GetSeries(ctx context.Context, url string, client *http.Client, labelset model.LabelSet) (model.Value, error) {
 	promResp := &SeriesResult{}
 	if err := DoRequest(ctx, url, client, promResp); err == nil {
 		if promResp.Status != promhttputil.StatusSuccess {
 			return nil, fmt.Errorf(promResp.Error)
 		}
-		return promResp.Data, nil
+
+		// convert to vector (there aren't points, but this way we don't have to make more merging functions)
+		retVector := make(model.Vector, len(promResp.Data))
+		for j, labelset := range promResp.Data {
+			retVector[j] = &model.Sample{
+				Metric: model.Metric(labelset),
+			}
+		}
+
+		if err := promhttputil.ValueAddLabelSet(retVector, labelset); err != nil {
+			return nil, err
+		}
+
+		return retVector, nil
 	} else {
 		return nil, err
 	}

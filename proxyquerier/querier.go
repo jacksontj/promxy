@@ -8,6 +8,7 @@ import (
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/storage"
@@ -45,7 +46,18 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		}).Debug("Select")
 	}()
 
-	result, err := h.ServerGroups.GetValue(h.Ctx, timestamp.Time(selectParams.Start), timestamp.Time(selectParams.End), matchers)
+	var result model.Value
+	var err error
+	// Select() is a combined API call for query/query_range/series.
+	// as of right now there is no great way of differentiating between a
+	// data call (query/query_range) and a metadata call (series). For now
+	// the working workaround is to switch based on the selectParams.
+	// https://github.com/prometheus/prometheus/issues/4057
+	if selectParams == nil {
+		result, err = h.ServerGroups.GetSeries(h.Ctx, h.Start, h.End, matchers)
+	} else {
+		result, err = h.ServerGroups.GetValue(h.Ctx, timestamp.Time(selectParams.Start), timestamp.Time(selectParams.End), matchers)
+	}
 	if err != nil {
 		return nil, err
 	}
