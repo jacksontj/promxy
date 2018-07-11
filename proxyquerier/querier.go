@@ -74,8 +74,8 @@ func (h *ProxyQuerier) LabelValues(name string) ([]string, error) {
 		return nil, err
 	}
 
-	ret := make([]string, len(result.Data))
-	for i, r := range result.Data {
+	ret := make([]string, len(result))
+	for i, r := range result {
 		ret[i] = string(r)
 	}
 

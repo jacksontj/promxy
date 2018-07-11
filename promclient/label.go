@@ -39,3 +39,17 @@ func (l *LabelResult) Merge(o *LabelResult) error {
 	}
 	return nil
 }
+
+func MergeLabelValues(a, b []model.LabelValue) {
+	labels := make(map[model.LabelValue]struct{})
+	for _, item := range a {
+		labels[item] = struct{}{}
+	}
+
+	for _, item := range b {
+		if _, ok := labels[item]; !ok {
+			a = append(a, item)
+			labels[item] = struct{}{}
+		}
+	}
+}

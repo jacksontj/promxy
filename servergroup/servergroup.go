@@ -300,6 +300,8 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 						return nil, err
 					}
 				}
+			default:
+				return nil, fmt.Errorf("Unknown return type")
 			}
 		}
 	}
@@ -376,24 +378,19 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 			case error:
 				lastError = retTyped
 				errCount++
-			case *promclient.DataResult:
-				// If the server responded with a non-success, lets mark that as an error
-				if retTyped.Status != promhttputil.StatusSuccess {
-					lastError = fmt.Errorf(retTyped.Error)
-					errCount++
-					continue
-				}
-
+			case model.Value:
 				// TODO: check qData.ResultType
 				if result == nil {
-					result = retTyped.Data.Result
+					result = retTyped
 				} else {
 					var err error
-					result, err = promhttputil.MergeValues(s.Cfg.GetAntiAffinity(), result, retTyped.Data.Result)
+					result, err = promhttputil.MergeValues(s.Cfg.GetAntiAffinity(), result, retTyped)
 					if err != nil {
 						return nil, err
 					}
 				}
+			default:
+				return nil, fmt.Errorf("Unknown return type")
 			}
 		}
 	}
@@ -405,58 +402,54 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 	return result, nil
 }
 
-func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) (*promclient.LabelResult, error) {
+func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) ([]model.LabelValue, error) {
 	targets := s.Targets()
 
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChan := make(chan *promclient.LabelResult, len(targets))
-	errChan := make(chan error, len(targets))
+	resultChans := make([]chan interface{}, len(targets))
 
-	for _, target := range targets {
+	for i, target := range targets {
+		resultChans[i] = make(chan interface{}, 1)
 		parsedUrl, err := url.Parse(target + path)
 		if err != nil {
 			return nil, err
 		}
-		go func(stringUrl string) {
+		go func(retChan chan interface{}, stringUrl string) {
 			start := time.Now()
 			result, err := promclient.GetValuesForLabelName(childContext, stringUrl, s.Client)
 			took := time.Now().Sub(start)
 			if err != nil {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "error").Observe(float64(took))
-				errChan <- err
+				retChan <- err
 			} else {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "success").Observe(float64(took))
-				resultChan <- result
+				retChan <- result
 			}
-		}(parsedUrl.String())
+		}(resultChans[i], parsedUrl.String())
 	}
 
 	// Wait for results as we get them
-	result := &promclient.LabelResult{}
+	var result []model.LabelValue
 	var lastError error
 	errCount := 0
 	for i := 0; i < len(targets); i++ {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case err := <-errChan:
-			lastError = err
-			errCount++
-		case childResult := <-resultChan:
-			// If the server responded with a non-success, lets mark that as an error
-			if childResult.Status != promhttputil.StatusSuccess {
-				lastError = fmt.Errorf(childResult.Error)
+		case ret := <-resultChans[i]:
+			switch retTyped := ret.(type) {
+			case error:
+				lastError = retTyped
 				errCount++
-				continue
-			}
-
-			if result == nil {
-				result = childResult
-			} else {
-				if err := result.Merge(childResult); err != nil {
-					return nil, err
+			case []model.LabelValue:
+				if result == nil {
+					result = retTyped
+				} else {
+					promclient.MergeLabelValues(result, retTyped)
 				}
+			default:
+				return nil, fmt.Errorf("Unknown return type")
 			}
 		}
 	}
