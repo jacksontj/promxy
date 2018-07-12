@@ -446,7 +446,7 @@ func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) ([
 				if result == nil {
 					result = retTyped
 				} else {
-					promclient.MergeLabelValues(result, retTyped)
+					result = promclient.MergeLabelValues(result, retTyped)
 				}
 			default:
 				return nil, fmt.Errorf("Unknown return type")

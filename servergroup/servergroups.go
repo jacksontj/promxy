@@ -150,7 +150,7 @@ func (s ServerGroups) GetValuesForLabelName(ctx context.Context, path string) ([
 				if result == nil {
 					result = retTyped
 				} else {
-					promclient.MergeLabelValues(result, retTyped)
+					result = promclient.MergeLabelValues(result, retTyped)
 				}
 			}
 		}
