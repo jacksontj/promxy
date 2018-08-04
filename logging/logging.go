@@ -77,7 +77,7 @@ func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request
 	record := &ApacheLogRecord{
 		ResponseWriter: rw,
 		ip:             clientIP,
-		time:           time.Time{},
+		startTime:      time.Now(),
 		method:         r.Method,
 		uri:            r.RequestURI,
 		protocol:       r.Proto,
@@ -85,7 +85,6 @@ func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request
 		elapsedTime:    time.Duration(0),
 	}
 
-	startTime := time.Now()
 	if err := h.runHandler(record, r); err != nil {
 		http.Error(record, err.Error(), http.StatusInternalServerError)
 	}
