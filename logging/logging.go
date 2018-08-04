@@ -42,15 +42,23 @@ func (r *ApacheLogRecord) WriteHeader(status int) {
 	r.ResponseWriter.WriteHeader(status)
 }
 
-type ApacheLoggingHandler struct {
-	handler http.Handler
-	out     io.Writer
+type LogRecordHandler func(*ApacheLogRecord)
+
+func LogToWriter(out io.Writer) LogRecordHandler {
+	return func(l *ApacheLogRecord) {
+		l.Log(out)
+	}
 }
 
-func NewApacheLoggingHandler(handler http.Handler, out io.Writer) http.Handler {
+type ApacheLoggingHandler struct {
+	handler     http.Handler
+	logHandlers []LogRecordHandler
+}
+
+func NewApacheLoggingHandler(handler http.Handler, logHandlers ...LogRecordHandler) http.Handler {
 	return &ApacheLoggingHandler{
-		handler: handler,
-		out:     out,
+		handler:     handler,
+		logHandlers: logHandlers,
 	}
 }
 
@@ -77,12 +85,10 @@ func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request
 	record := &ApacheLogRecord{
 		ResponseWriter: rw,
 		ip:             clientIP,
-		time:           time.Time{},
 		method:         r.Method,
 		uri:            r.RequestURI,
 		protocol:       r.Proto,
 		status:         http.StatusOK,
-		elapsedTime:    time.Duration(0),
 	}
 
 	startTime := time.Now()
@@ -94,5 +100,7 @@ func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request
 	record.time = finishTime.UTC()
 	record.elapsedTime = finishTime.Sub(startTime)
 
-	record.Log(h.out)
+	for _, logHandler := range h.logHandlers {
+		logHandler(record)
+	}
 }
