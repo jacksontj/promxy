@@ -16,29 +16,29 @@ const ApacheFormatPattern = "%s - - [%s] \"%s %d %d\" %f\n"
 type ApacheLogRecord struct {
 	http.ResponseWriter
 
-	ip                    string
-	time                  time.Time
-	method, uri, protocol string
-	status                int
-	responseBytes         int64
-	elapsedTime           time.Duration
+	IP                    string
+	Time                  time.Time
+	Method, URI, Protocol string
+	Status                int
+	ResponseBytes         int64
+	ElapsedTime           time.Duration
 }
 
 func (r *ApacheLogRecord) Log(out io.Writer) {
-	timeFormatted := r.time.Format("02/Jan/2006 03:04:05")
-	requestLine := fmt.Sprintf("%s %s %s", r.method, r.uri, r.protocol)
-	fmt.Fprintf(out, ApacheFormatPattern, r.ip, timeFormatted, requestLine, r.status, r.responseBytes,
-		r.elapsedTime.Seconds())
+	timeFormatted := r.Time.Format("02/Jan/2006 03:04:05")
+	requestLine := fmt.Sprintf("%s %s %s", r.Method, r.URI, r.Protocol)
+	fmt.Fprintf(out, ApacheFormatPattern, r.IP, timeFormatted, requestLine, r.Status, r.ResponseBytes,
+		r.ElapsedTime.Seconds())
 }
 
 func (r *ApacheLogRecord) Write(p []byte) (int, error) {
 	written, err := r.ResponseWriter.Write(p)
-	r.responseBytes += int64(written)
+	r.ResponseBytes += int64(written)
 	return written, err
 }
 
 func (r *ApacheLogRecord) WriteHeader(status int) {
-	r.status = status
+	r.Status = status
 	r.ResponseWriter.WriteHeader(status)
 }
 
@@ -84,11 +84,11 @@ func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request
 
 	record := &ApacheLogRecord{
 		ResponseWriter: rw,
-		ip:             clientIP,
-		method:         r.Method,
-		uri:            r.RequestURI,
-		protocol:       r.Proto,
-		status:         http.StatusOK,
+		IP:             clientIP,
+		Method:         r.Method,
+		URI:            r.RequestURI,
+		Protocol:       r.Proto,
+		Status:         http.StatusOK,
 	}
 
 	startTime := time.Now()
@@ -97,8 +97,8 @@ func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request
 	}
 	finishTime := time.Now()
 
-	record.time = finishTime.UTC()
-	record.elapsedTime = finishTime.Sub(startTime)
+	record.Time = finishTime.UTC()
+	record.ElapsedTime = finishTime.Sub(startTime)
 
 	for _, logHandler := range h.logHandlers {
 		logHandler(record)
