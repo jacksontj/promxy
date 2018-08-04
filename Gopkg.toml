@@ -12,10 +12,6 @@
   version = "1.1.0"
 
 [[constraint]]
-  name = "github.com/prometheus/client_golang"
-  version = "0.8.0"
-
-[[constraint]]
   branch = "tjackson_fork_22"
   name = "github.com/prometheus/common"
   source = "github.com/jacksontj/common"
