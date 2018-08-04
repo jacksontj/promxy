@@ -301,7 +301,7 @@ func main() {
 	close(reloadReady)
 
 	// Set up access logger
-	loggedRouter := logging.NewApacheLoggingHandler(r, os.Stdout)
+	loggedRouter := logging.NewApacheLoggingHandler(r, logging.LogToWriter(os.Stdout))
 	srv := &http.Server{
 		Addr:    opts.BindAddr,
 		Handler: loggedRouter,
