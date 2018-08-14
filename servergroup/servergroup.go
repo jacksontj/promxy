@@ -21,7 +21,6 @@ import (
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/relabel"
 	"github.com/prometheus/prometheus/storage/remote"
-	httputil "github.com/prometheus/prometheus/util/httputil"
 
 	sd_config "github.com/prometheus/prometheus/discovery/config"
 )
@@ -118,7 +117,7 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 
 	// stage the client swap as well
 	// TODO: better name
-	client, err := httputil.NewClientFromConfig(cfg.HTTPConfig, "somename")
+	client, err := config_util.NewClientFromConfig(cfg.HTTPConfig, "somename")
 	if err != nil {
 		return fmt.Errorf("Unable to load client from config: %s", err)
 	}
@@ -226,7 +225,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 			}
 
 			start := time.Now()
-			query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), matchers)
+			query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), matchers, nil)
 			if err != nil {
 				retChan <- err
 				return
