@@ -31,8 +31,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
-	yaml_util "github.com/prometheus/prometheus/util/yaml"
-	"gopkg.in/fsnotify.v1"
+	"gopkg.in/fsnotify/fsnotify.v1"
 	"gopkg.in/yaml.v2"
 )
 
@@ -49,9 +48,6 @@ var (
 type SDConfig struct {
 	Files           []string       `yaml:"files"`
 	RefreshInterval model.Duration `yaml:"refresh_interval,omitempty"`
-
-	// Catches all undefined fields and must be empty after parsing.
-	XXX map[string]interface{} `yaml:",inline"`
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface.
@@ -60,9 +56,6 @@ func (c *SDConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	type plain SDConfig
 	err := unmarshal((*plain)(c))
 	if err != nil {
-		return err
-	}
-	if err := yaml_util.CheckOverflow(c.XXX, "file_sd_config"); err != nil {
 		return err
 	}
 	if len(c.Files) == 0 {
@@ -286,7 +279,7 @@ func (d *Discovery) deleteTimestamp(filename string) {
 
 // stop shuts down the file watcher.
 func (d *Discovery) stop() {
-	level.Debug(d.logger).Log("msg", "Stopping file discovery...", "paths", d.paths)
+	level.Debug(d.logger).Log("msg", "Stopping file discovery...", "paths", fmt.Sprintf("%v", d.paths))
 
 	done := make(chan struct{})
 	defer close(done)
@@ -306,10 +299,10 @@ func (d *Discovery) stop() {
 		}
 	}()
 	if err := d.watcher.Close(); err != nil {
-		level.Error(d.logger).Log("msg", "Error closing file watcher", "paths", d.paths, "err", err)
+		level.Error(d.logger).Log("msg", "Error closing file watcher", "paths", fmt.Sprintf("%v", d.paths), "err", err)
 	}
 
-	level.Debug(d.logger).Log("File discovery stopped", "paths", d.paths)
+	level.Debug(d.logger).Log("msg", "File discovery stopped")
 }
 
 // refresh reads all files matching the discovery's patterns and sends the respective
@@ -385,7 +378,7 @@ func (d *Discovery) readFile(filename string) ([]*targetgroup.Group, error) {
 			return nil, err
 		}
 	case ".yml", ".yaml":
-		if err := yaml.Unmarshal(content, &targetGroups); err != nil {
+		if err := yaml.UnmarshalStrict(content, &targetGroups); err != nil {
 			return nil, err
 		}
 	default:

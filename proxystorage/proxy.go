@@ -161,7 +161,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 	visitor := &OffsetFinder{}
 	if _, err := promql.Walk(ctx, visitor, s, node, nil, nil); err != nil {
-		return nil, err
+		return nil, nil
 	}
 	// If we couldn't find an offset, then something is wrong-- lets skip
 	// Also if there was an error, skip

@@ -16,9 +16,11 @@ package promql
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
+	"github.com/mailru/easyjson/jwriter"
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
@@ -100,10 +102,53 @@ func (p Point) String() string {
 	return fmt.Sprintf("%v @[%v]", v, p.T)
 }
 
+func (p Point) MarshalEasyJSON(w *jwriter.Writer) {
+	w.RawByte('[')
+	t := p.T
+	if t < 0 {
+		w.RawByte('-')
+		t = -t
+	}
+
+	w.Int64(int64(t) / 1000)
+	fraction := int64(t) % 1000
+
+	if fraction != 0 {
+		w.RawByte('.')
+		if fraction < 100 {
+			w.RawByte('0')
+		}
+		if fraction < 10 {
+			w.RawByte('0')
+		}
+		w.Int64(fraction)
+	}
+
+	w.RawByte(',')
+
+	// Write value
+	w.RawByte('"')
+	w.Buffer.EnsureSpace(20)
+
+	abs := math.Abs(p.V)
+	fmt := byte('f')
+	// Note: Must use float32 comparisons for underlying float32 value to get precise cutoffs right.
+	if abs != 0 {
+		if abs < 1e-6 || abs >= 1e21 {
+			fmt = 'e'
+		}
+	}
+
+	w.Buffer.Buf = strconv.AppendFloat(w.Buffer.Buf, p.V, fmt, -1, 64)
+	w.RawByte('"')
+	w.RawByte(']')
+}
+
 // MarshalJSON implements json.Marshaler.
 func (p Point) MarshalJSON() ([]byte, error) {
-	v := strconv.FormatFloat(p.V, 'f', -1, 64)
-	return json.Marshal([...]interface{}{float64(p.T) / 1000, v})
+	w := jwriter.Writer{}
+	p.MarshalEasyJSON(&w)
+	return w.Buffer.BuildBytes(), w.Error
 }
 
 // Sample is a single sample belonging to a metric.

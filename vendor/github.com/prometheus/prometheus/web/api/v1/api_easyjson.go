@@ -3,7 +3,7 @@
 package v1
 
 import (
-	json "encoding/json"
+	encodingjson "encoding/json"
 
 	easyjson "github.com/mailru/easyjson"
 	jlexer "github.com/mailru/easyjson/jlexer"
@@ -12,7 +12,6 @@ import (
 
 // suppress unused package warning
 var (
-	_ *json.RawMessage
 	_ *jlexer.Lexer
 	_ *jwriter.Writer
 	_ easyjson.Marshaler
@@ -42,7 +41,7 @@ func easyjsonC1cedd36DecodeGithubComPrometheusPrometheusWebApiV1(in *jlexer.Lexe
 		case "data":
 			if m, ok := out.Data.(easyjson.Unmarshaler); ok {
 				m.UnmarshalEasyJSON(in)
-			} else if m, ok := out.Data.(json.Unmarshaler); ok {
+			} else if m, ok := out.Data.(encodingjson.Unmarshaler); ok {
 				_ = m.UnmarshalJSON(in.Raw())
 			} else {
 				out.Data = in.Interface()
@@ -79,7 +78,7 @@ func easyjsonC1cedd36EncodeGithubComPrometheusPrometheusWebApiV1(out *jwriter.Wr
 		out.RawString("\"data\":")
 		if m, ok := in.Data.(easyjson.Marshaler); ok {
 			m.MarshalEasyJSON(out)
-		} else if m, ok := in.Data.(json.Marshaler); ok {
+		} else if m, ok := in.Data.(encodingjson.Marshaler); ok {
 			out.Raw(m.MarshalJSON())
 		} else {
 			out.Raw(json.Marshal(in.Data))

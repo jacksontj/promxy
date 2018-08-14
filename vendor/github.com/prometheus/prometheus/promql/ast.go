@@ -100,7 +100,7 @@ type Expressions []Expr
 
 // AggregateExpr represents an aggregation operation on a Vector.
 type AggregateExpr struct {
-	Op       itemType // The used aggregation operation.
+	Op       ItemType // The used aggregation operation.
 	Expr     Expr     // The Vector expression over which is aggregated.
 	Param    Expr     // Parameter used by some aggregators.
 	Grouping []string // The labels by which to group the Vector.
@@ -109,7 +109,7 @@ type AggregateExpr struct {
 
 // BinaryExpr represents a binary expression between two child expressions.
 type BinaryExpr struct {
-	Op       itemType // The operation of the expression.
+	Op       ItemType // The operation of the expression.
 	LHS, RHS Expr     // The operands on the respective sides of the operator.
 
 	// The matching behavior for the operation if both operands are Vectors.
@@ -133,9 +133,8 @@ type MatrixSelector struct {
 	Offset        time.Duration
 	LabelMatchers []*labels.Matcher
 
-	// The series iterators are populated at query preparation time.
-	series    []storage.Series
-	iterators []*storage.BufferedSeriesIterator
+	// The series are populated at query preparation time.
+	series []storage.Series
 }
 
 func (m *MatrixSelector) SetSeries(series []storage.Series) {
@@ -165,7 +164,7 @@ type StringLiteral struct {
 // UnaryExpr represents a unary operation on another expression.
 // Currently unary operations are only supported for Scalars.
 type UnaryExpr struct {
-	Op   itemType
+	Op   ItemType
 	Expr Expr
 }
 
@@ -175,9 +174,8 @@ type VectorSelector struct {
 	Offset        time.Duration
 	LabelMatchers []*labels.Matcher
 
-	// The series iterators are populated at query preparation time.
-	series    []storage.Series
-	iterators []*storage.BufferedSeriesIterator
+	// The series are populated at query preparation time.
+	series []storage.Series
 }
 
 func (m *VectorSelector) SetSeries(series []storage.Series) {
@@ -256,7 +254,7 @@ type VectorMatching struct {
 
 // Visitor allows visiting a Node and its child nodes. The Visit method is
 // invoked for each node with the path leading to the node provided additionally.
-// If the result visitor w is not nil, Walk visits each of the children
+// If the result visitor w is not nil and no error, Walk visits each of the children
 // of node with the visitor w, followed by a call of w.Visit(nil, nil).
 type Visitor interface {
 	Visit(node Node, path []Node) (w Visitor, err error)
@@ -264,9 +262,9 @@ type Visitor interface {
 
 // Walk traverses an AST in depth-first order: It starts by calling
 // v.Visit(node, path); node must not be nil. If the visitor w returned by
-// v.Visit(node, path) is not nil, Walk is invoked recursively with visitor
-// w for each of the non-nil children of node, followed by a call of
-// w.Visit(nil).
+// v.Visit(node, path) is not nil and the visitor returns no error, Walk is
+// invoked recursively with visitor w for each of the non-nil children of node,
+// followed by a call of w.Visit(nil), returning an error
 // As the tree is descended the path of previous nodes is provided.
 func Walk(ctx context.Context, v Visitor, st *EvalStmt, node Node, path []Node, nr NodeReplacer) (Node, error) {
 	// Check if the context is closed already
@@ -288,10 +286,7 @@ func Walk(ctx context.Context, v Visitor, st *EvalStmt, node Node, path []Node, 
 	}
 
 	var err error
-	if v, err = v.Visit(node, path); v == nil {
-		return node, nil
-	}
-	if err != nil {
+	if v, err = v.Visit(node, path); v == nil || err != nil {
 		return node, err
 	}
 	path = append(path, node)
@@ -343,7 +338,7 @@ func Walk(ctx context.Context, v Visitor, st *EvalStmt, node Node, path []Node, 
 		}
 
 	case *BinaryExpr:
-		// Do BinaryExpr in parallel (since this is where the tree diverges
+		// Do BinaryExpr in parallel (since this is where the tree diverges)
 		childCtx, childCancel := context.WithCancel(ctx)
 		defer childCancel()
 		doneChan := make(chan error, 2)
@@ -402,7 +397,10 @@ func Walk(ctx context.Context, v Visitor, st *EvalStmt, node Node, path []Node, 
 		panic(fmt.Errorf("promql.Walk: unhandled node type %T", node))
 	}
 
-	v.Visit(nil, path)
+	_, err = v.Visit(nil, path)
+	if err != nil {
+		return nil, err
+	}
 	return node, nil
 }
 
@@ -417,10 +415,10 @@ func (f inspector) Visit(node Node, path []Node) (Visitor, error) {
 }
 
 // Inspect traverses an AST in depth-first order: It starts by calling
-// f(node, path); node must not be nil. If f returns true, Inspect invokes f
+// f(node, path); node must not be nil. If f returns a nil error, Inspect invokes f
 // for all the non-nil children of node, recursively.
 func Inspect(ctx context.Context, s *EvalStmt, f inspector, nr NodeReplacer) (Node, error) {
-	return Walk(ctx, inspector(f), s, s.Expr, nil, nr)
+	return Walk(ctx, f, s, s.Expr, nil, nr)
 }
 
 type NodeReplacer func(context.Context, *EvalStmt, Node) (Node, error)

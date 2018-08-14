@@ -205,10 +205,8 @@
 [[projects]]
   name = "github.com/gogo/protobuf"
   packages = [
-    "gogoproto",
     "jsonpb",
     "proto",
-    "protoc-gen-gogo/descriptor",
     "sortkeys",
     "types"
   ]
@@ -313,6 +311,12 @@
   revision = "0b12d6b5"
 
 [[projects]]
+  name = "github.com/json-iterator/go"
+  packages = ["."]
+  revision = "1624edc4454b8682399def8740d46db5e4362ba4"
+  version = "1.1.5"
+
+[[projects]]
   branch = "master"
   name = "github.com/juju/ratelimit"
   packages = ["."]
@@ -363,6 +367,18 @@
   revision = "b8bc1bf767474819792c23f32d8286a45736f1c6"
 
 [[projects]]
+  name = "github.com/modern-go/concurrent"
+  packages = ["."]
+  revision = "bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94"
+  version = "1.0.3"
+
+[[projects]]
+  name = "github.com/modern-go/reflect2"
+  packages = ["."]
+  revision = "4b7aa43c6742a2c18fdef89dd197aaae7dac7ccd"
+  version = "1.0.1"
+
+[[projects]]
   branch = "master"
   name = "github.com/mwitkow/go-conntrack"
   packages = ["."]
@@ -409,10 +425,13 @@
   version = "v0.8.0"
 
 [[projects]]
+  branch = "master"
   name = "github.com/prometheus/client_golang"
-  packages = ["prometheus"]
-  revision = "c5b7fccd204277076155f10851dad72b76a49317"
-  version = "v0.8.0"
+  packages = [
+    "prometheus",
+    "prometheus/promhttp"
+  ]
+  revision = "5b23715facdef1452016bae512489c3cdf82458c"
 
 [[projects]]
   branch = "master"
@@ -421,7 +440,7 @@
   revision = "6f3806018612930941127f2a7c6c453ba2c527d2"
 
 [[projects]]
-  branch = "tjackson_fork_22"
+  branch = "tjackson_fork_23"
   name = "github.com/prometheus/common"
   packages = [
     "config",
@@ -433,7 +452,7 @@
     "route",
     "version"
   ]
-  revision = "ced8cc405cc4476542fb62641ebe80f07fb5c31d"
+  revision = "b6328fa22d05e30e511feed43277a9165c159ddb"
   source = "github.com/jacksontj/common"
 
 [[projects]]
@@ -446,7 +465,7 @@
   revision = "e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2"
 
 [[projects]]
-  branch = "release-2.2_fork_promxy"
+  branch = "release-2.3_fork_promxy"
   name = "github.com/prometheus/prometheus"
   packages = [
     "config",
@@ -486,13 +505,12 @@
     "util/strutil",
     "util/testutil",
     "util/treecache",
-    "util/yaml",
     "web",
     "web/api/v1",
     "web/api/v2",
     "web/ui"
   ]
-  revision = "9afbbc0c5df386ab546cb8522fa3dc132eb2650b"
+  revision = "3e594b7652fc5fa1265b75cd429995bf5949f363"
   source = "github.com/jacksontj/prometheus"
 
 [[projects]]
@@ -690,10 +708,9 @@
   version = "v2.2.5"
 
 [[projects]]
-  name = "gopkg.in/fsnotify.v1"
+  name = "gopkg.in/fsnotify/fsnotify.v1"
   packages = ["."]
   revision = "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9"
-  source = "github.com/fsnotify/fsnotify"
   version = "v1.4.7"
 
 [[projects]]
@@ -831,7 +848,8 @@
     "util/cert",
     "util/clock",
     "util/flowcontrol",
-    "util/integer"
+    "util/integer",
+    "util/workqueue"
   ]
   revision = "21300e3e11c918b8e6a70fb7293b310683d6c046"
   version = "v3.0.0"
@@ -839,6 +857,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "6d309226eb6f92c04c79779c8e3b3ec609cf4b263d3bbe9e454abcb8864fe4ad"
+  inputs-digest = "d9a759a37e1301cb3968d3700610da155eafd5698d7a757effaa43854d18f31e"
   solver-name = "gps-cdcl"
   solver-version = 1

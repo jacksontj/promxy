@@ -9,6 +9,7 @@ import (
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 )
@@ -44,7 +45,7 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		}).Debug("Select")
 	}()
 
-	result, err := h.ServerGroups.GetValue(h.Ctx, h.Start, h.End, matchers)
+	result, err := h.ServerGroups.GetValue(h.Ctx, timestamp.Time(selectParams.Start), timestamp.Time(selectParams.End), matchers)
 	if err != nil {
 		return nil, err
 	}
