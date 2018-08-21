@@ -95,6 +95,12 @@ func reloadConfig(rls ...proxyconfig.Reloadable) error {
 }
 
 func main() {
+	// Wait for reload or termination signals. Start the handler for SIGHUP as
+	// early as possible, but ignore it until we are ready to handle reloading
+	// our config.
+	sigs := make(chan os.Signal)
+	defer close(sigs)
+	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 
 	prometheus.MustRegister(reloadTime)
 
@@ -314,12 +320,7 @@ func main() {
 		}
 	}()
 
-	// Wait for reload or termination signals. Start the handler for SIGHUP as
-	// early as possible, but ignore it until we are ready to handle reloading
-	// our config.
-	sigs := make(chan os.Signal)
-	defer close(sigs)
-	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
+	// wait for signals etc.
 	for {
 		select {
 		case sig := <-sigs:
