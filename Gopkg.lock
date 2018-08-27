@@ -510,7 +510,7 @@
     "web/api/v2",
     "web/ui"
   ]
-  revision = "3e594b7652fc5fa1265b75cd429995bf5949f363"
+  revision = "b40118231a4d4974b97ec3f45120f8266ca562d6"
   source = "github.com/jacksontj/prometheus"
 
 [[projects]]
@@ -857,6 +857,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "d9a759a37e1301cb3968d3700610da155eafd5698d7a757effaa43854d18f31e"
+  inputs-digest = "196407655ef116f38d4d6682ab1fba7291ff01292ba9b0a73e89b7963fc77fb9"
   solver-name = "gps-cdcl"
   solver-version = 1
