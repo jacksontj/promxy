@@ -130,8 +130,14 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	// dial timeout (2) healthchecks (3) track "healthiness" of downstream based on our
 	// requests to it -- not through other healthchecks
 	// Override the dial timeout
-	transport := client.Transport.(*http.Transport)
-	transport.DialContext = (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext
+	switch transport := client.Transport.(type) {
+	case *http.Transport:
+		transport.DialContext = (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext
+		// TODO: basic auth?  as reported in #70 basicAuth doesn't use this timeout.
+		// This is because prometheus has its own RoundTripper (*config.basicAuthRoundTripper)
+		// which doesn't set a timeout or expose a way to do so. For now I'm changing
+		// this just so it won't panic, but this is not a long-term solution to the issue.
+	}
 
 	s.Client = client
 
