@@ -45,6 +45,8 @@ type Config struct {
 	// Hosts is a set of ServiceDiscoveryConfig options that allow promxy to discover
 	// all hosts in the server_group
 	Hosts sd_config.ServiceDiscoveryConfig `yaml:",inline"`
+	// PathPrefix to prepend to all queries to hosts in this servergroup
+	PathPrefix string `yaml:"path_prefix"`
 	// TODO cache this as a model.Time after unmarshal
 	// AntiAffinity defines how large of a gap in the timeseries will cause promxy
 	// to merge series from 2 hosts in a server_group. This required for a couple reasons
