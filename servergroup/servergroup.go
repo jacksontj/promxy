@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"sync/atomic"
 	"time"
 
@@ -73,6 +74,13 @@ type ServerGroup struct {
 	OriginalURLs []string
 
 	urls atomic.Value
+}
+
+func (s *ServerGroup) getPath(p string) string {
+	if s.Cfg.PathPrefix != "" {
+		return path.Join(s.Cfg.PathPrefix, p)
+	}
+	return p
 }
 
 func (s *ServerGroup) Cancel() {
@@ -212,9 +220,11 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 	defer childContextCancel()
 	resultChans := make([]chan interface{}, len(targets))
 
+	path := s.getPath("/api/v1/read")
+
 	for i, target := range targets {
 		resultChans[i] = make(chan interface{}, 1)
-		parsedUrl, err := url.Parse(target + "/api/v1/read")
+		parsedUrl, err := url.Parse(target + path)
 		if err != nil {
 			return nil, err
 		}
@@ -320,6 +330,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 
 // TODO: change the args here from url.Values to something else (probably matchers and start/end more like remote read)
 func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Values) (model.Value, error) {
+	path = s.getPath(path)
 	// Make a copy of Values since we're going to mutate it
 	values := make(url.Values)
 	for k, v := range inValues {
@@ -409,6 +420,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 
 func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) ([]model.LabelValue, error) {
 	targets := s.Targets()
+	path = s.getPath(path)
 
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
@@ -476,7 +488,7 @@ func (s *ServerGroup) GetSeries(ctx context.Context, start, end time.Time, match
 	// Create the query params
 	values := url.Values{}
 
-	urlBase := "/api/v1/series"
+	urlBase := s.getPath("/api/v1/series")
 
 	// Add matchers
 	// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
