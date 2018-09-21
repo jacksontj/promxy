@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 
 	"fmt"
 	"net"
@@ -60,7 +61,8 @@ type CLIOpts struct {
 	QueryTimeout        time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
 	QueryMaxConcurrency int           `long:"query.max-concurrency" description:"Maximum number of queries executed concurrently." default:"1000"`
 
-	NotificationQueueCapacity int `long:"alertmanager.notification-queue-capacity" description:"The capacity of the queue for pending alert manager notifications." default:"10000"`
+	NotificationQueueCapacity int    `long:"alertmanager.notification-queue-capacity" description:"The capacity of the queue for pending alert manager notifications." default:"10000"`
+	AccessLogDestination      string `long:"access-log-destination" description:"where to log access logs, options (none, stderr, stdout)" default:"stdout"`
 }
 
 func (c *CLIOpts) ToFlags() map[string]string {
@@ -307,10 +309,27 @@ func main() {
 	close(reloadReady)
 
 	// Set up access logger
-	loggedRouter := logging.NewApacheLoggingHandler(r, logging.LogToWriter(os.Stdout))
+	var accessLogOut io.Writer
+	switch strings.ToLower(opts.AccessLogDestination) {
+	case "stderr":
+		accessLogOut = os.Stderr
+	case "stdout":
+		accessLogOut = os.Stdout
+	case "none":
+	default:
+		logrus.Fatalf("Invalid AccessLogDestination: %s", opts.AccessLogDestination)
+	}
+
+	var handler http.Handler
+	if accessLogOut == nil {
+		handler = r
+	} else {
+		handler = logging.NewApacheLoggingHandler(r, logging.LogToWriter(accessLogOut))
+	}
+
 	srv := &http.Server{
 		Addr:    opts.BindAddr,
-		Handler: loggedRouter,
+		Handler: handler,
 	}
 
 	go func() {
