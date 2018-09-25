@@ -306,6 +306,22 @@ func main() {
 		logrus.Fatalf("Error loading config: %s", err)
 	}
 
+	// Our own checks on top of the config
+	checkConfig := func() error {
+		// check for any recording rules, if we find any lets log a fatal and stop
+		// https://github.com/jacksontj/promxy/issues/74
+		for _, rule := range ruleManager.Rules() {
+			if _, ok := rule.(*rules.RecordingRule); ok {
+				return fmt.Errorf("Promxy doesn't support recording rules: %s", rule)
+			}
+		}
+		return nil
+	}
+
+	if err := checkConfig(); err != nil {
+		logrus.Fatalf("Error checking config: %v", err)
+	}
+
 	close(reloadReady)
 
 	// Set up access logger
@@ -348,6 +364,9 @@ func main() {
 				log.Infof("Reloading config")
 				if err := reloadConfig(reloadables...); err != nil {
 					log.Errorf("Error reloading config: %s", err)
+				}
+				if err := checkConfig(); err != nil {
+					logrus.Errorf("Error checking config: %v", err)
 				}
 			case syscall.SIGTERM, syscall.SIGINT:
 				log.Infof("promxy exiting")
