@@ -120,6 +120,7 @@ func (a *appenderStub) Commit() error { return nil }
 func (a *appenderStub) Rollback() error { return nil }
 
 func (p *ProxyStorage) Appender() (storage.Appender, error) {
+	logrus.Warning("Promxy cannot *write* metrics but is being asked to. This is likely due to a RecordingRule")
 	return &appenderStub{}, nil
 }
 
