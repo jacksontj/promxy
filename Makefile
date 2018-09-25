@@ -6,7 +6,7 @@ GOFMT ?= gofmt -s
 .PHONY: clean
 clean:
 	$(GO) clean -i ./...
-	rm -rf $(EXECUTABLE) $(DIST) $(BINDATA)
+	rm -rf $(BUILD)
 
 .PHONY: fmt
 fmt:
