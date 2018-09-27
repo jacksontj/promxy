@@ -49,11 +49,14 @@ var (
 		Name: "process_reload_time_seconds",
 		Help: "Last reload (SIGHUP) time of the process since unix epoch in seconds.",
 	})
+	Version = "<version>"
 )
 
 type CLIOpts struct {
+	Version bool `long:"version" short:"v" description:"print out version and exit"`
+
 	BindAddr   string `long:"bind-addr" description:"address for promxy to listen on" default:":8082"`
-	ConfigFile string `long:"config" description:"path to the config file" required:"true"`
+	ConfigFile string `long:"config" description:"path to the config file" default:"config.yaml"`
 	LogLevel   string `long:"log-level" description:"Log level" default:"info"`
 
 	ExternalURL string `long:"web.external-url" description:"The URL under which Prometheus is externally reachable (for example, if Prometheus is served via a reverse proxy). Used for generating relative and absolute links back to Prometheus itself. If the URL has a path portion, it will be used to prefix all HTTP endpoints served by Prometheus. If omitted, relevant URL components will be derived automatically."`
@@ -116,6 +119,11 @@ func main() {
 			os.Exit(1)
 		}
 		logrus.Fatalf("Error parsing flags: %v", err)
+	}
+
+	if opts.Version {
+		fmt.Println("Version", Version)
+		os.Exit(0)
 	}
 
 	// Use log level

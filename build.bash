@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-VERSION=`git describe --tags`
+VERSION=`git describe --tags --dirty`
 
 package=$1
 destination=$2
@@ -23,7 +23,7 @@ do
         output_name+='.exe'
     fi  
 
-    env GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 go build -o $destination/$output_name $package
+    env GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 go build -x -ldflags="-X main.Version=$VERSION" -o $destination/$output_name $package
     if [ $? -ne 0 ]; then
         echo 'An error has occurred! Aborting the script execution...'
         exit 1
