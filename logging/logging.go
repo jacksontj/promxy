@@ -65,11 +65,8 @@ func NewApacheLoggingHandler(handler http.Handler, logHandlers ...LogRecordHandl
 func (h *ApacheLoggingHandler) runHandler(rw http.ResponseWriter, r *http.Request) (err error) {
 	defer func() {
 		if rec := recover(); rec != nil {
-			var ok bool
-			err, ok = rec.(error)
-			if !ok {
-				err = errors.Wrap(fmt.Errorf(string(debug.Stack())), "Error running handler")
-			}
+			// Just return a stack trace always
+			err = errors.Wrap(fmt.Errorf(string(debug.Stack())), "Error running handler")
 		}
 	}()
 	h.handler.ServeHTTP(rw, r)
