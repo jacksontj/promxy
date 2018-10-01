@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -110,6 +111,11 @@ func (p *ProxyStorage) StartTime() (int64, error) {
 // TODO: remove?
 type appenderStub struct{}
 
+// Alerting rules append metrics as well, so we want to make sure we don't *spam* the logs
+// when we have real metrics
+var appenderLock = sync.Mutex{}
+var appenderWarningTime time.Time
+
 func (a *appenderStub) Add(l labels.Labels, t int64, v float64) (uint64, error) { return 0, nil }
 
 func (a *appenderStub) AddFast(l labels.Labels, ref uint64, t int64, v float64) error { return nil }
@@ -120,7 +126,14 @@ func (a *appenderStub) Commit() error { return nil }
 func (a *appenderStub) Rollback() error { return nil }
 
 func (p *ProxyStorage) Appender() (storage.Appender, error) {
-	logrus.Warning("Promxy cannot *write* metrics but is being asked to. This is likely due to a RecordingRule")
+	appenderLock.Lock()
+	now := time.Now()
+	if now.Sub(appenderWarningTime) > time.Minute {
+		logrus.Warning("Promxy cannot *write* metrics but is being asked to. This is caused by (1) RecordingRules or (2) Rule Evaluation. Details in: https://github.com/jacksontj/promxy/issues/79")
+		appenderWarningTime = now
+	}
+	appenderLock.Unlock()
+
 	return &appenderStub{}, nil
 }
 
