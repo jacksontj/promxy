@@ -145,7 +145,6 @@ func init() {
 // and updates them via watches.
 type Discovery struct {
 	client           *consul.Client
-	clientConf       *consul.Config
 	clientDatacenter string
 	tagSeparator     string
 	watchedServices  []string // Set of services which will be discovered.
@@ -153,6 +152,7 @@ type Discovery struct {
 	watchedNodeMeta  map[string]string
 	allowStale       bool
 	refreshInterval  time.Duration
+	finalizer        func()
 	logger           log.Logger
 }
 
@@ -167,6 +167,7 @@ func NewDiscovery(conf *SDConfig, logger log.Logger) (*Discovery, error) {
 		return nil, err
 	}
 	transport := &http.Transport{
+		IdleConnTimeout: 5 * time.Duration(conf.RefreshInterval),
 		TLSClientConfig: tls,
 		DialContext: conntrack.NewDialContextFunc(
 			conntrack.DialWithTracing(),
@@ -195,14 +196,14 @@ func NewDiscovery(conf *SDConfig, logger log.Logger) (*Discovery, error) {
 	}
 	cd := &Discovery{
 		client:           client,
-		clientConf:       clientConf,
 		tagSeparator:     conf.TagSeparator,
 		watchedServices:  conf.Services,
 		watchedTag:       conf.ServiceTag,
 		watchedNodeMeta:  conf.NodeMeta,
 		allowStale:       conf.AllowStale,
 		refreshInterval:  time.Duration(conf.RefreshInterval),
-		clientDatacenter: clientConf.Datacenter,
+		clientDatacenter: conf.Datacenter,
+		finalizer:        transport.CloseIdleConnections,
 		logger:           logger,
 	}
 	return cd, nil
@@ -296,6 +297,9 @@ func (d *Discovery) initialize(ctx context.Context) {
 
 // Run implements the Discoverer interface.
 func (d *Discovery) Run(ctx context.Context, ch chan<- []*targetgroup.Group) {
+	if d.finalizer != nil {
+		defer d.finalizer()
+	}
 	d.initialize(ctx)
 
 	if len(d.watchedServices) == 0 || d.watchedTag != "" {
