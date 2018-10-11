@@ -1,0 +1,9 @@
+load 5m
+  http_requests{job="api-server", instance="0", group="production"} 0+10x10
+  http_requests{job="api-server", instance="1", group="production"} 0+20x10
+  http_requests{job="api-server", instance="0", group="canary"}   0+30x10
+  http_requests{job="api-server", instance="1", group="canary"}   0+40x10
+  http_requests{job="app-server", instance="0", group="production"} 0+50x10
+  http_requests{job="app-server", instance="1", group="production"} 0+60x10
+  http_requests{job="app-server", instance="0", group="canary"}   0+70x10
+  http_requests{job="app-server", instance="1", group="canary"}   0+80x10
