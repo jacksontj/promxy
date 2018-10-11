@@ -8,6 +8,7 @@ import (
 
 type LabelFilterVisitor struct {
 	s           *ServerGroup
+	ls          model.LabelSet
 	filterMatch bool
 }
 
@@ -20,7 +21,7 @@ func (l *LabelFilterVisitor) Visit(node promql.Node, path []promql.Node) (w prom
 			}
 		}
 
-		filteredMatchers, ok := l.s.FilterMatchers(nodeTyped.LabelMatchers)
+		filteredMatchers, ok := FilterMatchers(l.ls, nodeTyped.LabelMatchers)
 		l.filterMatch = l.filterMatch && ok
 
 		if ok {
@@ -35,7 +36,7 @@ func (l *LabelFilterVisitor) Visit(node promql.Node, path []promql.Node) (w prom
 			}
 		}
 
-		filteredMatchers, ok := l.s.FilterMatchers(nodeTyped.LabelMatchers)
+		filteredMatchers, ok := FilterMatchers(l.ls, nodeTyped.LabelMatchers)
 		l.filterMatch = l.filterMatch && ok
 
 		if ok {
@@ -46,4 +47,21 @@ func (l *LabelFilterVisitor) Visit(node promql.Node, path []promql.Node) (w prom
 	}
 
 	return l, nil
+}
+
+func FilterMatchers(ls model.LabelSet, matchers []*labels.Matcher) ([]*labels.Matcher, bool) {
+	filteredMatchers := make([]*labels.Matcher, 0, len(matchers))
+
+	// Look over the matchers passed in, if any exist in our labels, we'll do the matcher, and then strip
+	for _, matcher := range matchers {
+		if localValue, ok := ls[model.LabelName(matcher.Name)]; ok {
+			// If the label exists locally and isn't there, then skip it
+			if !matcher.Matches(string(localValue)) {
+				return nil, false
+			}
+		} else {
+			filteredMatchers = append(filteredMatchers, matcher)
+		}
+	}
+	return filteredMatchers, true
 }
