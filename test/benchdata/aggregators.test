@@ -1,0 +1,19 @@
+# Simple sum.
+eval instant at 50m SUM BY (group) (http_requests{job="api-server"})
+  {group="canary"} 1400
+  {group="production"} 600
+
+# Test alternative "by"-clause order.
+eval instant at 50m sum by (group) (http_requests{job="api-server"})
+  {group="canary"} 1400
+  {group="production"} 600
+
+# Simple average.
+eval instant at 50m avg by (group) (http_requests{job="api-server"})
+  {group="canary"} 350
+  {group="production"} 150
+
+# Simple count.
+eval instant at 50m count by (group) (http_requests{job="api-server"})
+  {group="canary"} 4
+  {group="production"} 4
