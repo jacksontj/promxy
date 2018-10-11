@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/relabel"
 	"github.com/prometheus/prometheus/storage/remote"
+	"github.com/sirupsen/logrus"
 
 	sd_config "github.com/prometheus/prometheus/discovery/config"
 )
@@ -60,6 +62,14 @@ func New() *ServerGroup {
 
 }
 
+// Encapsulate the state of a serverGroup from service discovery
+type ServerGroupState struct {
+	// Targets is the list of target URLs for this discovery round
+	Targets []string
+	// Labels that should be applied to metrics from this serverGroup
+	Labels model.LabelSet
+}
+
 type ServerGroup struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
@@ -67,13 +77,14 @@ type ServerGroup struct {
 	loaded bool
 	Ready  chan struct{}
 
+	// TODO: lock/atomics on cfg and client
 	Cfg           *Config
 	Client        *http.Client
 	targetManager *discovery.Manager
 
 	OriginalURLs []string
 
-	urls atomic.Value
+	state atomic.Value
 }
 
 func (s *ServerGroup) getPath(p string) string {
@@ -92,12 +103,14 @@ func (s *ServerGroup) Sync() {
 
 	for targetGroupMap := range syncCh {
 		targets := make([]string, 0)
+		var ls model.LabelSet
+
 		for _, targetGroupList := range targetGroupMap {
 			for _, targetGroup := range targetGroupList {
 				for _, target := range targetGroup.Targets {
 
 					target = relabel.Process(target, s.Cfg.RelabelConfigs...)
-					// Check if the target was dropped.
+					// Check if the target was dropped, if so we skip it
 					if target == nil {
 						continue
 					}
@@ -107,10 +120,60 @@ func (s *ServerGroup) Sync() {
 						Host:   string(target[model.AddressLabel]),
 					}
 					targets = append(targets, u.String())
+
+					// We remove all private labels after we set the target entry
+					for name, _ := range target {
+						if strings.HasPrefix(string(name), model.ReservedLabelPrefix) {
+							delete(target, name)
+						}
+					}
+
+					// Now we want to generate the labelset for this servergroup based
+					// on the relabel_config. In the event that the relabel_config returns
+					// different labelsets per-host we'll take the intersection. This is
+					// important as these labels will be added to each result from these
+					// targets, and since they are in the same targetgroup they are supposed
+					// to be the same-- so if they had different labels we'd be duplicating
+					// the metrics, which we don't want.
+					if ls == nil {
+						ls = target
+					} else {
+						if !ls.Equal(target) {
+							// If not equal, we want ls to be the intersection of all the labelsets
+							// we see, this is because targetManager.SyncCh() has no error reporting
+							// mechanism
+							changedKeys := make([]model.LabelName, 0)
+							for k, v := range ls {
+								// if the new labelset doesn't have it, remove it
+								if oV, ok := target[k]; !ok {
+									delete(ls, k)
+									changedKeys = append(changedKeys, k)
+								} else if v != oV { // If the keys both exist but values don't
+									delete(ls, k)
+									delete(target, k)
+									changedKeys = append(changedKeys, k)
+								}
+							}
+							for k, _ := range target {
+								// if the new labelset doesn't have it, remove it
+								if _, ok := ls[k]; !ok {
+									delete(target, k)
+									changedKeys = append(changedKeys, k)
+								}
+							}
+							logrus.Warnf("relabel_configs for server group created different labelsets for targets within the same server group; using intersection of labelsets: different keys=%v", changedKeys)
+						}
+					}
 				}
 			}
 		}
-		s.urls.Store(targets)
+
+		s.state.Store(&ServerGroupState{
+			Targets: targets,
+			// Merge labels we just got with the statically configured ones, this way the
+			// static ones take priority
+			Labels: ls.Merge(s.Cfg.Labels),
+		})
 
 		if !s.loaded {
 			s.loaded = true
@@ -155,34 +218,18 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	return nil
 }
 
-func (s *ServerGroup) Targets() []string {
-	tmp := s.urls.Load()
-	if ret, ok := tmp.([]string); ok {
+func (s *ServerGroup) State() *ServerGroupState {
+	tmp := s.state.Load()
+	if ret, ok := tmp.(*ServerGroupState); ok {
 		return ret
 	} else {
 		return nil
 	}
 }
 
-func (s *ServerGroup) FilterMatchers(matchers []*labels.Matcher) ([]*labels.Matcher, bool) {
-	filteredMatchers := make([]*labels.Matcher, 0, len(matchers))
-
-	// Look over the matchers passed in, if any exist in our labels, we'll do the matcher, and then strip
-	for _, matcher := range matchers {
-		if localValue, ok := s.Cfg.Labels[model.LabelName(matcher.Name)]; ok {
-			// If the label exists locally and isn't there, then skip it
-			if !matcher.Matches(string(localValue)) {
-				return nil, false
-			}
-		} else {
-			filteredMatchers = append(filteredMatchers, matcher)
-		}
-	}
-	return filteredMatchers, true
-}
-
 func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
-	filteredMatchers, ok := s.FilterMatchers(matchers)
+	state := s.State()
+	filteredMatchers, ok := FilterMatchers(state.Labels, matchers)
 	if !ok {
 		return nil, nil
 	}
@@ -214,15 +261,15 @@ func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matche
 }
 
 func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
-	targets := s.Targets()
+	state := s.State()
 
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(targets))
+	resultChans := make([]chan interface{}, len(state.Targets))
 
 	path := s.getPath("/api/v1/read")
 
-	for i, target := range targets {
+	for i, target := range state.Targets {
 		resultChans[i] = make(chan interface{}, 1)
 		parsedUrl, err := url.Parse(target + path)
 		if err != nil {
@@ -277,7 +324,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 					}
 				}
 
-				err = promhttputil.ValueAddLabelSet(matrix, s.Cfg.Labels)
+				err = promhttputil.ValueAddLabelSet(matrix, state.Labels)
 				if err != nil {
 					retChan <- err
 					return
@@ -293,7 +340,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 	var result model.Value
 	var lastError error
 	errCount := 0
-	for i := 0; i < len(targets); i++ {
+	for i := 0; i < len(state.Targets); i++ {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -321,7 +368,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 		}
 	}
 
-	if errCount != 0 && errCount == len(targets) {
+	if errCount != 0 && errCount == len(state.Targets) {
 		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
 	}
 
@@ -330,6 +377,8 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 
 // TODO: change the args here from url.Values to something else (probably matchers and start/end more like remote read)
 func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Values) (model.Value, error) {
+	state := s.State()
+
 	path = s.getPath(path)
 	// Make a copy of Values since we're going to mutate it
 	values := make(url.Values)
@@ -344,7 +393,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 	}
 
 	// Walk the expression, to filter out any LabelMatchers that match etc.
-	filterVisitor := &LabelFilterVisitor{s, true}
+	filterVisitor := &LabelFilterVisitor{s, state.Labels, true}
 	if _, err := promql.Walk(ctx, filterVisitor, &promql.EvalStmt{Expr: e}, e, nil, nil); err != nil {
 		return nil, err
 	}
@@ -353,13 +402,11 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 	}
 	values.Set("query", e.String())
 
-	targets := s.Targets()
-
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(targets))
+	resultChans := make([]chan interface{}, len(state.Targets))
 
-	for i, target := range targets {
+	for i, target := range state.Targets {
 		resultChans[i] = make(chan interface{}, 1)
 		parsedUrl, err := url.Parse(target + path)
 		if err != nil {
@@ -368,7 +415,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 		parsedUrl.RawQuery = values.Encode()
 		go func(retChan chan interface{}, stringUrl string) {
 			start := time.Now()
-			result, err := promclient.GetData(childContext, stringUrl, s.Client, s.Cfg.Labels)
+			result, err := promclient.GetData(childContext, stringUrl, s.Client, state.Labels)
 			took := time.Now().Sub(start)
 			if err != nil {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(float64(took))
@@ -384,7 +431,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 	var result model.Value
 	var lastError error
 	errCount := 0
-	for i := 0; i < len(targets); i++ {
+	for i := 0; i < len(state.Targets); i++ {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -411,7 +458,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 		}
 	}
 
-	if errCount != 0 && errCount == len(targets) {
+	if errCount != 0 && errCount == len(state.Targets) {
 		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
 	}
 
@@ -419,14 +466,14 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 }
 
 func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) ([]model.LabelValue, error) {
-	targets := s.Targets()
+	state := s.State()
 	path = s.getPath(path)
 
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(targets))
+	resultChans := make([]chan interface{}, len(state.Targets))
 
-	for i, target := range targets {
+	for i, target := range state.Targets {
 		resultChans[i] = make(chan interface{}, 1)
 		parsedUrl, err := url.Parse(target + path)
 		if err != nil {
@@ -450,7 +497,7 @@ func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) ([
 	var result []model.LabelValue
 	var lastError error
 	errCount := 0
-	for i := 0; i < len(targets); i++ {
+	for i := 0; i < len(state.Targets); i++ {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -472,7 +519,7 @@ func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) ([
 	}
 
 	// If we got only errors, lets return that
-	if errCount == len(targets) {
+	if errCount == len(state.Targets) {
 		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
 	}
 
@@ -480,7 +527,9 @@ func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) ([
 }
 
 func (s *ServerGroup) GetSeries(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
-	filteredMatchers, ok := s.FilterMatchers(matchers)
+	state := s.State()
+
+	filteredMatchers, ok := FilterMatchers(state.Labels, matchers)
 	if !ok {
 		return nil, nil
 	}
@@ -501,13 +550,11 @@ func (s *ServerGroup) GetSeries(ctx context.Context, start, end time.Time, match
 	values.Add("start", model.Time(timestamp.FromTime(start)).String())
 	values.Add("end", model.Time(timestamp.FromTime(end)).String())
 
-	targets := s.Targets()
-
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(targets))
+	resultChans := make([]chan interface{}, len(state.Targets))
 
-	for i, target := range targets {
+	for i, target := range state.Targets {
 		resultChans[i] = make(chan interface{}, 1)
 		parsedUrl, err := url.Parse(target + urlBase)
 		if err != nil {
@@ -516,7 +563,7 @@ func (s *ServerGroup) GetSeries(ctx context.Context, start, end time.Time, match
 		parsedUrl.RawQuery = values.Encode()
 		go func(retChan chan interface{}, stringUrl string) {
 			start := time.Now()
-			result, err := promclient.GetSeries(childContext, stringUrl, s.Client, s.Cfg.Labels)
+			result, err := promclient.GetSeries(childContext, stringUrl, s.Client, state.Labels)
 			took := time.Now().Sub(start)
 			if err != nil {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(float64(took))
@@ -532,7 +579,7 @@ func (s *ServerGroup) GetSeries(ctx context.Context, start, end time.Time, match
 	var result model.Value
 	var lastError error
 	errCount := 0
-	for i := 0; i < len(targets); i++ {
+	for i := 0; i < len(state.Targets); i++ {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -559,7 +606,7 @@ func (s *ServerGroup) GetSeries(ctx context.Context, start, end time.Time, match
 		}
 	}
 
-	if errCount != 0 && errCount == len(targets) {
+	if errCount != 0 && errCount == len(state.Targets) {
 		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
 	}
 
