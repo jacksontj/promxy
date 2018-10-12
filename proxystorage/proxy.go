@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -15,16 +14,17 @@ import (
 	"github.com/jacksontj/promxy/proxyquerier"
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/sirupsen/logrus"
 )
 
 type proxyStorageState struct {
 	serverGroups []*servergroup.ServerGroup
 	cfg          *proxyconfig.PromxyConfig
+	appender     storage.Appender
 }
 
 func (p *proxyStorageState) Ready() {
@@ -82,6 +82,18 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		return fmt.Errorf("Error Applying Config to one or more server group(s)")
 	}
 
+	// Check for remote_write (for appender)
+	if c.PromConfig.RemoteWriteConfigs != nil {
+		remote := remote.NewStorage(nil, func() (int64, error) { return 0, nil }, 1*time.Second)
+		if err := remote.ApplyConfig(&c.PromConfig); err != nil {
+			return err
+		}
+		newState.appender = remote
+	} else {
+		newState.appender = &appenderStub{}
+
+	}
+
 	newState.Ready()         // Wait for the newstate to be ready
 	oldState := p.GetState() // Fetch the old state
 	p.state.Store(newState)  // Store the new state
@@ -108,33 +120,9 @@ func (p *ProxyStorage) StartTime() (int64, error) {
 	return 0, nil
 }
 
-// TODO: remove?
-type appenderStub struct{}
-
-// Alerting rules append metrics as well, so we want to make sure we don't *spam* the logs
-// when we have real metrics
-var appenderLock = sync.Mutex{}
-var appenderWarningTime time.Time
-
-func (a *appenderStub) Add(l labels.Labels, t int64, v float64) (uint64, error) { return 0, nil }
-
-func (a *appenderStub) AddFast(l labels.Labels, ref uint64, t int64, v float64) error { return nil }
-
-// Commit submits the collected samples and purges the batch.
-func (a *appenderStub) Commit() error { return nil }
-
-func (a *appenderStub) Rollback() error { return nil }
-
 func (p *ProxyStorage) Appender() (storage.Appender, error) {
-	appenderLock.Lock()
-	now := time.Now()
-	if now.Sub(appenderWarningTime) > time.Minute {
-		logrus.Warning("Promxy cannot *write* metrics but is being asked to. This is caused by (1) RecordingRules or (2) Rule Evaluation. Details in: https://github.com/jacksontj/promxy/issues/79")
-		appenderWarningTime = now
-	}
-	appenderLock.Unlock()
-
-	return &appenderStub{}, nil
+	state := p.GetState()
+	return state.appender, nil
 }
 
 // TODO: actually close things?
