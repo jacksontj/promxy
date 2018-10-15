@@ -19,3 +19,4 @@ test:
 .PHONY: release
 release:
 	./build.bash github.com/jacksontj/promxy/cmd/promxy $(BUILD)
+	./build.bash github.com/jacksontj/promxy/cmd/remote_write_exporter $(BUILD)
