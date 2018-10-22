@@ -68,6 +68,15 @@ Promxy currently does a complete scatter-gather to all configured server groups.
 There are plans to [reduce scatter-gather queries](https://github.com/jacksontj/promxy/issues/2)
 but in practice the current "scatter-gather always" implementation hasn't been a bottleneck.
 
+### How do I use alerting/recording rules in promxy?
+Promxy is simply an aggregating proxy in front of your prometheus infrastructure. As such, you can use promxy to
+create alerting/recording rules which will execute across your entire prometheus infrastructure. For example, if
+you wanted to know that the global error rate was <10% this would be impossible on the individual prometheus hosts
+(without federation, or re-scraping) but trivial in promxy.
+
+**Note**: recording rules in regular prometheus write to their local tsdb. Promxy has no local tsdb, so if you wish
+to use recording rules (or see the metrics from alerting rules) a [remote_write](https://github.com/jacksontj/promxy/blob/master/cmd/promxy/config.yaml#L22)
+endpoint must be defined in the promxy config (which is where it will send those metrics).
 
 ## Questions/Bugs/etc.
 Feedback is **greatly** appreciated. If you find a bug, have a feature request, or just have a general question feel free to open up an issue!
