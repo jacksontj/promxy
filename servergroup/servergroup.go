@@ -31,7 +31,7 @@ import (
 var (
 	// TODO: have a marker for "which" servergroup
 	serverGroupSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name: "server_group_request",
+		Name: "server_group_request_duration_seconds",
 		Help: "Summary of calls to servergroup instances",
 	}, []string{"host", "call", "status"})
 )
@@ -298,10 +298,10 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 			took := time.Now().Sub(start)
 
 			if err != nil {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "remoteread", "error").Observe(float64(took))
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "remoteread", "error").Observe(took.Seconds())
 				retChan <- err
 			} else {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "remoteread", "success").Observe(float64(took))
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "remoteread", "success").Observe(took.Seconds())
 				// convert result (timeseries) to SampleStream
 				matrix := make(model.Matrix, len(result.Timeseries))
 				for i, ts := range result.Timeseries {
@@ -418,10 +418,10 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 			result, err := promclient.GetData(childContext, stringUrl, s.Client, state.Labels)
 			took := time.Now().Sub(start)
 			if err != nil {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(float64(took))
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(took.Seconds())
 				retChan <- err
 			} else {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "success").Observe(float64(took))
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "success").Observe(took.Seconds())
 				retChan <- result
 			}
 		}(resultChans[i], parsedUrl.String())
@@ -484,10 +484,10 @@ func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) ([
 			result, err := promclient.GetValuesForLabelName(childContext, stringUrl, s.Client)
 			took := time.Now().Sub(start)
 			if err != nil {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "error").Observe(float64(took))
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "error").Observe(took.Seconds())
 				retChan <- err
 			} else {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "success").Observe(float64(took))
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "success").Observe(took.Seconds())
 				retChan <- result
 			}
 		}(resultChans[i], parsedUrl.String())
@@ -566,10 +566,10 @@ func (s *ServerGroup) GetSeries(ctx context.Context, start, end time.Time, match
 			result, err := promclient.GetSeries(childContext, stringUrl, s.Client, state.Labels)
 			took := time.Now().Sub(start)
 			if err != nil {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(float64(took))
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(took.Seconds())
 				retChan <- err
 			} else {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "success").Observe(float64(took))
+				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "success").Observe(took.Seconds())
 				retChan <- result
 			}
 		}(resultChans[i], parsedUrl.String())
