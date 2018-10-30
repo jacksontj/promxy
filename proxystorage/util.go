@@ -7,6 +7,27 @@ import (
 	"github.com/prometheus/prometheus/promql"
 )
 
+type MultiVisitor struct {
+	visitors []promql.Visitor
+}
+
+func (v *MultiVisitor) Visit(node promql.Node, path []promql.Node) (promql.Visitor, error) {
+	var visitorErr error
+	for i, visitor := range v.visitors {
+		if visitor == nil {
+			continue
+		}
+		visitorRet, err := visitor.Visit(node, path)
+		if err != nil {
+			visitorErr = err
+		}
+		v.visitors[i] = visitorRet
+	}
+
+	return v, visitorErr
+
+}
+
 type OffsetFinder struct {
 	Found  bool
 	Offset time.Duration
@@ -38,7 +59,7 @@ func (o *OffsetFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor,
 	if o.Error == nil {
 		return o, nil
 	} else {
-		return nil, o.Error
+		return nil, nil
 	}
 }
 

@@ -145,8 +145,11 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 	// If there is a child that is an aggregator we cannot do anything (as they have their own
 	// rules around combining). We'll skip this node and let a lower layer take this on
 	aggFinder := &BooleanFinder{Func: isAgg}
+	offsetFinder := &OffsetFinder{}
 
-	if _, err := promql.Walk(ctx, aggFinder, s, node, nil, nil); err != nil {
+	visitor := &MultiVisitor{[]promql.Visitor{aggFinder, offsetFinder}}
+
+	if _, err := promql.Walk(ctx, visitor, s, node, nil, nil); err != nil {
 		return nil, err
 	}
 
@@ -161,16 +164,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 	// to wait until further in execution where they all match
 	var offset time.Duration
 
-	visitor := &OffsetFinder{}
-	if _, err := promql.Walk(ctx, visitor, s, node, nil, nil); err != nil {
-		return nil, nil
-	}
 	// If we couldn't find an offset, then something is wrong-- lets skip
 	// Also if there was an error, skip
-	if !visitor.Found || visitor.Error != nil {
+	if !offsetFinder.Found || offsetFinder.Error != nil {
 		return nil, nil
 	}
-	offset = visitor.Offset
+	offset = offsetFinder.Offset
 
 	// Function to recursivelt remove offset. This is needed as we're using
 	// the node API to String() the query to downstreams. Promql's iterators require
