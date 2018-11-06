@@ -22,9 +22,10 @@ import (
 )
 
 type proxyStorageState struct {
-	serverGroups []*servergroup.ServerGroup
-	cfg          *proxyconfig.PromxyConfig
-	appender     storage.Appender
+	serverGroups   []*servergroup.ServerGroup
+	cfg            *proxyconfig.PromxyConfig
+	appender       storage.Appender
+	appenderCloser func() error
 }
 
 func (p *proxyStorageState) Ready() {
@@ -33,10 +34,16 @@ func (p *proxyStorageState) Ready() {
 	}
 }
 
-func (p *proxyStorageState) Cancel() {
+func (p *proxyStorageState) Cancel(n *proxyStorageState) {
 	if p.serverGroups != nil {
 		for _, sg := range p.serverGroups {
 			sg.Cancel()
+		}
+	}
+	// We call close if the new one is nil, or if the appanders don't match
+	if n == nil || p.appender != n.appender {
+		if p.appenderCloser != nil {
+			p.appenderCloser()
 		}
 	}
 }
@@ -55,11 +62,13 @@ func (p *ProxyStorage) GetState() *proxyStorageState {
 	if sg, ok := tmp.(*proxyStorageState); ok {
 		return sg
 	} else {
-		return nil
+		return &proxyStorageState{}
 	}
 }
 
 func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
+	oldState := p.GetState() // Fetch the old state
+
 	failed := false
 
 	newState := &proxyStorageState{
@@ -76,29 +85,37 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	}
 
 	if failed {
-		for _, sg := range newState.serverGroups {
-			sg.Cancel()
-		}
+		newState.Cancel(nil)
 		return fmt.Errorf("Error Applying Config to one or more server group(s)")
 	}
 
 	// Check for remote_write (for appender)
 	if c.PromConfig.RemoteWriteConfigs != nil {
-		remote := remote.NewStorage(nil, func() (int64, error) { return 0, nil }, 1*time.Second)
-		if err := remote.ApplyConfig(&c.PromConfig); err != nil {
-			return err
+		switch oldAppender := oldState.appender.(type) {
+		// If the old one was a remote storage, we just need to apply config
+		case *remote.Storage:
+			if err := oldAppender.ApplyConfig(&c.PromConfig); err != nil {
+				return err
+			}
+			newState.appender = oldState.appender
+			newState.appenderCloser = oldState.appenderCloser
+		// if it was an appenderstub we just need to replace
+		default:
+			remote := remote.NewStorage(nil, func() (int64, error) { return 0, nil }, 1*time.Second)
+			if err := remote.ApplyConfig(&c.PromConfig); err != nil {
+				return err
+			}
+			newState.appender = remote
+			newState.appenderCloser = remote.Close
 		}
-		newState.appender = remote
 	} else {
 		newState.appender = &appenderStub{}
-
 	}
 
-	newState.Ready()         // Wait for the newstate to be ready
-	oldState := p.GetState() // Fetch the old state
-	p.state.Store(newState)  // Store the new state
+	newState.Ready()        // Wait for the newstate to be ready
+	p.state.Store(newState) // Store the new state
 	if oldState != nil {
-		oldState.Cancel() // Cancel the old one
+		oldState.Cancel(newState) // Cancel the old one
 	}
 
 	return nil
