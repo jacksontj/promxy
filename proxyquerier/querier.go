@@ -7,6 +7,7 @@ import (
 	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/servergroup"
+	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/timestamp"
@@ -47,7 +48,7 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		result, err = h.ServerGroups.GetValue(h.Ctx, timestamp.Time(selectParams.Start), timestamp.Time(selectParams.End), matchers)
 	}
 	if err != nil {
-		return nil, err
+		return nil, errors.Cause(err)
 	}
 
 	iterators := promclient.IteratorsForValue(result)
@@ -72,7 +73,7 @@ func (h *ProxyQuerier) LabelValues(name string) ([]string, error) {
 
 	result, err := h.ServerGroups.GetValuesForLabelName(h.Ctx, "/api/v1/label/"+string(name)+"/values")
 	if err != nil {
-		return nil, err
+		return nil, errors.Cause(err)
 	}
 
 	ret := make([]string, len(result))

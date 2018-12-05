@@ -13,6 +13,7 @@ import (
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/proxyquerier"
 	"github.com/jacksontj/promxy/servergroup"
+	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/promql"
@@ -230,7 +231,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 			result, err = serverGroups.GetData(ctx, urlBase, values)
 			if err != nil {
-				return nil, err
+				return nil, errors.Cause(err)
 			}
 
 		// Convert avg into sum() / count()
@@ -275,7 +276,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 			result, err = serverGroups.GetData(ctx, urlBase, values)
 			if err != nil {
-				return nil, err
+				return nil, errors.Cause(err)
 			}
 			// TODO: have a reverse method in promql/lex.go
 			n.Op = 41 // SUM
@@ -327,7 +328,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 		result, err := serverGroups.GetData(ctx, urlBase, values)
 		if err != nil {
-			return nil, err
+			return nil, errors.Cause(err)
 		}
 		iterators := promclient.IteratorsForValue(result)
 		series := make([]storage.Series, len(iterators))

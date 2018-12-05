@@ -13,6 +13,7 @@ import (
 
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/promhttputil"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
@@ -369,7 +370,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 	}
 
 	if errCount != 0 && errCount == len(state.Targets) {
-		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
+		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
 	}
 
 	return result, nil
@@ -459,7 +460,7 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 	}
 
 	if errCount != 0 && errCount == len(state.Targets) {
-		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
+		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
 	}
 
 	return result, nil
@@ -520,7 +521,7 @@ func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) ([
 
 	// If we got only errors, lets return that
 	if errCount == len(state.Targets) {
-		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
+		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
 	}
 
 	return result, nil
@@ -607,7 +608,7 @@ func (s *ServerGroup) GetSeries(ctx context.Context, start, end time.Time, match
 	}
 
 	if errCount != 0 && errCount == len(state.Targets) {
-		return nil, fmt.Errorf("Unable to fetch from downstream servers, lastError: %s", lastError.Error())
+		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
 	}
 
 	return result, nil
