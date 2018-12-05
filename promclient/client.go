@@ -8,15 +8,16 @@ import (
 	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/mailru/easyjson"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/promql"
 	"github.com/sirupsen/logrus"
 )
 
-func DoRequest(ctx context.Context, url string, client *http.Client, responseStruct easyjson.Unmarshaler) error {
+func DoRequest(ctx context.Context, url string, client *http.Client, responseStruct easyjson.Unmarshaler) (int, error) {
 	logrus.Debugf("sending request downstream: %s", url)
 	// Create request
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// Pass the context on
@@ -25,16 +26,22 @@ func DoRequest(ctx context.Context, url string, client *http.Client, responseStr
 	// Send the request
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return easyjson.UnmarshalFromReader(resp.Body, responseStruct)
+	return resp.StatusCode, easyjson.UnmarshalFromReader(resp.Body, responseStruct)
 }
 
 // HTTP client for prometheus
 func GetData(ctx context.Context, url string, client *http.Client, labelset model.LabelSet) (model.Value, error) {
 	promResp := &DataResult{}
-	if err := DoRequest(ctx, url, client, promResp); err == nil {
+	statusCode, err := DoRequest(ctx, url, client, promResp)
+	switch statusCode {
+	case http.StatusServiceUnavailable:
+		return nil, promql.ErrQueryTimeout(promResp.Error)
+	}
+
+	if err == nil {
 		if promResp.Status != promhttputil.StatusSuccess {
 			return nil, fmt.Errorf(promResp.Error)
 		}
@@ -50,7 +57,13 @@ func GetData(ctx context.Context, url string, client *http.Client, labelset mode
 
 func GetSeries(ctx context.Context, url string, client *http.Client, labelset model.LabelSet) (model.Value, error) {
 	promResp := &SeriesResult{}
-	if err := DoRequest(ctx, url, client, promResp); err == nil {
+	statusCode, err := DoRequest(ctx, url, client, promResp)
+	switch statusCode {
+	case http.StatusServiceUnavailable:
+		return nil, promql.ErrQueryTimeout(promResp.Error)
+	}
+
+	if err == nil {
 		if promResp.Status != promhttputil.StatusSuccess {
 			return nil, fmt.Errorf(promResp.Error)
 		}
@@ -75,7 +88,13 @@ func GetSeries(ctx context.Context, url string, client *http.Client, labelset mo
 
 func GetValuesForLabelName(ctx context.Context, url string, client *http.Client) ([]model.LabelValue, error) {
 	promResp := &LabelResult{}
-	if err := DoRequest(ctx, url, client, promResp); err == nil {
+	statusCode, err := DoRequest(ctx, url, client, promResp)
+	switch statusCode {
+	case http.StatusServiceUnavailable:
+		return nil, promql.ErrQueryTimeout(promResp.Error)
+	}
+
+	if err == nil {
 		if promResp.Status != promhttputil.StatusSuccess {
 			return nil, fmt.Errorf(promResp.Error)
 		}
