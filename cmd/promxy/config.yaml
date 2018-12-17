@@ -40,6 +40,9 @@ promxy:
       anti_affinity: 10s
       # options for promxy's HTTP client when talking to hosts in server_groups
       http_client:
+        # dial_timeout controls how long promxy will wait for a connection to the downstream
+        # the default is 200ms.
+        dial_timeout: 1s
         tls_config:
           insecure_skip_verify: true
     # as many additional server groups as you have
