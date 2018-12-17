@@ -9,6 +9,14 @@ import (
 	sd_config "github.com/prometheus/prometheus/discovery/config"
 )
 
+var (
+	DefaultConfig = Config{
+		HTTPConfig: HTTPClientConfig{
+			DialTimeout: time.Millisecond * 2000, // Default dial timeout of 200ms
+		},
+	}
+)
+
 // Config is the configuration for a ServerGroup that promxy will talk to.
 // This is where the vast majority of options exist.
 type Config struct {
@@ -33,7 +41,7 @@ type Config struct {
 	RemoteRead bool `yaml:"remote_read"`
 	// HTTP client config for promxy to use when connecting to the various server_groups
 	// this is the same config as prometheus
-	HTTPConfig config_util.HTTPClientConfig `yaml:"http_client"`
+	HTTPConfig HTTPClientConfig `yaml:"http_client"`
 	// Scheme defines how promxy talks to this server group (http, https, etc.)
 	Scheme string `yaml:"scheme"`
 	// Labels is a set of labels that will be added to all metrics retrieved
@@ -72,4 +80,19 @@ func (c *Config) GetAntiAffinity() model.Time {
 		return model.TimeFromUnix(10) // 10s
 	}
 	return model.TimeFromUnix(int64((*c.AntiAffinity).Seconds()))
+}
+
+// UnmarshalYAML implements the yaml.Unmarshaler interface.
+func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	*c = DefaultConfig
+	// We want to set c to the defaults and then overwrite it with the input.
+	// To make unmarshal fill the plain data struct rather than calling UnmarshalYAML
+	// again, we have to hide it using a type indirection.
+	type plain Config
+	return unmarshal((*plain)(c))
+}
+
+type HTTPClientConfig struct {
+	DialTimeout time.Duration                `yaml:"dial_timeout"`
+	HTTPConfig  config_util.HTTPClientConfig `yaml:",inline"`
 }

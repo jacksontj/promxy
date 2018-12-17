@@ -187,31 +187,39 @@ func (s *ServerGroup) Sync() {
 func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	s.Cfg = cfg
 
-	// stage the client swap as well
-	// TODO: better name
-	client, err := config_util.NewClientFromConfig(cfg.HTTPConfig, "somename")
+	// Copy/paste from upstream prometheus/common until https://github.com/prometheus/common/issues/144 is resolved
+	tlsConfig, err := config_util.NewTLSConfig(&cfg.HTTPConfig.HTTPConfig.TLSConfig)
 	if err != nil {
-		return fmt.Errorf("Unable to load client from config: %s", err)
+		return errors.Wrap(err, "error loading TLS client config")
+	}
+	// The only timeout we care about is the configured scrape timeout.
+	// It is applied on request. So we leave out any timings here.
+	var rt http.RoundTripper = &http.Transport{
+		Proxy:               http.ProxyURL(cfg.HTTPConfig.HTTPConfig.ProxyURL.URL),
+		MaxIdleConns:        20000,
+		MaxIdleConnsPerHost: 1000, // see https://github.com/golang/go/issues/13801
+		DisableKeepAlives:   false,
+		TLSClientConfig:     tlsConfig,
+		DisableCompression:  true,
+		// 5 minutes is typically above the maximum sane scrape interval. So we can
+		// use keepalive for all configurations.
+		IdleConnTimeout: 5 * time.Minute,
+		DialContext:     (&net.Dialer{Timeout: cfg.HTTPConfig.DialTimeout}).DialContext,
 	}
 
-	// TODO
-	// as of now the service_discovery mechanisms in prometheus have no mechanism of
-	// removing unhealthy hosts (through relableing or otherwise). So for now we simply
-	// set a dial timeout, assuming that if we can't TCP connect in 200ms it is probably
-	// dead. Our options for doing this better in the future are (1) configurable
-	// dial timeout (2) healthchecks (3) track "healthiness" of downstream based on our
-	// requests to it -- not through other healthchecks
-	// Override the dial timeout
-	switch transport := client.Transport.(type) {
-	case *http.Transport:
-		transport.DialContext = (&net.Dialer{Timeout: 200 * time.Millisecond}).DialContext
-		// TODO: basic auth?  as reported in #70 basicAuth doesn't use this timeout.
-		// This is because prometheus has its own RoundTripper (*config.basicAuthRoundTripper)
-		// which doesn't set a timeout or expose a way to do so. For now I'm changing
-		// this just so it won't panic, but this is not a long-term solution to the issue.
+	// If a bearer token is provided, create a round tripper that will set the
+	// Authorization header correctly on each request.
+	if len(cfg.HTTPConfig.HTTPConfig.BearerToken) > 0 {
+		rt = config_util.NewBearerAuthRoundTripper(cfg.HTTPConfig.HTTPConfig.BearerToken, rt)
+	} else if len(cfg.HTTPConfig.HTTPConfig.BearerTokenFile) > 0 {
+		rt = config_util.NewBearerAuthFileRoundTripper(cfg.HTTPConfig.HTTPConfig.BearerTokenFile, rt)
 	}
 
-	s.Client = client
+	if cfg.HTTPConfig.HTTPConfig.BasicAuth != nil {
+		rt = config_util.NewBasicAuthRoundTripper(cfg.HTTPConfig.HTTPConfig.BasicAuth.Username, cfg.HTTPConfig.HTTPConfig.BasicAuth.Password, cfg.HTTPConfig.HTTPConfig.BasicAuth.PasswordFile, rt)
+	}
+
+	s.Client = &http.Client{Transport: rt}
 
 	if err := s.targetManager.ApplyConfig(map[string]sd_config.ServiceDiscoveryConfig{"foo": cfg.Hosts}); err != nil {
 		return err
