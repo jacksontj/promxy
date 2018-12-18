@@ -123,7 +123,7 @@ func (s *ServerGroup) Sync() {
 					targets = append(targets, u.String())
 
 					// We remove all private labels after we set the target entry
-					for name, _ := range target {
+					for name := range target {
 						if strings.HasPrefix(string(name), model.ReservedLabelPrefix) {
 							delete(target, name)
 						}
@@ -155,7 +155,7 @@ func (s *ServerGroup) Sync() {
 									changedKeys = append(changedKeys, k)
 								}
 							}
-							for k, _ := range target {
+							for k := range target {
 								// if the new labelset doesn't have it, remove it
 								if _, ok := ls[k]; !ok {
 									delete(target, k)
