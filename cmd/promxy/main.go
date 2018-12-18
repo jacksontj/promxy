@@ -247,12 +247,10 @@ func main() {
 		if err := ruleManager.Update(time.Duration(cfg.GlobalConfig.EvaluationInterval), files); err != nil {
 			return err
 		}
-		return nil
 
 		if cfg.RemoteWriteConfigs == nil {
 			ruleList := ruleManager.Rules()
 			// check for any recording rules, if we find any lets log a fatal and stop
-			// https://github.com/jacksontj/promxy/issues/74
 			for _, rule := range ruleList {
 				if _, ok := rule.(*rules.RecordingRule); ok {
 					return fmt.Errorf("Promxy doesn't support recording rules: %s", rule)
