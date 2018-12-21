@@ -197,39 +197,41 @@ func TestEvaluations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, fn := range files {
-		t.Run(fn, func(t *testing.T) {
-			test, err := newTestFromFile(t, fn)
-			if err != nil {
-				t.Errorf("error creating test for %s: %s", fn, err)
-			}
+	for i, psConfig := range []string{rawDoublePSConfig, rawDoublePSConfigRR} {
+		for _, fn := range files {
+			t.Run(strconv.Itoa(i)+fn, func(t *testing.T) {
+				test, err := newTestFromFile(t, fn)
+				if err != nil {
+					t.Errorf("error creating test for %s: %s", fn, err)
+				}
 
-			// Create API for the storage engine
-			srv, stopChan := startAPIForTest(test.Storage(), ":8083")
-			srv2, stopChan2 := startAPIForTest(test.Storage(), ":8084")
+				// Create API for the storage engine
+				srv, stopChan := startAPIForTest(test.Storage(), ":8083")
+				srv2, stopChan2 := startAPIForTest(test.Storage(), ":8084")
 
-			ps := getProxyStorage(rawDoublePSConfig)
-			lStorage := &LayeredStorage{ps, test.Storage()}
-			// Replace the test storage with the promxy one
-			test.SetStorage(lStorage)
-			test.QueryEngine().NodeReplacer = ps.NodeReplacer
+				ps := getProxyStorage(psConfig)
+				lStorage := &LayeredStorage{ps, test.Storage()}
+				// Replace the test storage with the promxy one
+				test.SetStorage(lStorage)
+				test.QueryEngine().NodeReplacer = ps.NodeReplacer
 
-			err = test.Run()
-			if err != nil {
-				t.Errorf("error running test %s: %s", fn, err)
-			}
+				err = test.Run()
+				if err != nil {
+					t.Errorf("error running test %s: %s", fn, err)
+				}
 
-			test.Close()
+				test.Close()
 
-			// stop server
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-			defer cancel()
-			srv.Shutdown(ctx)
-			srv2.Shutdown(ctx)
+				// stop server
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+				defer cancel()
+				srv.Shutdown(ctx)
+				srv2.Shutdown(ctx)
 
-			<-stopChan
-			<-stopChan2
-		})
+				<-stopChan
+				<-stopChan2
+			})
+		}
 	}
 }
 
