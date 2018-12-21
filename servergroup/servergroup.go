@@ -436,11 +436,18 @@ func (s *ServerGroup) QueryRange(ctx context.Context, query string, r v1.Range) 
 	return val, nil
 }
 
-// TODO: add our labels from state?
 func (s *ServerGroup) LabelValues(ctx context.Context, label string) (model.LabelValues, error) {
 	state := s.State()
 
-	return state.apiClient.LabelValues(ctx, label)
+	val, err := state.apiClient.LabelValues(ctx, label)
+	if err != nil {
+		return nil, err
+	}
+	// do we have labels that match in our state
+	if value, ok := state.Labels[model.LabelName(label)]; ok {
+		return promclient.MergeLabelValues(val, model.LabelValues{value}), nil
+	}
+	return val, nil
 }
 
 // TODO: add our labels from state?
