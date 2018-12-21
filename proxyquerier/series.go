@@ -1,9 +1,10 @@
 package proxyquerier
 
 import (
-	"github.com/jacksontj/promxy/promclient"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/storage"
+
+	"github.com/jacksontj/promxy/promclient"
 )
 
 type Series struct {

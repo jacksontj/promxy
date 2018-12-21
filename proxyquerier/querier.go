@@ -4,16 +4,17 @@ import (
 	"context"
 	"time"
 
-	"github.com/jacksontj/promxy/config"
-	"github.com/jacksontj/promxy/promclient"
-	"github.com/jacksontj/promxy/promhttputil"
-	"github.com/jacksontj/promxy/servergroup"
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
+
+	"github.com/jacksontj/promxy/config"
+	"github.com/jacksontj/promxy/promclient"
+	"github.com/jacksontj/promxy/promhttputil"
+	"github.com/jacksontj/promxy/servergroup"
 )
 
 type ProxyQuerier struct {

@@ -12,8 +12,6 @@ import (
 
 	yaml "gopkg.in/yaml.v2"
 
-	"github.com/jacksontj/promxy/config"
-	"github.com/jacksontj/promxy/proxystorage"
 	"github.com/prometheus/common/route"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/promql"
@@ -21,6 +19,9 @@ import (
 	"github.com/prometheus/prometheus/util/testutil"
 	"github.com/prometheus/prometheus/web/api/v1"
 	"github.com/sirupsen/logrus"
+
+	"github.com/jacksontj/promxy/config"
+	"github.com/jacksontj/promxy/proxystorage"
 )
 
 const rawPSConfig = `
