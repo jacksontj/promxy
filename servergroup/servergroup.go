@@ -190,7 +190,7 @@ func (s *ServerGroup) Sync() {
 
 		s.state.Store(&ServerGroupState{
 			Targets:              targets,
-			apiClient:            promclient.NewMultiApi(apiClients, model.TimeFromUnix(20)),
+			apiClient:            promclient.NewMultiApi(apiClients, s.Cfg.GetAntiAffinity()),
 			remoteStorageClients: remoteStorageClients,
 			// Merge labels we just got with the statically configured ones, this way the
 			// static ones take priority
