@@ -6,6 +6,7 @@ import (
 
 	"github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/promclient"
+	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
@@ -43,11 +44,11 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 	// the working workaround is to switch based on the selectParams.
 	// https://github.com/prometheus/prometheus/issues/4057
 	if selectParams == nil {
-		stringMatchers := make([]string, len(matchers))
-		for i, matcher := range matchers {
-			stringMatchers[i] = matcher.String()
+		matcherString, err := promhttputil.MatcherToString(matchers)
+		if err != nil {
+			return nil, err
 		}
-		labelsets, err := h.ServerGroups.Series(h.Ctx, stringMatchers, h.Start, h.End)
+		labelsets, err := h.ServerGroups.Series(h.Ctx, []string{matcherString}, h.Start, h.End)
 		if err != nil {
 			return nil, errors.Cause(err)
 		}
