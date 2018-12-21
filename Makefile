@@ -1,7 +1,7 @@
 BUILD := build
 GO ?= go
 GOFILES := $(shell find . -name "*.go" -type f ! -path "./vendor/*")
-GOFMT ?= gofmt -s
+GOFMT ?= goimports -local=github.com/jacksontj/promxy -w
 
 .PHONY: clean
 clean:
