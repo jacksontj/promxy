@@ -436,6 +436,7 @@ func (s *ServerGroup) QueryRange(ctx context.Context, query string, r v1.Range) 
 	return val, nil
 }
 
+// LabelValues performs a query for the values of the given label.
 func (s *ServerGroup) LabelValues(ctx context.Context, label string) (model.LabelValues, error) {
 	state := s.State()
 
