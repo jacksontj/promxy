@@ -11,8 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jacksontj/promxy/promclient"
-	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/api"
 	"github.com/prometheus/client_golang/api/prometheus/v1"
@@ -27,6 +25,9 @@ import (
 	"github.com/prometheus/prometheus/relabel"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/sirupsen/logrus"
+
+	"github.com/jacksontj/promxy/promclient"
+	"github.com/jacksontj/promxy/promhttputil"
 
 	sd_config "github.com/prometheus/prometheus/discovery/config"
 )

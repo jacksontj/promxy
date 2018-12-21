@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/jacksontj/promxy/servergroup"
 	"github.com/prometheus/prometheus/config"
+
+	"github.com/jacksontj/promxy/servergroup"
 
 	"gopkg.in/yaml.v2"
 )

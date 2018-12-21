@@ -6,11 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/promql"
+
+	"github.com/jacksontj/promxy/promhttputil"
 )
 
 // Since these error types magically add in their own prefixes, we need to get

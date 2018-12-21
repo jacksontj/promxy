@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/jacksontj/promxy/promclient"
-	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
+
+	"github.com/jacksontj/promxy/promclient"
+	"github.com/jacksontj/promxy/promhttputil"
 )
 
 type ServerGroups []*ServerGroup

@@ -21,9 +21,6 @@ import (
 	"crypto/md5"
 
 	kitlog "github.com/go-kit/kit/log"
-	"github.com/jacksontj/promxy/config"
-	"github.com/jacksontj/promxy/logging"
-	"github.com/jacksontj/promxy/proxystorage"
 	"github.com/jessevdk/go-flags"
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus"
@@ -42,6 +39,10 @@ import (
 	"github.com/prometheus/prometheus/util/strutil"
 	"github.com/prometheus/prometheus/web"
 	"github.com/sirupsen/logrus"
+
+	"github.com/jacksontj/promxy/config"
+	"github.com/jacksontj/promxy/logging"
+	"github.com/jacksontj/promxy/proxystorage"
 )
 
 var (

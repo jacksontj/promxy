@@ -1,8 +1,9 @@
 package promclient
 
 import (
-	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/mailru/easyjson/jlexer"
+
+	"github.com/jacksontj/promxy/promhttputil"
 )
 
 type DataResult struct {
