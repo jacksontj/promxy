@@ -11,10 +11,16 @@ import (
 	"github.com/prometheus/common/model"
 )
 
-func NewMultiApi(apis []API, antiAffinity model.Time) *MultiAPI {
+// MultiAPIMetricFunc defines a method where a client can record metrics about
+// the specific API calls made through this multi client
+type MultiAPIMetricFunc func(i int, api, status string, took float64)
+
+// NewMultiAPI returns a MultiAPI
+func NewMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricFunc) *MultiAPI {
 	return &MultiAPI{
 		apis:         apis,
 		antiAffinity: antiAffinity,
+		metricFunc:   metricFunc,
 	}
 }
 
@@ -22,6 +28,13 @@ func NewMultiApi(apis []API, antiAffinity model.Time) *MultiAPI {
 type MultiAPI struct {
 	apis         []API
 	antiAffinity model.Time
+	metricFunc   MultiAPIMetricFunc
+}
+
+func (m *MultiAPI) recordMetric(i int, api, status string, took float64) {
+	if m.metricFunc != nil {
+		m.metricFunc(i, api, status, took)
+	}
 }
 
 // LabelValues performs a query for the values of the given label.
@@ -32,18 +45,18 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 
 	for i, api := range m.apis {
 		resultChans[i] = make(chan interface{}, 1)
-		go func(retChan chan interface{}, api API, label string) {
-			//start := time.Now()
+		go func(i int, retChan chan interface{}, api API, label string) {
+			start := time.Now()
 			result, err := api.LabelValues(childContext, label)
-			//took := time.Now().Sub(start)
+			took := time.Now().Sub(start)
 			if err != nil {
-				//serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "error").Observe(took.Seconds())
+				m.recordMetric(i, "label_values", "error", took.Seconds())
 				retChan <- err
 			} else {
-				//serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "success").Observe(took.Seconds())
+				m.recordMetric(i, "label_values", "success", took.Seconds())
 				retChan <- result
 			}
-		}(resultChans[i], api, label)
+		}(i, resultChans[i], api, label)
 	}
 
 	// Wait for results as we get them
@@ -87,18 +100,18 @@ func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model
 
 	for i, api := range m.apis {
 		resultChans[i] = make(chan interface{}, 1)
-		go func(retChan chan interface{}, api API, query string, ts time.Time) {
-			//start := time.Now()
+		go func(i int, retChan chan interface{}, api API, query string, ts time.Time) {
+			start := time.Now()
 			result, err := api.Query(childContext, query, ts)
-			//took := time.Now().Sub(start)
+			took := time.Now().Sub(start)
 			if err != nil {
-				//serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(took.Seconds())
+				m.recordMetric(i, "query", "error", took.Seconds())
 				retChan <- err
 			} else {
-				//serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "success").Observe(took.Seconds())
+				m.recordMetric(i, "query", "success", took.Seconds())
 				retChan <- result
 			}
-		}(resultChans[i], api, query, ts)
+		}(i, resultChans[i], api, query, ts)
 	}
 
 	// Wait for results as we get them
@@ -149,18 +162,18 @@ func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 
 	for i, api := range m.apis {
 		resultChans[i] = make(chan interface{}, 1)
-		go func(retChan chan interface{}, api API, query string, r v1.Range) {
-			//start := time.Now()
+		go func(i int, retChan chan interface{}, api API, query string, r v1.Range) {
+			start := time.Now()
 			result, err := api.QueryRange(childContext, query, r)
-			//took := time.Now().Sub(start)
+			took := time.Now().Sub(start)
 			if err != nil {
-				//serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(took.Seconds())
+				m.recordMetric(i, "query_range", "error", took.Seconds())
 				retChan <- err
 			} else {
-				//serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "success").Observe(took.Seconds())
+				m.recordMetric(i, "query_range", "success", took.Seconds())
 				retChan <- result
 			}
-		}(resultChans[i], api, query, r)
+		}(i, resultChans[i], api, query, r)
 	}
 
 	// Wait for results as we get them
@@ -211,18 +224,18 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 
 	for i, api := range m.apis {
 		resultChans[i] = make(chan interface{}, 1)
-		go func(retChan chan interface{}, api API) {
-			//start := time.Now()
+		go func(i int, retChan chan interface{}, api API) {
+			start := time.Now()
 			result, err := api.Series(childContext, matches, startTime, endTime)
-			//took := time.Now().Sub(start)
+			took := time.Now().Sub(start)
 			if err != nil {
-				//serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "error").Observe(took.Seconds())
+				m.recordMetric(i, "series", "error", took.Seconds())
 				retChan <- err
 			} else {
-				//serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "success").Observe(took.Seconds())
+				m.recordMetric(i, "series", "success", took.Seconds())
 				retChan <- result
 			}
-		}(resultChans[i], api)
+		}(i, resultChans[i], api)
 	}
 
 	// Wait for results as we get them

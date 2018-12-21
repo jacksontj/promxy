@@ -24,12 +24,12 @@ func (s ServerGroups) getAPIs() []promclient.API {
 
 // Query performs a query for the given time.
 func (s ServerGroups) Query(ctx context.Context, query string, ts time.Time) (model.Value, error) {
-	return promclient.NewMultiApi(s.getAPIs(), model.TimeFromUnix(0)).Query(ctx, query, ts)
+	return promclient.NewMultiAPI(s.getAPIs(), model.TimeFromUnix(0), nil).Query(ctx, query, ts)
 }
 
 // QueryRange performs a query for the given range.
 func (s ServerGroups) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, error) {
-	return promclient.NewMultiApi(s.getAPIs(), model.TimeFromUnix(0)).QueryRange(ctx, query, r)
+	return promclient.NewMultiAPI(s.getAPIs(), model.TimeFromUnix(0), nil).QueryRange(ctx, query, r)
 }
 
 // GetValue fetches a `model.Value` from the servergroups
@@ -84,10 +84,10 @@ func (s ServerGroups) GetValue(ctx context.Context, start, end time.Time, matche
 }
 
 func (s ServerGroups) LabelValues(ctx context.Context, label string) (model.LabelValues, error) {
-	return promclient.NewMultiApi(s.getAPIs(), model.TimeFromUnix(0)).LabelValues(ctx, label)
+	return promclient.NewMultiAPI(s.getAPIs(), model.TimeFromUnix(0), nil).LabelValues(ctx, label)
 }
 
 // Series finds series by label matchers.
 func (s ServerGroups) Series(ctx context.Context, matches []string, startTime, endTime time.Time) ([]model.LabelSet, error) {
-	return promclient.NewMultiApi(s.getAPIs(), model.TimeFromUnix(0)).Series(ctx, matches, startTime, endTime)
+	return promclient.NewMultiAPI(s.getAPIs(), model.TimeFromUnix(0), nil).Series(ctx, matches, startTime, endTime)
 }
