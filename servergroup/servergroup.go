@@ -14,6 +14,8 @@ import (
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/api"
+	"github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
@@ -66,7 +68,8 @@ func New() *ServerGroup {
 // Encapsulate the state of a serverGroup from service discovery
 type ServerGroupState struct {
 	// Targets is the list of target URLs for this discovery round
-	Targets []string
+	Targets   []string
+	apiClient promclient.API
 	// Labels that should be applied to metrics from this serverGroup
 	Labels model.LabelSet
 }
@@ -104,6 +107,7 @@ func (s *ServerGroup) Sync() {
 
 	for targetGroupMap := range syncCh {
 		targets := make([]string, 0)
+		apiClients := make([]promclient.API, 0)
 		var ls model.LabelSet
 
 		for _, targetGroupList := range targetGroupMap {
@@ -119,8 +123,17 @@ func (s *ServerGroup) Sync() {
 					u := &url.URL{
 						Scheme: string(s.Cfg.GetScheme()),
 						Host:   string(target[model.AddressLabel]),
+						Path:   s.Cfg.PathPrefix,
 					}
 					targets = append(targets, u.String())
+
+					client, err := api.NewClient(api.Config{Address: u.String(), RoundTripper: s.Client.Transport})
+					if err != nil {
+						panic(err) // TODO: shouldn't be possible? If this happens I guess we log and skip?
+					}
+					apiClients = append(apiClients, v1.NewAPI(client))
+
+					// TODO: create remoteread client
 
 					// We remove all private labels after we set the target entry
 					for name := range target {
@@ -170,7 +183,8 @@ func (s *ServerGroup) Sync() {
 		}
 
 		s.state.Store(&ServerGroupState{
-			Targets: targets,
+			Targets:   targets,
+			apiClient: promclient.NewMultiApi(apiClients, model.TimeFromUnix(20)),
 			// Merge labels we just got with the statically configured ones, this way the
 			// static ones take priority
 			Labels: ls.Merge(s.Cfg.Labels),
@@ -246,20 +260,12 @@ func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matche
 			return nil, err
 		}
 
-		// Create the query params
-		values := url.Values{}
-
-		// We want to do a normal query (for raw data)
-		urlBase := "/api/v1/query"
-
 		// We want to grab only the raw datapoints, so we do that through the query interface
 		// passing in a duration that is at least as long as ours (the added second is to deal
 		// with any rounding error etc since the duration is a floating point and we are casting
 		// to an int64
-		values.Add("query", pql+fmt.Sprintf("[%ds]", int64(end.Sub(start).Seconds())+1))
-		values.Add("time", model.Time(timestamp.FromTime(end)).String())
-
-		return s.GetData(ctx, urlBase, values)
+		query := pql + fmt.Sprintf("[%ds]", int64(end.Sub(start).Seconds())+1)
+		return s.Query(ctx, query, end)
 	}
 }
 
@@ -382,19 +388,12 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 	return result, nil
 }
 
-// TODO: change the args here from url.Values to something else (probably matchers and start/end more like remote read)
-func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Values) (model.Value, error) {
+// Query performs a query for the given time.
+func (s *ServerGroup) Query(ctx context.Context, query string, ts time.Time) (model.Value, error) {
 	state := s.State()
 
-	path = s.getPath(path)
-	// Make a copy of Values since we're going to mutate it
-	values := make(url.Values)
-	for k, v := range inValues {
-		values[k] = v
-	}
-
 	// Parse out the promql query into expressions etc.
-	e, err := promql.ParseExpr(values.Get("query"))
+	e, err := promql.ParseExpr(query)
 	if err != nil {
 		return nil, err
 	}
@@ -407,215 +406,57 @@ func (s *ServerGroup) GetData(ctx context.Context, path string, inValues url.Val
 	if !filterVisitor.filterMatch {
 		return nil, nil
 	}
-	values.Set("query", e.String())
 
-	childContext, childContextCancel := context.WithCancel(ctx)
-	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(state.Targets))
-
-	for i, target := range state.Targets {
-		resultChans[i] = make(chan interface{}, 1)
-		parsedUrl, err := url.Parse(target + path)
-		if err != nil {
-			return nil, err
-		}
-		parsedUrl.RawQuery = values.Encode()
-		go func(retChan chan interface{}, stringUrl string) {
-			start := time.Now()
-			result, err := promclient.GetData(childContext, stringUrl, s.Client, state.Labels)
-			took := time.Now().Sub(start)
-			if err != nil {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(took.Seconds())
-				retChan <- err
-			} else {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "success").Observe(took.Seconds())
-				retChan <- result
-			}
-		}(resultChans[i], parsedUrl.String())
-	}
-
-	// Wait for results as we get them
-	var result model.Value
-	var lastError error
-	errCount := 0
-	for i := 0; i < len(state.Targets); i++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-
-		case ret := <-resultChans[i]:
-			switch retTyped := ret.(type) {
-			case error:
-				lastError = retTyped
-				errCount++
-			case model.Value:
-				// TODO: check qData.ResultType
-				if result == nil {
-					result = retTyped
-				} else {
-					var err error
-					result, err = promhttputil.MergeValues(s.Cfg.GetAntiAffinity(), result, retTyped)
-					if err != nil {
-						return nil, err
-					}
-				}
-			default:
-				return nil, fmt.Errorf("Unknown return type")
-			}
-		}
-	}
-
-	if errCount != 0 && errCount == len(state.Targets) {
-		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
-	}
-
-	return result, nil
-}
-
-func (s *ServerGroup) GetValuesForLabelName(ctx context.Context, path string) ([]model.LabelValue, error) {
-	state := s.State()
-	path = s.getPath(path)
-
-	childContext, childContextCancel := context.WithCancel(ctx)
-	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(state.Targets))
-
-	for i, target := range state.Targets {
-		resultChans[i] = make(chan interface{}, 1)
-		parsedUrl, err := url.Parse(target + path)
-		if err != nil {
-			return nil, err
-		}
-		go func(retChan chan interface{}, stringUrl string) {
-			start := time.Now()
-			result, err := promclient.GetValuesForLabelName(childContext, stringUrl, s.Client)
-			took := time.Now().Sub(start)
-			if err != nil {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "error").Observe(took.Seconds())
-				retChan <- err
-			} else {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "label_values", "success").Observe(took.Seconds())
-				retChan <- result
-			}
-		}(resultChans[i], parsedUrl.String())
-	}
-
-	// Wait for results as we get them
-	var result []model.LabelValue
-	var lastError error
-	errCount := 0
-	for i := 0; i < len(state.Targets); i++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case ret := <-resultChans[i]:
-			switch retTyped := ret.(type) {
-			case error:
-				lastError = retTyped
-				errCount++
-			case []model.LabelValue:
-				if result == nil {
-					result = retTyped
-				} else {
-					result = promclient.MergeLabelValues(result, retTyped)
-				}
-			default:
-				return nil, fmt.Errorf("Unknown return type")
-			}
-		}
-	}
-
-	// If we got only errors, lets return that
-	if errCount == len(state.Targets) {
-		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
-	}
-
-	return result, nil
-}
-
-func (s *ServerGroup) GetSeries(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
-	state := s.State()
-
-	filteredMatchers, ok := FilterMatchers(state.Labels, matchers)
-	if !ok {
-		return nil, nil
-	}
-
-	// Create the query params
-	values := url.Values{}
-
-	urlBase := s.getPath("/api/v1/series")
-
-	// Add matchers
-	// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
-	pql, err := promhttputil.MatcherToString(filteredMatchers)
+	val, err := state.apiClient.Query(ctx, e.String(), ts)
 	if err != nil {
 		return nil, err
 	}
-	values.Add("match[]", pql)
+	if err := promhttputil.ValueAddLabelSet(val, state.Labels); err != nil {
+		return nil, err
+	}
+	return val, nil
+}
 
-	values.Add("start", model.Time(timestamp.FromTime(start)).String())
-	values.Add("end", model.Time(timestamp.FromTime(end)).String())
+// QueryRange performs a query for the given range.
+func (s *ServerGroup) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, error) {
+	state := s.State()
 
-	childContext, childContextCancel := context.WithCancel(ctx)
-	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(state.Targets))
-
-	for i, target := range state.Targets {
-		resultChans[i] = make(chan interface{}, 1)
-		parsedUrl, err := url.Parse(target + urlBase)
-		if err != nil {
-			return nil, err
-		}
-		parsedUrl.RawQuery = values.Encode()
-		go func(retChan chan interface{}, stringUrl string) {
-			start := time.Now()
-			result, err := promclient.GetSeries(childContext, stringUrl, s.Client, state.Labels)
-			took := time.Now().Sub(start)
-			if err != nil {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "error").Observe(took.Seconds())
-				retChan <- err
-			} else {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "getdata", "success").Observe(took.Seconds())
-				retChan <- result
-			}
-		}(resultChans[i], parsedUrl.String())
+	// Parse out the promql query into expressions etc.
+	e, err := promql.ParseExpr(query)
+	if err != nil {
+		return nil, err
 	}
 
-	// Wait for results as we get them
-	var result model.Value
-	var lastError error
-	errCount := 0
-	for i := 0; i < len(state.Targets); i++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-
-		case ret := <-resultChans[i]:
-			switch retTyped := ret.(type) {
-			case error:
-				lastError = retTyped
-				errCount++
-			case model.Value:
-				// TODO: check qData.ResultType
-				if result == nil {
-					result = retTyped
-				} else {
-					var err error
-					result, err = promhttputil.MergeValues(s.Cfg.GetAntiAffinity(), result, retTyped)
-					if err != nil {
-						return nil, err
-					}
-				}
-			default:
-				return nil, fmt.Errorf("Unknown return type")
-			}
-		}
+	// Walk the expression, to filter out any LabelMatchers that match etc.
+	filterVisitor := &LabelFilterVisitor{s, state.Labels, true}
+	if _, err := promql.Walk(ctx, filterVisitor, &promql.EvalStmt{Expr: e}, e, nil, nil); err != nil {
+		return nil, err
+	}
+	if !filterVisitor.filterMatch {
+		return nil, nil
 	}
 
-	if errCount != 0 && errCount == len(state.Targets) {
-		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+	val, err := state.apiClient.QueryRange(ctx, e.String(), r)
+	if err != nil {
+		return nil, err
 	}
+	if err := promhttputil.ValueAddLabelSet(val, state.Labels); err != nil {
+		return nil, err
+	}
+	return val, nil
+}
 
-	return result, nil
+// TODO: add our labels from state?
+func (s *ServerGroup) LabelValues(ctx context.Context, label string) (model.LabelValues, error) {
+	state := s.State()
+
+	return state.apiClient.LabelValues(ctx, label)
+}
+
+// TODO: add our labels from state?
+// Series finds series by label matchers.
+func (s *ServerGroup) Series(ctx context.Context, matches []string, startTime, endTime time.Time) ([]model.LabelSet, error) {
+	state := s.State()
+
+	return state.apiClient.Series(ctx, matches, startTime, endTime)
 }
