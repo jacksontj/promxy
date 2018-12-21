@@ -3,13 +3,44 @@ package promclient
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/promql"
 )
+
+var (
+	timeoutPrefix  = promql.ErrQueryTimeout("").Error()
+	canceledPrefix = promql.ErrQueryCanceled("").Error()
+)
+
+// NormalizePromError converts the errors that the prometheus API client returns
+// into errors that the prometheus API server actually handles and returns proper
+// error codes for
+func NormalizePromError(err error) error {
+	if typedErr, ok := err.(*v1.Error); ok {
+		res := &DataResult{}
+		// The prometheus client does a terrible job of handling and returning errors
+		// so we need to do the work ourselves.
+		// The `Detail` is actually just the body of the response so we need
+		// to unmarshal that so we can see what happened
+		if err := res.UnmarshalJSON([]byte(typedErr.Detail)); err != nil {
+			// If the body can't be unmarshaled, return the original error
+			return typedErr
+		}
+		switch res.ErrorType {
+		case promhttputil.ErrorTimeout:
+			return promql.ErrQueryTimeout(strings.TrimPrefix(res.Error, timeoutPrefix))
+		case promhttputil.ErrorCanceled:
+			return promql.ErrQueryCanceled(strings.TrimPrefix(res.Error, canceledPrefix))
+		}
+	}
+	return err
+}
 
 // MultiAPIMetricFunc defines a method where a client can record metrics about
 // the specific API calls made through this multi client
@@ -51,7 +82,7 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 			took := time.Now().Sub(start)
 			if err != nil {
 				m.recordMetric(i, "label_values", "error", took.Seconds())
-				retChan <- err
+				retChan <- NormalizePromError(err)
 			} else {
 				m.recordMetric(i, "label_values", "success", took.Seconds())
 				retChan <- result
@@ -106,7 +137,7 @@ func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model
 			took := time.Now().Sub(start)
 			if err != nil {
 				m.recordMetric(i, "query", "error", took.Seconds())
-				retChan <- err
+				retChan <- NormalizePromError(err)
 			} else {
 				m.recordMetric(i, "query", "success", took.Seconds())
 				retChan <- result
@@ -129,7 +160,6 @@ func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model
 				lastError = retTyped
 				errCount++
 			case model.Value:
-				// TODO: check qData.ResultType
 				if result == nil {
 					result = retTyped
 				} else {
@@ -168,7 +198,7 @@ func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 			took := time.Now().Sub(start)
 			if err != nil {
 				m.recordMetric(i, "query_range", "error", took.Seconds())
-				retChan <- err
+				retChan <- NormalizePromError(err)
 			} else {
 				m.recordMetric(i, "query_range", "success", took.Seconds())
 				retChan <- result
@@ -191,7 +221,6 @@ func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 				lastError = retTyped
 				errCount++
 			case model.Value:
-				// TODO: check qData.ResultType
 				if result == nil {
 					result = retTyped
 				} else {
@@ -230,7 +259,7 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 			took := time.Now().Sub(start)
 			if err != nil {
 				m.recordMetric(i, "series", "error", took.Seconds())
-				retChan <- err
+				retChan <- NormalizePromError(err)
 			} else {
 				m.recordMetric(i, "series", "success", took.Seconds())
 				retChan <- result
