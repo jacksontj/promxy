@@ -120,7 +120,7 @@ func (s *ServerGroup) Sync() {
 						Host:   string(target[model.AddressLabel]),
 						Path:   s.Cfg.PathPrefix,
 					}
-					targets = append(targets, u.String())
+					targets = append(targets, u.Host)
 
 					client, err := api.NewClient(api.Config{Address: u.String(), RoundTripper: s.Client.Transport})
 					if err != nil {
@@ -188,9 +188,13 @@ func (s *ServerGroup) Sync() {
 			}
 		}
 
+		apiClientMetricFunc := func(i int, api, status string, took float64) {
+			serverGroupSummary.WithLabelValues(targets[i], api, status).Observe(took)
+		}
+
 		s.state.Store(&ServerGroupState{
 			Targets:              targets,
-			apiClient:            promclient.NewMultiApi(apiClients, s.Cfg.GetAntiAffinity()),
+			apiClient:            promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc),
 			remoteStorageClients: remoteStorageClients,
 			// Merge labels we just got with the statically configured ones, this way the
 			// static ones take priority
@@ -301,10 +305,10 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 			took := time.Now().Sub(queryStart)
 
 			if err != nil {
-				serverGroupSummary.WithLabelValues(client.Name(), "remoteread", "error").Observe(took.Seconds())
+				serverGroupSummary.WithLabelValues(state.Targets[i], "remoteread", "error").Observe(took.Seconds())
 				retChan <- err
 			} else {
-				serverGroupSummary.WithLabelValues(client.Name(), "remoteread", "success").Observe(took.Seconds())
+				serverGroupSummary.WithLabelValues(state.Targets[i], "remoteread", "success").Observe(took.Seconds())
 				// convert result (timeseries) to SampleStream
 				matrix := make(model.Matrix, len(result.Timeseries))
 				for i, ts := range result.Timeseries {
