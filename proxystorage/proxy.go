@@ -3,9 +3,7 @@ package proxystorage
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"reflect"
-	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -14,6 +12,7 @@ import (
 	"github.com/jacksontj/promxy/proxyquerier"
 	"github.com/jacksontj/promxy/servergroup"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/promql"
@@ -214,22 +213,18 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		switch n.Op.String() {
 		// All "reentrant" cases (meaning they can be done repeatedly and the outcome doesn't change)
 		case "sum", "min", "max", "topk", "bottomk":
-			var urlBase string
-			values := url.Values{}
 			removeOffset()
-			values.Add("query", n.String())
 
 			if s.Interval > 0 {
-				values.Add("start", model.Time(timestamp.FromTime(s.Start.Add(-offset-promql.LookbackDelta))).String())
-				values.Add("end", model.Time(timestamp.FromTime(s.End.Add(-offset))).String())
-				values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'f', -1, 64))
-				urlBase = "/api/v1/query_range"
+				result, err = serverGroups.QueryRange(ctx, n.String(), v1.Range{
+					Start: s.Start.Add(-offset - promql.LookbackDelta),
+					End:   s.End.Add(-offset),
+					Step:  s.Interval,
+				})
 			} else {
-				values.Add("time", model.Time(timestamp.FromTime(s.Start.Add(-offset))).String())
-				urlBase = "/api/v1/query"
+				result, err = serverGroups.Query(ctx, n.String(), s.Start.Add(-offset))
 			}
 
-			result, err = serverGroups.GetData(ctx, urlBase, values)
 			if err != nil {
 				return nil, errors.Cause(err)
 			}
@@ -259,22 +254,18 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 		// For count we simply need to change this to a sum over the data we get back
 		case "count":
-			var urlBase string
-			values := url.Values{}
 			removeOffset()
-			values.Add("query", n.String())
 
 			if s.Interval > 0 {
-				values.Add("start", model.Time(timestamp.FromTime(s.Start.Add(-offset-promql.LookbackDelta))).String())
-				values.Add("end", model.Time(timestamp.FromTime(s.End.Add(-offset))).String())
-				values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'f', -1, 64))
-				urlBase = "/api/v1/query_range"
+				result, err = serverGroups.QueryRange(ctx, n.String(), v1.Range{
+					Start: s.Start.Add(-offset - promql.LookbackDelta),
+					End:   s.End.Add(-offset),
+					Step:  s.Interval,
+				})
 			} else {
-				values.Add("time", model.Time(timestamp.FromTime(s.Start.Add(-offset))).String())
-				urlBase = "/api/v1/query"
+				result, err = serverGroups.Query(ctx, n.String(), s.Start.Add(-offset))
 			}
 
-			result, err = serverGroups.GetData(ctx, urlBase, values)
 			if err != nil {
 				return nil, errors.Cause(err)
 			}
@@ -311,22 +302,20 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 	// prometheus node to answer
 	case *promql.Call:
 		logrus.Debugf("call %v %v", n, n.Type())
-		var urlBase string
-		values := url.Values{}
 		removeOffset()
-		values.Add("query", n.String())
 
+		var result model.Value
+		var err error
 		if s.Interval > 0 {
-			values.Add("start", model.Time(timestamp.FromTime(s.Start.Add(-offset-promql.LookbackDelta))).String())
-			values.Add("end", model.Time(timestamp.FromTime(s.End.Add(-offset))).String())
-			values.Add("step", strconv.FormatFloat(s.Interval.Seconds(), 'f', -1, 64))
-			urlBase = "/api/v1/query_range"
+			result, err = serverGroups.QueryRange(ctx, n.String(), v1.Range{
+				Start: s.Start.Add(-offset - promql.LookbackDelta),
+				End:   s.End.Add(-offset),
+				Step:  s.Interval,
+			})
 		} else {
-			values.Add("time", model.Time(timestamp.FromTime(s.Start.Add(-offset))).String())
-			urlBase = "/api/v1/query"
+			result, err = serverGroups.Query(ctx, n.String(), s.Start.Add(-offset))
 		}
 
-		result, err := serverGroups.GetData(ctx, urlBase, values)
 		if err != nil {
 			return nil, errors.Cause(err)
 		}

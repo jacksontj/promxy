@@ -43,7 +43,23 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 	// the working workaround is to switch based on the selectParams.
 	// https://github.com/prometheus/prometheus/issues/4057
 	if selectParams == nil {
-		result, err = h.ServerGroups.GetSeries(h.Ctx, h.Start, h.End, matchers)
+		stringMatchers := make([]string, len(matchers))
+		for i, matcher := range matchers {
+			stringMatchers[i] = matcher.String()
+		}
+		labelsets, err := h.ServerGroups.Series(h.Ctx, stringMatchers, h.Start, h.End)
+		if err != nil {
+			return nil, errors.Cause(err)
+		}
+		// Convert labelsets to vectors
+		// convert to vector (there aren't points, but this way we don't have to make more merging functions)
+		retVector := make(model.Vector, len(labelsets))
+		for j, labelset := range labelsets {
+			retVector[j] = &model.Sample{
+				Metric: model.Metric(labelset),
+			}
+		}
+		result = retVector
 	} else {
 		result, err = h.ServerGroups.GetValue(h.Ctx, timestamp.Time(selectParams.Start), timestamp.Time(selectParams.End), matchers)
 	}
@@ -71,7 +87,7 @@ func (h *ProxyQuerier) LabelValues(name string) ([]string, error) {
 		}).Debug("LabelValues")
 	}()
 
-	result, err := h.ServerGroups.GetValuesForLabelName(h.Ctx, "/api/v1/label/"+string(name)+"/values")
+	result, err := h.ServerGroups.LabelValues(h.Ctx, name)
 	if err != nil {
 		return nil, errors.Cause(err)
 	}
