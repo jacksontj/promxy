@@ -13,6 +13,8 @@ import (
 	"github.com/prometheus/prometheus/promql"
 )
 
+// Since these error types magically add in their own prefixes, we need to get
+// the prefix so it doesn't get added twice
 var (
 	timeoutPrefix  = promql.ErrQueryTimeout("").Error()
 	canceledPrefix = promql.ErrQueryCanceled("").Error()
@@ -32,6 +34,8 @@ func NormalizePromError(err error) error {
 			// If the body can't be unmarshaled, return the original error
 			return typedErr
 		}
+
+		// Now we want to switch for any errors that the API server will handle differently
 		switch res.ErrorType {
 		case promhttputil.ErrorTimeout:
 			return promql.ErrQueryTimeout(strings.TrimPrefix(res.Error, timeoutPrefix))
@@ -39,6 +43,8 @@ func NormalizePromError(err error) error {
 			return promql.ErrQueryCanceled(strings.TrimPrefix(res.Error, canceledPrefix))
 		}
 	}
+
+	// If all else fails, return the original error
 	return err
 }
 
