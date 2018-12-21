@@ -296,7 +296,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 				return
 			}
 
-			start := time.Now()
+			queryStart := time.Now()
 			query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), matchers, nil)
 			if err != nil {
 				retChan <- err
@@ -304,7 +304,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 			}
 			// http://localhost:8083/api/v1/query?query=%7B__name__%3D%22metric%22%7D%5B302s%5D&time=21
 			result, err := client.Read(childContext, query)
-			took := time.Now().Sub(start)
+			took := time.Now().Sub(queryStart)
 
 			if err != nil {
 				serverGroupSummary.WithLabelValues(parsedUrl.Host, "remoteread", "error").Observe(took.Seconds())
