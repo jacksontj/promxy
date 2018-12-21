@@ -450,10 +450,48 @@ func (s *ServerGroup) LabelValues(ctx context.Context, label string) (model.Labe
 	return val, nil
 }
 
-// TODO: add our labels from state?
 // Series finds series by label matchers.
 func (s *ServerGroup) Series(ctx context.Context, matches []string, startTime, endTime time.Time) ([]model.LabelSet, error) {
 	state := s.State()
 
-	return state.apiClient.Series(ctx, matches, startTime, endTime)
+	// Now we need to filter the matches sent to us for the labels associated with this
+	// servergroup
+	filteredMatches := make([]string, 0, len(matches))
+	for _, matcher := range matches {
+		// Parse out the promql query into expressions etc.
+		e, err := promql.ParseExpr(matcher)
+		if err != nil {
+			return nil, err
+		}
+
+		// Walk the expression, to filter out any LabelMatchers that match etc.
+		filterVisitor := &LabelFilterVisitor{s, state.Labels, true}
+		if _, err := promql.Walk(ctx, filterVisitor, &promql.EvalStmt{Expr: e}, e, nil, nil); err != nil {
+			return nil, err
+		}
+		// If we didn't match, lets skip
+		if !filterVisitor.filterMatch {
+			continue
+		}
+		// if we did match, lets assign the filtered version of the matcher
+		filteredMatches = append(filteredMatches, e.String())
+	}
+
+	// If no matchers remain, then we don't have anything -- so skip
+	if len(filteredMatches) == 0 {
+		return nil, nil
+	}
+
+	v, err := state.apiClient.Series(ctx, filteredMatches, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+
+	// add our state's labels to the labelsets we return
+	for _, lset := range v {
+		for k, v := range state.Labels {
+			lset[k] = v
+		}
+	}
+	return v, nil
 }
