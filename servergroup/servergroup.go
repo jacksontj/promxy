@@ -68,8 +68,9 @@ func New() *ServerGroup {
 // Encapsulate the state of a serverGroup from service discovery
 type ServerGroupState struct {
 	// Targets is the list of target URLs for this discovery round
-	Targets   []string
-	apiClient promclient.API
+	Targets              []string
+	apiClient            promclient.API
+	remoteStorageClients []*remote.Client
 	// Labels that should be applied to metrics from this serverGroup
 	Labels model.LabelSet
 }
@@ -91,13 +92,6 @@ type ServerGroup struct {
 	state atomic.Value
 }
 
-func (s *ServerGroup) getPath(p string) string {
-	if s.Cfg.PathPrefix != "" {
-		return path.Join(s.Cfg.PathPrefix, p)
-	}
-	return p
-}
-
 func (s *ServerGroup) Cancel() {
 	s.ctxCancel()
 }
@@ -108,6 +102,7 @@ func (s *ServerGroup) Sync() {
 	for targetGroupMap := range syncCh {
 		targets := make([]string, 0)
 		apiClients := make([]promclient.API, 0)
+		remoteStorageClients := make([]*remote.Client, 0)
 		var ls model.LabelSet
 
 		for _, targetGroupList := range targetGroupMap {
@@ -134,6 +129,17 @@ func (s *ServerGroup) Sync() {
 					apiClients = append(apiClients, v1.NewAPI(client))
 
 					// TODO: create remoteread client
+					u.Path = path.Join(u.Path, "api/v1/read")
+					cfg := &remote.ClientConfig{
+						URL: &config_util.URL{u},
+						// TODO: from context?
+						Timeout: model.Duration(time.Minute * 2),
+					}
+					remoteStorageClient, err := remote.NewClient(1, cfg)
+					if err != nil {
+						panic(err)
+					}
+					remoteStorageClients = append(remoteStorageClients, remoteStorageClient)
 
 					// We remove all private labels after we set the target entry
 					for name := range target {
@@ -183,8 +189,9 @@ func (s *ServerGroup) Sync() {
 		}
 
 		s.state.Store(&ServerGroupState{
-			Targets:   targets,
-			apiClient: promclient.NewMultiApi(apiClients, model.TimeFromUnix(20)),
+			Targets:              targets,
+			apiClient:            promclient.NewMultiApi(apiClients, model.TimeFromUnix(20)),
+			remoteStorageClients: remoteStorageClients,
 			// Merge labels we just got with the statically configured ones, this way the
 			// static ones take priority
 			Labels: ls.Merge(s.Cfg.Labels),
@@ -280,26 +287,9 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 	defer childContextCancel()
 	resultChans := make([]chan interface{}, len(state.Targets))
 
-	path := s.getPath("/api/v1/read")
-
-	for i, target := range state.Targets {
+	for i, client := range state.remoteStorageClients {
 		resultChans[i] = make(chan interface{}, 1)
-		parsedUrl, err := url.Parse(target + path)
-		if err != nil {
-			return nil, err
-		}
-		go func(retChan chan interface{}, stringUrl *url.URL) {
-			cfg := &remote.ClientConfig{
-				URL: &config_util.URL{parsedUrl},
-				// TODO: from context?
-				Timeout: model.Duration(time.Minute * 2),
-			}
-			client, err := remote.NewClient(1, cfg)
-			if err != nil {
-				retChan <- err
-				return
-			}
-
+		go func(retChan chan interface{}, client *remote.Client) {
 			queryStart := time.Now()
 			query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), filteredMatchers, nil)
 			if err != nil {
@@ -311,10 +301,10 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 			took := time.Now().Sub(queryStart)
 
 			if err != nil {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "remoteread", "error").Observe(took.Seconds())
+				serverGroupSummary.WithLabelValues(client.Name(), "remoteread", "error").Observe(took.Seconds())
 				retChan <- err
 			} else {
-				serverGroupSummary.WithLabelValues(parsedUrl.Host, "remoteread", "success").Observe(took.Seconds())
+				serverGroupSummary.WithLabelValues(client.Name(), "remoteread", "success").Observe(took.Seconds())
 				// convert result (timeseries) to SampleStream
 				matrix := make(model.Matrix, len(result.Timeseries))
 				for i, ts := range result.Timeseries {
@@ -346,7 +336,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 				retChan <- matrix
 			}
 
-		}(resultChans[i], parsedUrl)
+		}(resultChans[i], client)
 	}
 
 	// Wait for results as we get them
