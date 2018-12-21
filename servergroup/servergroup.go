@@ -237,17 +237,11 @@ func (s *ServerGroup) State() *ServerGroupState {
 }
 
 func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
-	state := s.State()
-	filteredMatchers, ok := FilterMatchers(state.Labels, matchers)
-	if !ok {
-		return nil, nil
-	}
-
 	if s.Cfg.RemoteRead {
-		return s.RemoteRead(ctx, start, end, filteredMatchers)
+		return s.RemoteRead(ctx, start, end, matchers)
 	} else {
 		// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
-		pql, err := promhttputil.MatcherToString(filteredMatchers)
+		pql, err := promhttputil.MatcherToString(matchers)
 		if err != nil {
 			return nil, err
 		}
@@ -271,6 +265,10 @@ func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matche
 
 func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
 	state := s.State()
+	filteredMatchers, ok := FilterMatchers(state.Labels, matchers)
+	if !ok {
+		return nil, nil
+	}
 
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
@@ -297,7 +295,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 			}
 
 			queryStart := time.Now()
-			query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), matchers, nil)
+			query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), filteredMatchers, nil)
 			if err != nil {
 				retChan <- err
 				return
