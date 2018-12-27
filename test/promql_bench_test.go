@@ -46,7 +46,7 @@ func BenchmarkEvaluations(b *testing.B) {
 		srv, stopChan := startAPIForTest(storageA, ":8083")
 		srv2, stopChan2 := startAPIForTest(storageB, ":8084")
 		ps := getProxyStorage(rawDoublePSConfig)
-		psRemoteRead := getProxyStorage(rawDoublePSConfig)
+		psRemoteRead := getProxyStorage(rawDoublePSConfigRR)
 
 		b.Run(fn, func(b *testing.B) {
 			test, err := newTestFromFile(b, fn)
