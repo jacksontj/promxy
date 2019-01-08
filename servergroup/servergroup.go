@@ -294,7 +294,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 
 	for i, client := range state.remoteStorageClients {
 		resultChans[i] = make(chan interface{}, 1)
-		go func(retChan chan interface{}, client *remote.Client) {
+		go func(targetName string, retChan chan interface{}, client *remote.Client) {
 			queryStart := time.Now()
 			query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), filteredMatchers, nil)
 			if err != nil {
@@ -306,10 +306,10 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 			took := time.Now().Sub(queryStart)
 
 			if err != nil {
-				serverGroupSummary.WithLabelValues(state.Targets[i], "remoteread", "error").Observe(took.Seconds())
+				serverGroupSummary.WithLabelValues(targetName, "remoteread", "error").Observe(took.Seconds())
 				retChan <- err
 			} else {
-				serverGroupSummary.WithLabelValues(state.Targets[i], "remoteread", "success").Observe(took.Seconds())
+				serverGroupSummary.WithLabelValues(targetName, "remoteread", "success").Observe(took.Seconds())
 				// convert result (timeseries) to SampleStream
 				matrix := make(model.Matrix, len(result.Timeseries))
 				for i, ts := range result.Timeseries {
@@ -341,7 +341,7 @@ func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matc
 				retChan <- matrix
 			}
 
-		}(resultChans[i], client)
+		}(state.Targets[i], resultChans[i], client)
 	}
 
 	// Wait for results as we get them
