@@ -19,7 +19,7 @@ imports:
 
 .PHONY: test
 test:
-	$(GO) test ./...
+	$(GO) test -v ./...
 
 .PHONY: release
 release:
