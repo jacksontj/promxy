@@ -17,10 +17,10 @@ import (
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/testutil"
-	"github.com/prometheus/prometheus/web/api/v1"
+	v1 "github.com/prometheus/prometheus/web/api/v1"
 	"github.com/sirupsen/logrus"
 
-	"github.com/jacksontj/promxy/config"
+	proxyconfig "github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/proxystorage"
 )
 

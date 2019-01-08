@@ -8,7 +8,7 @@ import (
 
 	"github.com/jacksontj/promxy/servergroup"
 
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 )
 
 func ConfigFromFile(path string) (*Config, error) {

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/api/prometheus/v1"
+	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/promql"
@@ -16,7 +16,7 @@ import (
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/sirupsen/logrus"
 
-	"github.com/jacksontj/promxy/config"
+	proxyconfig "github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/proxyquerier"
 	"github.com/jacksontj/promxy/servergroup"

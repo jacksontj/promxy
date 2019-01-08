@@ -11,7 +11,7 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 
-	"github.com/jacksontj/promxy/config"
+	proxyconfig "github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/jacksontj/promxy/servergroup"
