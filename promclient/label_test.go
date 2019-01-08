@@ -41,36 +41,36 @@ func TestMergeLabelSets(t *testing.T) {
 		// Basic merge
 		{
 			a: []model.LabelSet{
-				model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")},
+				{model.MetricNameLabel: model.LabelValue("hosta")},
 			},
 			b: []model.LabelSet{
-				model.LabelSet{model.MetricNameLabel: model.LabelValue("hostb")},
+				{model.MetricNameLabel: model.LabelValue("hostb")},
 			},
 			merged: []model.LabelSet{
-				model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")},
-				model.LabelSet{model.MetricNameLabel: model.LabelValue("hostb")},
+				{model.MetricNameLabel: model.LabelValue("hosta")},
+				{model.MetricNameLabel: model.LabelValue("hostb")},
 			},
 		},
 		// No merge
 		{
 			a: []model.LabelSet{
-				model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")},
+				{model.MetricNameLabel: model.LabelValue("hosta")},
 			},
 			b: []model.LabelSet{},
 			merged: []model.LabelSet{
-				model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")},
+				{model.MetricNameLabel: model.LabelValue("hosta")},
 			},
 		},
 		// Dupe
 		{
 			a: []model.LabelSet{
-				model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")},
+				{model.MetricNameLabel: model.LabelValue("hosta")},
 			},
 			b: []model.LabelSet{
-				model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")},
+				{model.MetricNameLabel: model.LabelValue("hosta")},
 			},
 			merged: []model.LabelSet{
-				model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")},
+				{model.MetricNameLabel: model.LabelValue("hosta")},
 			},
 		},
 	}
