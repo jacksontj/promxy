@@ -5,3 +5,7 @@ go:
 
 # have an empty install to avoid travis doing a go get
 install: []
+
+script:
+  - make fmt && git diff --exit-code
+  - make test
