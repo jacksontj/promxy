@@ -4,8 +4,10 @@ go:
   - "1.10.x"
 
 # have an empty install to avoid travis doing a go get
-install: []
+install:
+  - go get golang.org/x/tools/cmd/goimports
 
 script:
   - make fmt && git diff --exit-code
+  - make imports && git diff --exit-code
   - make test
