@@ -60,7 +60,8 @@ type CLIOpts struct {
 	ConfigFile string `long:"config" description:"path to the config file" default:"config.yaml"`
 	LogLevel   string `long:"log-level" description:"Log level" default:"info"`
 
-	ExternalURL string `long:"web.external-url" description:"The URL under which Prometheus is externally reachable (for example, if Prometheus is served via a reverse proxy). Used for generating relative and absolute links back to Prometheus itself. If the URL has a path portion, it will be used to prefix all HTTP endpoints served by Prometheus. If omitted, relevant URL components will be derived automatically."`
+	ExternalURL     string `long:"web.external-url" description:"The URL under which Prometheus is externally reachable (for example, if Prometheus is served via a reverse proxy). Used for generating relative and absolute links back to Prometheus itself. If the URL has a path portion, it will be used to prefix all HTTP endpoints served by Prometheus. If omitted, relevant URL components will be derived automatically."`
+	EnableLifecycle bool   `long:"web.enable-lifecycle" description:"Enable shutdown and reload via HTTP request."`
 
 	QueryTimeout        time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
 	QueryMaxConcurrency int           `long:"query.max-concurrency" description:"Maximum number of queries executed concurrently." default:"1000"`
@@ -278,6 +279,8 @@ func main() {
 		RuleManager:   ruleManager,
 		Notifier:      notifierManager,
 
+		EnableLifecycle: opts.EnableLifecycle,
+
 		Flags:       opts.ToFlags(),
 		RoutePrefix: "/", // TODO: options for this?
 		ExternalURL: externalUrl,
@@ -369,6 +372,14 @@ func main() {
 	// wait for signals etc.
 	for {
 		select {
+		case rc := <-webHandler.Reload():
+			log.Infof("Reloading config")
+			if err := reloadConfig(reloadables...); err != nil {
+				log.Errorf("Error reloading config: %s", err)
+				rc <- err
+			} else {
+				rc <- nil
+			}
 		case sig := <-sigs:
 			switch sig {
 			case syscall.SIGHUP:
