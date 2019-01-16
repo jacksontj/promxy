@@ -15,6 +15,7 @@ package main
 
 import (
 	"bufio"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -26,17 +27,20 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
 	flags "github.com/jessevdk/go-flags"
+	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
 	"github.com/sirupsen/logrus"
 
+	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/prompb"
 )
 
 var opts struct {
-	BindAddr    string        `long:"bind-addr" description:"address to listen on" default:":8083"`
-	WritePath   string        `long:"write-path" description:"url path" default:"/receive"`
-	MetricsPath string        `long:"metrics-path" description:"url path" default:"/metrics"`
-	TTL         time.Duration `long:"metric-ttl" description:"how long until we TTL things out of the map" required:"true"`
+	BindAddr      string        `long:"bind-addr" description:"address to listen on" default:":8083"`
+	WritePath     string        `long:"write-path" description:"url path" default:"/receive"`
+	WriteTextPath string        `long:"write-text-path" description:"url path" default:"/receive_text"`
+	MetricsPath   string        `long:"metrics-path" description:"url path" default:"/metrics"`
+	TTL           time.Duration `long:"metric-ttl" description:"how long until we TTL things out of the map" required:"true"`
 }
 
 func main() {
@@ -109,6 +113,36 @@ func main() {
 			l.Lock()
 			m[metric.String()] = sample
 			l.Unlock()
+		}
+	})
+
+	http.HandleFunc(opts.WriteTextPath, func(w http.ResponseWriter, r *http.Request) {
+		decoder := expfmt.NewDecoder(r.Body, expfmt.FmtText) // TODO: get content-type header instead
+		for {
+			var mf dto.MetricFamily
+			err := decoder.Decode(&mf)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			vec, err := expfmt.ExtractSamples(&expfmt.DecodeOptions{Timestamp: model.Now()}, &mf)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			for _, vecSample := range vec {
+				l.Lock()
+				m[vecSample.Metric.String()] = &prompb.Sample{
+					Value:     float64(vecSample.Value),
+					Timestamp: int64(vecSample.Timestamp),
+				}
+				l.Unlock()
+			}
+
 		}
 	})
 
