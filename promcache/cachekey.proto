@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package promcache;
+
+message CacheKey {
+    string Func = 1;
+    string Query = 2;
+    int64 Start = 3;
+    int64 BucketSize = 4;
+    int64 StepOffset = 5;
+    int64 StepSize = 6;
+}

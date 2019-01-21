@@ -2,7 +2,6 @@ package promcache
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"github.com/jacksontj/promxy/promclient"
@@ -65,10 +64,16 @@ func (c *CacheClient) QueryRange(ctx context.Context, query string, r v1.Range) 
 // innerQueryRange gets queries that are within a bucket, we specifically want to query all data within that bucket
 func (c *CacheClient) innerQueryRange(ctx context.Context, bucketSize, stepOffset time.Duration, query string, r v1.Range) (model.Value, error) {
 	// Cache key for range
-	// Cache key is query_range:starttime_bucketsize_stepOffset:query:step
-	key := "query_range:" + strconv.FormatInt(r.Start.Unix(), 10) + "_" + strconv.FormatFloat(bucketSize.Seconds(), 'f', -1, 64) + "_" + strconv.FormatFloat(stepOffset.Seconds(), 'f', -1, 64) + ":" + query + ":" + strconv.FormatFloat(r.Step.Seconds(), 'f', -1, 64)
-
-	item, err := cache.Fetch(key, time.Minute*10, func() (interface{}, error) {
+	key := CacheKey{
+		Func:       "query_range",
+		Query:      query,
+		Start:      r.Start.UnixNano(),
+		BucketSize: bucketSize.Nanoseconds(),
+		StepOffset: stepOffset.Nanoseconds(),
+		StepSize:   r.Step.Nanoseconds(),
+	}
+	b, _ := key.Marshal()
+	item, err := cache.Fetch(string(b), time.Minute*10, func() (interface{}, error) {
 		return c.API.QueryRange(ctx, query, r)
 	})
 
