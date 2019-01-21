@@ -29,7 +29,11 @@ func BenchmarkCache(b *testing.B) {
 	}
 	apiClient := v1.NewAPI(client)
 
-	cacheClient := CacheClient{apiClient}
+	cache, err := New("ccache", map[string]interface{}{})
+	if err != nil {
+		b.Fatalf("Error creating cache: %v", err)
+	}
+	cacheClient := NewCacheClient(apiClient, cache)
 
 	// Do an actual test
 	ctx := context.TODO()
