@@ -55,11 +55,15 @@ func TestStepNormalize(t *testing.T) {
 	apiClient := v1.NewAPI(client)
 
 	countClient := &countingAPI{apiClient, 0}
-	cache, err := New("ccache", map[string]interface{}{})
-	if err != nil {
-		t.Fatalf("Error creating cache: %v", err)
+	opts := CacheClientOptions{
+		StepsPerBucket: 3,
+		CachePlugin:    "ccache",
+		CacheOptions:   map[string]interface{}{},
 	}
-	cacheClient := NewCacheClient(countClient, cache)
+	cacheClient, err := NewCacheClient(opts, countClient)
+	if err != nil {
+		t.Fatalf("Error creating cacheclient: %v", err)
+	}
 	normalClient := StepNormalizingClient{cacheClient}
 
 	// Do an actual test

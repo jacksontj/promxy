@@ -6,6 +6,7 @@ import (
 
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/promhttputil"
+	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 )
@@ -17,16 +18,29 @@ var (
 	stepsPerBucket = 3
 )
 
-func NewCacheClient(a promclient.API, c Cache) *CacheClient {
-	cClient := &CacheClient{API: a, c: c}
-	c.SetAPI(a)
-	return cClient
+type CacheClientOptions struct {
+	StepsPerBucket int                    `yaml:"steps_per_bucket"`
+	CachePlugin    string                 `yaml:"cache_plugin"`
+	CacheOptions   map[string]interface{} `yaml:"cache_options"`
+}
+
+func NewCacheClient(o CacheClientOptions, a promclient.API) (*CacheClient, error) {
+	cache, err := New(o.CachePlugin, o.CacheOptions)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating cache plugin")
+	}
+
+	cClient := &CacheClient{API: a, c: cache, o: o}
+
+	cache.SetAPI(a)
+	return cClient, nil
 }
 
 // CacheClient is a caching API client to prometheus.
 // This implements the promclient.API interface, and as such can be used interchangeably
 type CacheClient struct {
 	promclient.API
+	o CacheClientOptions
 	c Cache
 }
 
