@@ -14,6 +14,7 @@ import (
 
 var (
 	// TODO: move into cacheClient
+	// TODO: make an interface
 	cache = ccache.New(ccache.Configure().MaxSize(1000).ItemsToPrune(100))
 
 	// TODO: move into cacheClient
@@ -22,6 +23,8 @@ var (
 	stepsPerBucket = 2
 )
 
+// CacheClient is a caching API client to prometheus.
+// This implements the promclient.API interface, and as such can be used interchangeably
 type CacheClient struct {
 	promclient.API
 }
@@ -55,6 +58,7 @@ func (c *CacheClient) QueryRange(ctx context.Context, query string, r v1.Range) 
 	return matrix, nil
 }
 
+// innerQueryRange gets queries that are within a bucket, we specifically want to query all data within that bucket
 func (c *CacheClient) innerQueryRange(ctx context.Context, bucketSize time.Duration, query string, r v1.Range) (model.Value, error) {
 	// Cache key for range
 	// Cache key is query_range:starttime_bucketsize:query:step
