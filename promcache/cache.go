@@ -20,7 +20,7 @@ var (
 	// TODO: move into cacheClient
 	// TODO: config
 	// how many steps per bucket
-	stepsPerBucket = 2
+	stepsPerBucket = 3
 )
 
 // CacheClient is a caching API client to prometheus.
@@ -32,13 +32,17 @@ type CacheClient struct {
 func (c *CacheClient) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, error) {
 	bucketSize := r.Step * time.Duration(stepsPerBucket)
 	var matrix model.Value
-	start := r.Start.Truncate(bucketSize)
+
+	// Offset within the normalized step
+	stepOffset := r.Start.Sub(r.Start.Truncate(r.Step))
+	// Start by truncating to the bucket size, this is the
+	start := r.Start.Truncate(bucketSize).Add(stepOffset)
 
 	// TODO: parallelize / configurable
 	for start.Before(r.End) {
 		nextBucket := start.Add(bucketSize)
 
-		v, err := c.innerQueryRange(ctx, bucketSize, query, v1.Range{Start: start, End: start.Add(bucketSize), Step: r.Step})
+		v, err := c.innerQueryRange(ctx, bucketSize, stepOffset, query, v1.Range{Start: start, End: start.Add(bucketSize), Step: r.Step})
 		if err != nil {
 			return nil, err
 		}
@@ -59,10 +63,10 @@ func (c *CacheClient) QueryRange(ctx context.Context, query string, r v1.Range) 
 }
 
 // innerQueryRange gets queries that are within a bucket, we specifically want to query all data within that bucket
-func (c *CacheClient) innerQueryRange(ctx context.Context, bucketSize time.Duration, query string, r v1.Range) (model.Value, error) {
+func (c *CacheClient) innerQueryRange(ctx context.Context, bucketSize, stepOffset time.Duration, query string, r v1.Range) (model.Value, error) {
 	// Cache key for range
-	// Cache key is query_range:starttime_bucketsize:query:step
-	key := "query_range:" + strconv.FormatInt(r.Start.Unix(), 10) + "_" + strconv.FormatFloat(bucketSize.Seconds(), 'f', -1, 64) + ":" + query + ":" + strconv.FormatFloat(r.Step.Seconds(), 'f', -1, 64)
+	// Cache key is query_range:starttime_bucketsize_stepOffset:query:step
+	key := "query_range:" + strconv.FormatInt(r.Start.Unix(), 10) + "_" + strconv.FormatFloat(bucketSize.Seconds(), 'f', -1, 64) + "_" + strconv.FormatFloat(stepOffset.Seconds(), 'f', -1, 64) + ":" + query + ":" + strconv.FormatFloat(r.Step.Seconds(), 'f', -1, 64)
 
 	item, err := cache.Fetch(key, time.Minute*10, func() (interface{}, error) {
 		return c.API.QueryRange(ctx, query, r)

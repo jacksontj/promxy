@@ -109,6 +109,11 @@ var cacheTests = []struct {
 		"http_requests",
 		v1.Range{Start: zeroTime.Add(0 * time.Second), End: zeroTime.Add(100 * time.Second), Step: time.Second * 25},
 	},
+	// Same query, with a differnt start time
+	{
+		"http_requests",
+		v1.Range{Start: zeroTime.Add(1 * time.Second), End: zeroTime.Add(100 * time.Second), Step: time.Second * 25},
+	},
 	// Do a similar query over a completely different time range
 	{
 		"http_requests",
