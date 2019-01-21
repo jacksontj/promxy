@@ -103,7 +103,32 @@ func TestCache(t *testing.T) {
 	}{
 		{
 			"http_requests",
-			v1.Range{Start: zeroTime, End: zeroTime.Add(200000 * time.Second), Step: time.Second},
+			v1.Range{Start: zeroTime.Add(0 * time.Second), End: zeroTime.Add(100 * time.Second), Step: time.Second * 25},
+		},
+		// Repeat the same query to ensure that we don't mess with the original in cache
+		{
+			"http_requests",
+			v1.Range{Start: zeroTime.Add(0 * time.Second), End: zeroTime.Add(100 * time.Second), Step: time.Second * 25},
+		},
+		// Do a similar query over a completely different time range
+		{
+			"http_requests",
+			v1.Range{Start: zeroTime.Add(100 * time.Second), End: zeroTime.Add(200 * time.Second), Step: time.Second * 25},
+		},
+		// Do a query which has a subset of data in the bucket
+		{
+			"http_requests",
+			v1.Range{Start: zeroTime.Add(125 * time.Second), End: zeroTime.Add(175 * time.Second), Step: time.Second * 25},
+		},
+		// Query which barely spans buckets but has no data
+		{
+			"http_requests",
+			v1.Range{Start: zeroTime.Add(100 * time.Second), End: zeroTime.Add(130 * time.Second), Step: time.Second * 25},
+		},
+		// Query which has no result
+		{
+			"not_there",
+			v1.Range{Start: zeroTime.Add(100 * time.Second), End: zeroTime.Add(130 * time.Second), Step: time.Second * 25},
 		},
 	}
 
@@ -140,7 +165,7 @@ func TestCache(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(baseV, v) {
-				t.Fatalf("Mismatch in value expected=%v actual=%v", baseV, v)
+				t.Fatalf("Mismatch in value \nexpected=%v \nactual=%v", baseV, v)
 			}
 
 			// If it worked, hit it again, and ensure that we don't hit the API
@@ -152,11 +177,21 @@ func TestCache(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(v, v2) {
-				t.Fatalf("Mismatch in value expected=%v actual=%v", v, v2)
+				t.Fatalf("Mismatch in value \nexpected=%v \nactual=%v", v, v2)
 			}
-			
+
 			if countClient.count > countBefore {
 				t.Fatalf("Query not cached!")
+			}
+
+			// Check the datapoints, to ensure that all values are within the specified range
+			matrix := v2.(model.Matrix)
+			for _, stream := range matrix {
+				for _, value := range stream.Values {
+					if value.Timestamp.Time().Before(test.Range.Start) || value.Timestamp.Time().After(test.Range.End) {
+						t.Fatalf("point %v outside of range %v %v", value, test.Range.Start, test.Range.End)
+					}
+				}
 			}
 
 		})
