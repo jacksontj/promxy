@@ -24,6 +24,7 @@ import (
 
 type proxyStorageState struct {
 	serverGroups   []*servergroup.ServerGroup
+	client         promclient.API
 	cfg            *proxyconfig.PromxyConfig
 	appender       storage.Appender
 	appenderCloser func() error
@@ -84,6 +85,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		}
 		newState.serverGroups[i] = tmp
 	}
+	newState.client = servergroup.ServerGroups(newState.serverGroups)
 
 	if failed {
 		newState.Cancel(nil)
@@ -200,7 +202,6 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 	}
 
 	state := p.GetState()
-	serverGroups := servergroup.ServerGroups(state.serverGroups)
 	switch n := node.(type) {
 	// Some AggregateExprs can be composed (meaning they are "reentrant". If the aggregation op
 	// is reentrant/composable then we'll do so, otherwise we let it fall through to normal query mechanisms
@@ -217,13 +218,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			removeOffset()
 
 			if s.Interval > 0 {
-				result, err = serverGroups.QueryRange(ctx, n.String(), v1.Range{
+				result, err = state.client.QueryRange(ctx, n.String(), v1.Range{
 					Start: s.Start.Add(-offset - promql.LookbackDelta),
 					End:   s.End.Add(-offset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, err = serverGroups.Query(ctx, n.String(), s.Start.Add(-offset))
+				result, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
 			}
 
 			if err != nil {
@@ -258,13 +259,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			removeOffset()
 
 			if s.Interval > 0 {
-				result, err = serverGroups.QueryRange(ctx, n.String(), v1.Range{
+				result, err = state.client.QueryRange(ctx, n.String(), v1.Range{
 					Start: s.Start.Add(-offset - promql.LookbackDelta),
 					End:   s.End.Add(-offset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, err = serverGroups.Query(ctx, n.String(), s.Start.Add(-offset))
+				result, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
 			}
 
 			if err != nil {
@@ -308,13 +309,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		var result model.Value
 		var err error
 		if s.Interval > 0 {
-			result, err = serverGroups.QueryRange(ctx, n.String(), v1.Range{
+			result, err = state.client.QueryRange(ctx, n.String(), v1.Range{
 				Start: s.Start.Add(-offset - promql.LookbackDelta),
 				End:   s.End.Add(-offset),
 				Step:  s.Interval,
 			})
 		} else {
-			result, err = serverGroups.Query(ctx, n.String(), s.Start.Add(-offset))
+			result, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
 		}
 
 		if err != nil {
