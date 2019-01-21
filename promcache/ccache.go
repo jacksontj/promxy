@@ -60,7 +60,6 @@ func (c *CCache) SetAPI(api promclient.API) {
 func (c *CCache) GetMatrix(ctx context.Context, key CacheKey, r v1.Range) (model.Value, error) {
 	b, _ := key.Marshal()
 
-	// TODO: configurable TTL
 	item, err := c.Cache.Fetch(string(b), c.opts.TTL, func() (interface{}, error) {
 		return c.api.QueryRange(ctx, key.Query, r)
 	})
