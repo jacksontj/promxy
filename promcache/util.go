@@ -2,9 +2,8 @@ package promcache
 
 import "github.com/prometheus/common/model"
 
+// TrimMatrix trims the series from the matrix to only contain data within the range
 func TrimMatrix(matrix model.Matrix, rangeStart, rangeEnd model.Time) {
-	// TODO: move to a trim function
-
 	// Trim data for the actual end/start
 	// Check the datapoints, to ensure that all values are within the specified range
 	for _, stream := range matrix {

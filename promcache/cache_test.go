@@ -95,43 +95,48 @@ func (c *countingAPI) Series(ctx context.Context, matches []string, startTime ti
 	return c.API.Series(ctx, matches, startTime, endTime)
 }
 
-func TestCache(t *testing.T) {
-	zeroTime := time.Unix(0, 0)
-	tests := []struct {
-		query string
-		v1.Range
-	}{
-		{
-			"http_requests",
-			v1.Range{Start: zeroTime.Add(0 * time.Second), End: zeroTime.Add(100 * time.Second), Step: time.Second * 25},
-		},
-		// Repeat the same query to ensure that we don't mess with the original in cache
-		{
-			"http_requests",
-			v1.Range{Start: zeroTime.Add(0 * time.Second), End: zeroTime.Add(100 * time.Second), Step: time.Second * 25},
-		},
-		// Do a similar query over a completely different time range
-		{
-			"http_requests",
-			v1.Range{Start: zeroTime.Add(100 * time.Second), End: zeroTime.Add(200 * time.Second), Step: time.Second * 25},
-		},
-		// Do a query which has a subset of data in the bucket
-		{
-			"http_requests",
-			v1.Range{Start: zeroTime.Add(125 * time.Second), End: zeroTime.Add(175 * time.Second), Step: time.Second * 25},
-		},
-		// Query which barely spans buckets but has no data
-		{
-			"http_requests",
-			v1.Range{Start: zeroTime.Add(100 * time.Second), End: zeroTime.Add(130 * time.Second), Step: time.Second * 25},
-		},
-		// Query which has no result
-		{
-			"not_there",
-			v1.Range{Start: zeroTime.Add(100 * time.Second), End: zeroTime.Add(130 * time.Second), Step: time.Second * 25},
-		},
-	}
+var zeroTime = time.Unix(0, 0)
+var cacheTests = []struct {
+	query string
+	v1.Range
+}{
+	{
+		"http_requests",
+		v1.Range{Start: zeroTime.Add(0 * time.Second), End: zeroTime.Add(100 * time.Second), Step: time.Second * 25},
+	},
+	// Repeat the same query to ensure that we don't mess with the original in cache
+	{
+		"http_requests",
+		v1.Range{Start: zeroTime.Add(0 * time.Second), End: zeroTime.Add(100 * time.Second), Step: time.Second * 25},
+	},
+	// Do a similar query over a completely different time range
+	{
+		"http_requests",
+		v1.Range{Start: zeroTime.Add(100 * time.Second), End: zeroTime.Add(200 * time.Second), Step: time.Second * 25},
+	},
+	// Do a query which has a subset of data in the bucket
+	{
+		"http_requests",
+		v1.Range{Start: zeroTime.Add(125 * time.Second), End: zeroTime.Add(175 * time.Second), Step: time.Second * 25},
+	},
+	// Query which barely spans buckets but has no data
+	{
+		"http_requests",
+		v1.Range{Start: zeroTime.Add(100 * time.Second), End: zeroTime.Add(130 * time.Second), Step: time.Second * 25},
+	},
+	// Query which has no result
+	{
+		"not_there",
+		v1.Range{Start: zeroTime.Add(100 * time.Second), End: zeroTime.Add(130 * time.Second), Step: time.Second * 25},
+	},
+	// Query which has a scalar response
+	{
+		"1",
+		v1.Range{Start: zeroTime.Add(0 * time.Second), End: zeroTime.Add(100 * time.Second), Step: time.Second * 25},
+	},
+}
 
+func TestCache(t *testing.T) {
 	promqlTest, err := promql.NewTest(t, cacheTestData)
 	if err != nil {
 		t.Fatalf("Error loading data: %v", err)
@@ -155,7 +160,7 @@ func TestCache(t *testing.T) {
 	// Do an actual test
 	ctx := context.TODO()
 
-	for i, test := range tests {
+	for i, test := range cacheTests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			baseV, baseErr := apiClient.QueryRange(ctx, test.query, test.Range)
 			v, err := cacheClient.QueryRange(ctx, test.query, test.Range)

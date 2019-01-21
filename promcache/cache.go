@@ -31,6 +31,7 @@ func (c *CacheClient) QueryRange(ctx context.Context, query string, r v1.Range) 
 	var matrix model.Value
 	start := r.Start.Truncate(bucketSize)
 
+	// TODO: parallelize / configurable
 	for start.Before(r.End) {
 		nextBucket := start.Add(bucketSize)
 
