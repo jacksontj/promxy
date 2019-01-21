@@ -3,6 +3,7 @@ package promcache
 import (
 	"context"
 	fmt "fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/jacksontj/promxy/promclient"
@@ -50,18 +51,26 @@ type CCacheOptions struct {
 type CCache struct {
 	*ccache.Cache
 	opts CCacheOptions
-	api  promclient.API
+	api  atomic.Value
+}
+
+func (c *CCache) getAPI() promclient.API {
+	if tmp := c.api.Load(); tmp == nil {
+		return nil
+	} else {
+		return tmp.(promclient.API)
+	}
 }
 
 func (c *CCache) SetAPI(api promclient.API) {
-	c.api = api
+	c.api.Store(api)
 }
 
 func (c *CCache) GetMatrix(ctx context.Context, key CacheKey, r v1.Range) (model.Value, error) {
 	b, _ := key.Marshal()
 
 	item, err := c.Cache.Fetch(string(b), c.opts.TTL, func() (interface{}, error) {
-		return c.api.QueryRange(ctx, key.Query, r)
+		return c.getAPI().QueryRange(ctx, key.Query, r)
 	})
 
 	if err != nil {
