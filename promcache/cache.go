@@ -11,19 +11,19 @@ import (
 	"github.com/prometheus/common/model"
 )
 
-var (
-	// TODO: move into cacheClient
-	// TODO: config
-	// how many steps per bucket
-	stepsPerBucket = 3
-)
-
+// CacheClientOptions contains all the options for creating a CacheClient
+// this includes options specific to the client as well as options to create
+// the actual caching layer
 type CacheClientOptions struct {
-	StepsPerBucket int                    `yaml:"steps_per_bucket"`
-	CachePlugin    string                 `yaml:"cache_plugin"`
-	CacheOptions   map[string]interface{} `yaml:"cache_options"`
+	// Client options
+	StepsPerBucket int `yaml:"steps_per_bucket"`
+
+	// Cache options
+	CachePlugin  string                 `yaml:"cache_plugin"`
+	CacheOptions map[string]interface{} `yaml:"cache_options"`
 }
 
+// NewCacheClient creates a CacheClient with appropriate cache based on the given options
 func NewCacheClient(o CacheClientOptions, a promclient.API) (*CacheClient, error) {
 	cache, err := New(o.CachePlugin, o.CacheOptions)
 	if err != nil {
@@ -44,8 +44,9 @@ type CacheClient struct {
 	c Cache
 }
 
+// Query performs a query for the given time.
 func (c *CacheClient) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, error) {
-	bucketSize := r.Step * time.Duration(stepsPerBucket)
+	bucketSize := r.Step * time.Duration(c.o.StepsPerBucket)
 	var matrix model.Value
 
 	// Offset within the normalized step
