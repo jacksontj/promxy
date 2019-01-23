@@ -2,7 +2,6 @@ package servergroup
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -20,7 +19,6 @@ import (
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/relabel"
 	"github.com/prometheus/prometheus/storage/remote"
@@ -69,9 +67,8 @@ func New() *ServerGroup {
 // Encapsulate the state of a serverGroup from service discovery
 type ServerGroupState struct {
 	// Targets is the list of target URLs for this discovery round
-	Targets              []string
-	apiClient            promclient.API
-	remoteStorageClients []*remote.Client
+	Targets   []string
+	apiClient promclient.API
 	// Labels that should be applied to metrics from this serverGroup
 	Labels model.LabelSet
 }
@@ -103,7 +100,6 @@ func (s *ServerGroup) Sync() {
 	for targetGroupMap := range syncCh {
 		targets := make([]string, 0)
 		apiClients := make([]promclient.API, 0)
-		remoteStorageClients := make([]*remote.Client, 0)
 		var ls model.LabelSet
 
 		for _, targetGroupList := range targetGroupMap {
@@ -127,20 +123,25 @@ func (s *ServerGroup) Sync() {
 					if err != nil {
 						panic(err) // TODO: shouldn't be possible? If this happens I guess we log and skip?
 					}
-					apiClients = append(apiClients, v1.NewAPI(client))
 
-					// TODO: create remoteread client
-					u.Path = path.Join(u.Path, "api/v1/read")
-					cfg := &remote.ClientConfig{
-						URL: &config_util.URL{u},
-						// TODO: from context?
-						Timeout: model.Duration(time.Minute * 2),
+					promAPIClient := v1.NewAPI(client)
+
+					if s.Cfg.RemoteRead {
+						u.Path = path.Join(u.Path, "api/v1/read")
+						cfg := &remote.ClientConfig{
+							URL: &config_util.URL{u},
+							// TODO: from context?
+							Timeout: model.Duration(time.Minute * 2),
+						}
+						remoteStorageClient, err := remote.NewClient(1, cfg)
+						if err != nil {
+							panic(err)
+						}
+
+						apiClients = append(apiClients, &promclient.PromAPIRemoteRead{promAPIClient, remoteStorageClient})
+					} else {
+						apiClients = append(apiClients, &promclient.PromAPIV1{promAPIClient})
 					}
-					remoteStorageClient, err := remote.NewClient(1, cfg)
-					if err != nil {
-						panic(err)
-					}
-					remoteStorageClients = append(remoteStorageClients, remoteStorageClient)
 
 					// We remove all private labels after we set the target entry
 					for name := range target {
@@ -194,9 +195,8 @@ func (s *ServerGroup) Sync() {
 		}
 
 		s.state.Store(&ServerGroupState{
-			Targets:              targets,
-			apiClient:            promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc),
-			remoteStorageClients: remoteStorageClients,
+			Targets:   targets,
+			apiClient: promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc),
 			// Merge labels we just got with the statically configured ones, this way the
 			// static ones take priority
 			Labels: ls.Merge(s.Cfg.Labels),
@@ -262,125 +262,23 @@ func (s *ServerGroup) State() *ServerGroupState {
 	}
 }
 
+// GetValue loads the raw data for a given set of matchers in the time range
 func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
-	if s.Cfg.RemoteRead {
-		return s.RemoteRead(ctx, start, end, matchers)
-	} else {
-		// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
-		pql, err := promhttputil.MatcherToString(matchers)
-		if err != nil {
-			return nil, err
-		}
-
-		// We want to grab only the raw datapoints, so we do that through the query interface
-		// passing in a duration that is at least as long as ours (the added second is to deal
-		// with any rounding error etc since the duration is a floating point and we are casting
-		// to an int64
-		query := pql + fmt.Sprintf("[%ds]", int64(end.Sub(start).Seconds())+1)
-		return s.Query(ctx, query, end)
-	}
-}
-
-func (s *ServerGroup) RemoteRead(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
 	state := s.State()
 	filteredMatchers, ok := FilterMatchers(state.Labels, matchers)
 	if !ok {
 		return nil, nil
 	}
 
-	childContext, childContextCancel := context.WithCancel(ctx)
-	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(state.Targets))
-
-	for i, client := range state.remoteStorageClients {
-		resultChans[i] = make(chan interface{}, 1)
-		go func(targetName string, retChan chan interface{}, client *remote.Client) {
-			queryStart := time.Now()
-			query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), filteredMatchers, nil)
-			if err != nil {
-				retChan <- err
-				return
-			}
-			// http://localhost:8083/api/v1/query?query=%7B__name__%3D%22metric%22%7D%5B302s%5D&time=21
-			result, err := client.Read(childContext, query)
-			took := time.Now().Sub(queryStart)
-
-			if err != nil {
-				serverGroupSummary.WithLabelValues(targetName, "remoteread", "error").Observe(took.Seconds())
-				retChan <- err
-			} else {
-				serverGroupSummary.WithLabelValues(targetName, "remoteread", "success").Observe(took.Seconds())
-				// convert result (timeseries) to SampleStream
-				matrix := make(model.Matrix, len(result.Timeseries))
-				for i, ts := range result.Timeseries {
-					metric := make(model.Metric)
-					for _, label := range ts.Labels {
-						metric[model.LabelName(label.Name)] = model.LabelValue(label.Value)
-					}
-
-					samples := make([]model.SamplePair, len(ts.Samples))
-					for x, sample := range ts.Samples {
-						samples[x] = model.SamplePair{
-							Timestamp: model.Time(sample.Timestamp),
-							Value:     model.SampleValue(sample.Value),
-						}
-					}
-
-					matrix[i] = &model.SampleStream{
-						Metric: metric,
-						Values: samples,
-					}
-				}
-
-				err = promhttputil.ValueAddLabelSet(matrix, state.Labels)
-				if err != nil {
-					retChan <- err
-					return
-				}
-
-				retChan <- matrix
-			}
-
-		}(state.Targets[i], resultChans[i], client)
+	val, err := state.apiClient.GetValue(ctx, start, end, filteredMatchers)
+	if err != nil {
+		return nil, err
+	}
+	if err := promhttputil.ValueAddLabelSet(val, state.Labels); err != nil {
+		return nil, err
 	}
 
-	// Wait for results as we get them
-	var result model.Value
-	var lastError error
-	errCount := 0
-	for i := 0; i < len(state.Targets); i++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-
-		case ret := <-resultChans[i]:
-			switch retTyped := ret.(type) {
-			case error:
-				lastError = retTyped
-				errCount++
-			case model.Value:
-				// If the server responded with a non-success, lets mark that as an error
-				// TODO: check qData.ResultType
-				if result == nil {
-					result = retTyped
-				} else {
-					var err error
-					result, err = promhttputil.MergeValues(s.Cfg.GetAntiAffinity(), result, retTyped)
-					if err != nil {
-						return nil, err
-					}
-				}
-			default:
-				return nil, fmt.Errorf("Unknown return type")
-			}
-		}
-	}
-
-	if errCount != 0 && errCount == len(state.Targets) {
-		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
-	}
-
-	return result, nil
+	return val, nil
 }
 
 // Query performs a query for the given time.
