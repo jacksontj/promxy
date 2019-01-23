@@ -23,7 +23,7 @@ import (
 )
 
 type proxyStorageState struct {
-	serverGroups   []*servergroup.ServerGroup
+	sgs            []*servergroup.ServerGroup
 	client         promclient.API
 	cfg            *proxyconfig.PromxyConfig
 	appender       storage.Appender
@@ -31,14 +31,14 @@ type proxyStorageState struct {
 }
 
 func (p *proxyStorageState) Ready() {
-	for _, sg := range p.serverGroups {
+	for _, sg := range p.sgs {
 		<-sg.Ready
 	}
 }
 
 func (p *proxyStorageState) Cancel(n *proxyStorageState) {
-	if p.serverGroups != nil {
-		for _, sg := range p.serverGroups {
+	if p.sgs != nil {
+		for _, sg := range p.sgs {
 			sg.Cancel()
 		}
 	}
@@ -73,9 +73,10 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 
 	failed := false
 
+	apis := make([]promclient.API, len(c.ServerGroups))
 	newState := &proxyStorageState{
-		serverGroups: make([]*servergroup.ServerGroup, len(c.ServerGroups)),
-		cfg:          &c.PromxyConfig,
+		sgs: make([]*servergroup.ServerGroup, len(c.ServerGroups)),
+		cfg: &c.PromxyConfig,
 	}
 	for i, sgCfg := range c.ServerGroups {
 		tmp := servergroup.New()
@@ -83,9 +84,10 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 			failed = true
 			logrus.Errorf("Error applying config to server group: %s", err)
 		}
-		newState.serverGroups[i] = tmp
+		newState.sgs[i] = tmp
+		apis[i] = tmp
 	}
-	newState.client = servergroup.ServerGroups(newState.serverGroups)
+	newState.client = promclient.NewMultiAPI(apis, model.TimeFromUnix(0), nil)
 
 	if failed {
 		newState.Cancel(nil)
@@ -130,7 +132,7 @@ func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Q
 		ctx,
 		timestamp.Time(mint),
 		timestamp.Time(maxt),
-		state.serverGroups,
+		state.client,
 
 		state.cfg,
 	}, nil
