@@ -14,14 +14,13 @@ import (
 	proxyconfig "github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/promhttputil"
-	"github.com/jacksontj/promxy/servergroup"
 )
 
 type ProxyQuerier struct {
-	Ctx          context.Context
-	Start        time.Time
-	End          time.Time
-	ServerGroups servergroup.ServerGroups
+	Ctx    context.Context
+	Start  time.Time
+	End    time.Time
+	Client promclient.API
 
 	Cfg *proxyconfig.PromxyConfig
 }
@@ -49,7 +48,7 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		if err != nil {
 			return nil, err
 		}
-		labelsets, err := h.ServerGroups.Series(h.Ctx, []string{matcherString}, h.Start, h.End)
+		labelsets, err := h.Client.Series(h.Ctx, []string{matcherString}, h.Start, h.End)
 		if err != nil {
 			return nil, errors.Cause(err)
 		}
@@ -63,7 +62,7 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		}
 		result = retVector
 	} else {
-		result, err = h.ServerGroups.GetValue(h.Ctx, timestamp.Time(selectParams.Start), timestamp.Time(selectParams.End), matchers)
+		result, err = h.Client.GetValue(h.Ctx, timestamp.Time(selectParams.Start), timestamp.Time(selectParams.End), matchers)
 	}
 	if err != nil {
 		return nil, errors.Cause(err)
@@ -89,7 +88,7 @@ func (h *ProxyQuerier) LabelValues(name string) ([]string, error) {
 		}).Debug("LabelValues")
 	}()
 
-	result, err := h.ServerGroups.LabelValues(h.Ctx, name)
+	result, err := h.Client.LabelValues(h.Ctx, name)
 	if err != nil {
 		return nil, errors.Cause(err)
 	}
