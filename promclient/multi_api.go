@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/promql"
 
 	"github.com/jacksontj/promxy/promhttputil"
@@ -297,6 +298,61 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 				return nil, fmt.Errorf("Unknown return type")
 			}
 		}
+	}
+
+	// If we got only errors, lets return that
+	if errCount == len(m.apis) {
+		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+	}
+
+	return result, nil
+}
+
+// GetValue fetches a `model.Value` which represents the actual collected data
+func (m *MultiAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+	resultChans := make([]chan interface{}, len(m.apis))
+
+	// Scatter out all the queries
+	for i, api := range m.apis {
+		resultChans[i] = make(chan interface{}, 1)
+		go func(retChan chan interface{}, api API) {
+			queryStart := time.Now()
+			result, err := api.GetValue(childContext, start, end, matchers)
+			took := time.Now().Sub(queryStart)
+			if err != nil {
+				m.recordMetric(i, "get_value", "error", took.Seconds())
+				retChan <- err
+			} else {
+				m.recordMetric(i, "get_value", "success", took.Seconds())
+				retChan <- result
+			}
+		}(resultChans[i], api)
+	}
+
+	// Wait for results as we get them
+	var result model.Value
+	var lastError error
+	errCount := 0
+	for i := 0; i < len(m.apis); i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case ret := <-resultChans[i]:
+			switch retTyped := ret.(type) {
+			case error:
+				lastError = retTyped
+				errCount++
+			case model.Value:
+				var err error
+				result, err = promhttputil.MergeValues(model.TimeFromUnix(0), result, retTyped)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+
 	}
 
 	// If we got only errors, lets return that
