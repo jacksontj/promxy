@@ -46,7 +46,7 @@ type Config struct {
 	Scheme string `yaml:"scheme"`
 	// Labels is a set of labels that will be added to all metrics retrieved
 	// from this server group
-	Labels model.LabelSet `json:"labels"`
+	Labels model.LabelSet `yaml:"labels"`
 	// RelabelConfigs is identical in function and configuration as prometheus'
 	// relabel config for scrape jobs
 	RelabelConfigs []*config.RelabelConfig `yaml:"relabel_configs,omitempty"`
