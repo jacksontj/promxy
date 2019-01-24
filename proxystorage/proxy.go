@@ -333,8 +333,8 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		ret.SetSeries(series)
 		return ret, nil
 
-		// If we are simply fetching a Vector then we can fetch the data using the same step that
-		// the query came in as (reducing the amount of data we need to fetch)
+	// If we are simply fetching a Vector then we can fetch the data using the same step that
+	// the query came in as (reducing the amount of data we need to fetch)
 	// If we are simply fetching data, we skip here to let it fall through to the normal
 	// storage API
 	case *promql.VectorSelector:
