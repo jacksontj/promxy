@@ -2,6 +2,7 @@ package proxystorage
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"reflect"
 	"sync/atomic"
@@ -23,7 +24,7 @@ import (
 )
 
 type proxyStorageState struct {
-	sgs            []*servergroup.ServerGroup
+	sgs            map[[sha256.Size]byte]*servergroup.ServerGroup
 	client         promclient.API
 	cfg            *proxyconfig.PromxyConfig
 	appender       storage.Appender
@@ -75,21 +76,31 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 
 	apis := make([]promclient.API, len(c.ServerGroups))
 	newState := &proxyStorageState{
-		sgs: make([]*servergroup.ServerGroup, len(c.ServerGroups)),
+		sgs: make(map[[sha256.Size]byte]*servergroup.ServerGroup, len(c.ServerGroups)),
 		cfg: &c.PromxyConfig,
 	}
 	for i, sgCfg := range c.ServerGroups {
-		tmp := servergroup.New()
-		if err := tmp.ApplyConfig(sgCfg); err != nil {
-			failed = true
-			logrus.Errorf("Error applying config to server group: %s", err)
+		digest := sgCfg.Digest()
+		sg, ok := oldState.sgs[digest]
+		if !ok {
+			sg = servergroup.New()
+			if err := sg.ApplyConfig(sgCfg); err != nil {
+				failed = true
+				logrus.Errorf("Error applying config to server group: %s", err)
+			}
 		}
-		newState.sgs[i] = tmp
-		apis[i] = tmp
+		newState.sgs[digest] = sg
+		apis[i] = sg
 	}
 	newState.client = promclient.NewMultiAPI(apis, model.TimeFromUnix(0), nil)
 
 	if failed {
+		// Remove sgs that we migrated over
+		for digest := range newState.sgs {
+			if _, ok := oldState.sgs[digest]; ok {
+				delete(newState.sgs, digest)
+			}
+		}
 		newState.Cancel(nil)
 		return fmt.Errorf("Error Applying Config to one or more server group(s)")
 	}
@@ -119,7 +130,14 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 
 	newState.Ready()        // Wait for the newstate to be ready
 	p.state.Store(newState) // Store the new state
+
 	if oldState != nil {
+		// Remove sgs that we migrated over
+		for digest := range oldState.sgs {
+			if _, ok := newState.sgs[digest]; ok {
+				delete(oldState.sgs, digest)
+			}
+		}
 		oldState.Cancel(newState) // Cancel the old one
 	}
 

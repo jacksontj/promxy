@@ -1,12 +1,14 @@
 package servergroup
 
 import (
+	"crypto/sha256"
 	"time"
 
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
 	sd_config "github.com/prometheus/prometheus/discovery/config"
+	yaml "gopkg.in/yaml.v2"
 )
 
 var (
@@ -66,6 +68,11 @@ type Config struct {
 	// any one of these can cause the resulting data in prometheus to have the same time but in reality
 	// come from different points in time. Best practice for this value is to set it to your scrape interval
 	AntiAffinity *time.Duration `yaml:"anti_affinity,omitempty"`
+}
+
+func (c *Config) Digest() [sha256.Size]byte {
+	b, _ := yaml.Marshal(c)
+	return sha256.Sum256(b)
 }
 
 func (c *Config) GetScheme() string {
