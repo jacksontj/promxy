@@ -24,6 +24,7 @@ import (
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/sirupsen/logrus"
 
+	"github.com/jacksontj/promxy/promcache"
 	"github.com/jacksontj/promxy/promclient"
 	"github.com/jacksontj/promxy/promhttputil"
 
@@ -194,9 +195,20 @@ func (s *ServerGroup) Sync() {
 			serverGroupSummary.WithLabelValues(targets[i], api, status).Observe(took)
 		}
 
+		var apiClient promclient.API
+		apiClient = promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc)
+		if s.Cfg.CacheOptions != nil {
+			d := s.Cfg.Digest()
+			cacheClient, err := promcache.NewCacheClient(d[:], *s.Cfg.CacheOptions, apiClient)
+			if err != nil {
+				panic(err)
+			}
+			apiClient = cacheClient
+		}
+
 		s.state.Store(&ServerGroupState{
 			Targets:   targets,
-			apiClient: promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc),
+			apiClient: apiClient,
 			// Merge labels we just got with the statically configured ones, this way the
 			// static ones take priority
 			Labels: ls.Merge(s.Cfg.Labels),

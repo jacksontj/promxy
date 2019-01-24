@@ -2,7 +2,7 @@ package promcache
 
 import (
 	"context"
-	fmt "fmt"
+	"fmt"
 	"log"
 	"sync"
 

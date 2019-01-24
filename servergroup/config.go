@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"time"
 
+	"github.com/jacksontj/promxy/promcache"
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
@@ -68,6 +69,9 @@ type Config struct {
 	// any one of these can cause the resulting data in prometheus to have the same time but in reality
 	// come from different points in time. Best practice for this value is to set it to your scrape interval
 	AntiAffinity *time.Duration `yaml:"anti_affinity,omitempty"`
+
+	// TODO: docs
+	CacheOptions *promcache.CacheClientOptions `yaml:"cache"`
 }
 
 func (c *Config) Digest() [sha256.Size]byte {

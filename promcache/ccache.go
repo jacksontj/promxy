@@ -2,7 +2,7 @@ package promcache
 
 import (
 	"context"
-	fmt "fmt"
+	"fmt"
 	"time"
 
 	"github.com/karlseguin/ccache"
@@ -18,9 +18,12 @@ var DefaultCCacheOptions = CCacheOptions{
 func init() {
 	Register(
 		"ccache",
-		func() interface{} { return DefaultCCacheOptions },
+		func() interface{} {
+			c := DefaultCCacheOptions
+			return &c
+		},
 		func(options interface{}, getter Getter) (Cache, error) {
-			o, ok := options.(CCacheOptions)
+			o, ok := options.(*CCacheOptions)
 			if !ok {
 				return nil, fmt.Errorf("Invalid options")
 			}
@@ -47,7 +50,7 @@ type CCacheOptions struct {
 
 type CCache struct {
 	*ccache.Cache
-	opts CCacheOptions
+	opts *CCacheOptions
 	g    Getter
 }
 
@@ -55,6 +58,7 @@ func (c *CCache) Get(ctx context.Context, key CacheKey) (model.Value, error) {
 	b, _ := key.Marshal()
 
 	item, err := c.Cache.Fetch(string(b), c.opts.TTL, func() (interface{}, error) {
+		fmt.Println("miss")
 		return c.g.Get(ctx, key)
 	})
 
