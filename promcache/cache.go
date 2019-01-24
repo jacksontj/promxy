@@ -20,13 +20,18 @@ type CacheClientOptions struct {
 	// Client options
 	StepsPerBucket int `yaml:"steps_per_bucket"`
 
+	// NormalizeStep will normalize the times of range queries to be multiples
+	// of the step itself -- this significantly improves cache hit rates at the
+	// cost of having slightly-off data responses
+	NormalizeStep bool `yaml:"normalize_step"`
+
 	// Cache options
 	CachePlugin  string                 `yaml:"cache_plugin"`
 	CacheOptions map[string]interface{} `yaml:"cache_options"`
 }
 
 // NewCacheClient creates a CacheClient with appropriate cache based on the given options
-func NewCacheClient(key []byte, o CacheClientOptions, a promclient.API) (*CacheClient, error) {
+func NewCacheClient(key []byte, o CacheClientOptions, a promclient.API) (promclient.API, error) {
 	cClient := &CacheClient{API: a, o: o, k: key}
 
 	cache, err := New(o.CachePlugin, o.CacheOptions, cClient)
@@ -34,6 +39,10 @@ func NewCacheClient(key []byte, o CacheClientOptions, a promclient.API) (*CacheC
 		return nil, errors.Wrap(err, "error creating cache plugin")
 	}
 	cClient.c = cache
+
+	if o.NormalizeStep {
+		return &StepNormalizingClient{cClient}, nil
+	}
 
 	return cClient, nil
 }
