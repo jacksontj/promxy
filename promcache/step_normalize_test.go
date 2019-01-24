@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jacksontj/promxy/promclient"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
@@ -52,7 +53,7 @@ func TestStepNormalize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
-	apiClient := v1.NewAPI(client)
+	apiClient := &promclient.PromAPIV1{v1.NewAPI(client)}
 
 	countClient := &countingAPI{apiClient, 0}
 	opts := CacheClientOptions{

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jacksontj/promxy/promclient"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/prometheus/promql"
@@ -27,7 +28,7 @@ func BenchmarkCache(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Error creating client: %v", err)
 	}
-	apiClient := v1.NewAPI(client)
+	apiClient := &promclient.PromAPIV1{v1.NewAPI(client)}
 
 	opts := CacheClientOptions{
 		StepsPerBucket: 3,

@@ -157,7 +157,7 @@ func TestCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
-	apiClient := v1.NewAPI(client)
+	apiClient := &promclient.PromAPIV1{v1.NewAPI(client)}
 
 	countClient := &countingAPI{apiClient, 0}
 	opts := CacheClientOptions{
