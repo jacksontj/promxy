@@ -47,9 +47,8 @@ type CacheClient struct {
 }
 
 func (c *CacheClient) Get(ctx context.Context, k CacheKey) (model.Value, error) {
-	// TODO: specific type and vars
 	switch k.Func {
-	case "query_range":
+	case Func_QUERY_RANGE:
 		start := time.Unix(0, k.Start)
 		r := v1.Range{
 			Start: start,
@@ -78,7 +77,7 @@ func (c *CacheClient) QueryRange(ctx context.Context, query string, r v1.Range) 
 
 		// Cache key for range
 		key := CacheKey{
-			Func:       "query_range",
+			Func:       Func_QUERY_RANGE,
 			Query:      query,
 			Start:      start.UnixNano(),
 			BucketSize: bucketSize.Nanoseconds(),

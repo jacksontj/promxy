@@ -2,12 +2,21 @@ syntax = "proto3";
 
 package promcache;
 
-// TODO: add some sort of generation number for servergroup (or ident)
 message CacheKey {
-    string Func = 1;
-    string Query = 2;
-    int64 Start = 3;
-    int64 BucketSize = 4;
-    int64 StepOffset = 5;
-    int64 StepSize = 6;
+    // This Key should be unique to the specific servergroup with relevant configuration
+    // this ensures that the caches are namespaced per servergroup version.
+    bytes ServerGroupKey = 1;
+    // What function
+    Func Func = 2;
+    // promql to fetch this
+    string Query = 3;
+    int64 Start = 4;
+    int64 BucketSize = 5;
+    int64 StepOffset = 6;
+    int64 StepSize = 7;
+}
+
+enum Func {
+  UNKNOWN = 0;
+  QUERY_RANGE = 1;
 }
