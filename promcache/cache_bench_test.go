@@ -36,7 +36,7 @@ func BenchmarkCache(b *testing.B) {
 		CachePlugin:    "ccache",
 		CacheOptions:   map[string]interface{}{},
 	}
-	cacheClient, err := NewCacheClient(opts, apiClient)
+	cacheClient, err := NewCacheClient(nil, opts, apiClient)
 	if err != nil {
 		b.Fatalf("Error creating cacheclient: %v", err)
 	}

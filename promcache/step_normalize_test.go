@@ -62,7 +62,7 @@ func TestStepNormalize(t *testing.T) {
 		CachePlugin:    "ccache",
 		CacheOptions:   map[string]interface{}{},
 	}
-	cacheClient, err := NewCacheClient(opts, countClient)
+	cacheClient, err := NewCacheClient(nil, opts, countClient)
 	if err != nil {
 		t.Fatalf("Error creating cacheclient: %v", err)
 	}

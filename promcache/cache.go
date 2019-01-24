@@ -26,8 +26,8 @@ type CacheClientOptions struct {
 }
 
 // NewCacheClient creates a CacheClient with appropriate cache based on the given options
-func NewCacheClient(o CacheClientOptions, a promclient.API) (*CacheClient, error) {
-	cClient := &CacheClient{API: a, o: o}
+func NewCacheClient(key []byte, o CacheClientOptions, a promclient.API) (*CacheClient, error) {
+	cClient := &CacheClient{API: a, o: o, k: key}
 
 	cache, err := New(o.CachePlugin, o.CacheOptions, cClient)
 	if err != nil {
@@ -44,6 +44,7 @@ type CacheClient struct {
 	promclient.API
 	o CacheClientOptions
 	c Cache
+	k []byte
 }
 
 func (c *CacheClient) Get(ctx context.Context, k CacheKey) (model.Value, error) {
@@ -77,12 +78,13 @@ func (c *CacheClient) QueryRange(ctx context.Context, query string, r v1.Range) 
 
 		// Cache key for range
 		key := CacheKey{
-			Func:       Func_QUERY_RANGE,
-			Query:      query,
-			Start:      start.UnixNano(),
-			BucketSize: bucketSize.Nanoseconds(),
-			StepOffset: stepOffset.Nanoseconds(),
-			StepSize:   r.Step.Nanoseconds(),
+			ServerGroupKey: c.k,
+			Func:           Func_QUERY_RANGE,
+			Query:          query,
+			Start:          start.UnixNano(),
+			BucketSize:     bucketSize.Nanoseconds(),
+			StepOffset:     stepOffset.Nanoseconds(),
+			StepSize:       r.Step.Nanoseconds(),
 		}
 		v, err := c.c.Get(ctx, key)
 		if err != nil {
