@@ -3,14 +3,10 @@ package promcache
 import (
 	"context"
 	fmt "fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/karlseguin/ccache"
-	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
-
-	"github.com/jacksontj/promxy/promclient"
 )
 
 var DefaultCCacheOptions = CCacheOptions{
@@ -23,7 +19,7 @@ func init() {
 	Register(
 		"ccache",
 		func() interface{} { return DefaultCCacheOptions },
-		func(options interface{}) (Cache, error) {
+		func(options interface{}, getter Getter) (Cache, error) {
 			o, ok := options.(CCacheOptions)
 			if !ok {
 				return nil, fmt.Errorf("Invalid options")
@@ -35,7 +31,7 @@ func init() {
 			if o.ItemsToPrune > 0 {
 				config.ItemsToPrune(o.ItemsToPrune)
 			}
-			return &CCache{Cache: ccache.New(config), opts: o}, nil
+			return &CCache{Cache: ccache.New(config), opts: o, g: getter}, nil
 		},
 	)
 }
@@ -52,26 +48,14 @@ type CCacheOptions struct {
 type CCache struct {
 	*ccache.Cache
 	opts CCacheOptions
-	api  atomic.Value
+	g    Getter
 }
 
-func (c *CCache) getAPI() promclient.API {
-	if tmp := c.api.Load(); tmp == nil {
-		return nil
-	} else {
-		return tmp.(promclient.API)
-	}
-}
-
-func (c *CCache) SetAPI(api promclient.API) {
-	c.api.Store(api)
-}
-
-func (c *CCache) GetMatrix(ctx context.Context, key CacheKey, r v1.Range) (model.Value, error) {
+func (c *CCache) Get(ctx context.Context, key CacheKey) (model.Value, error) {
 	b, _ := key.Marshal()
 
 	item, err := c.Cache.Fetch(string(b), c.opts.TTL, func() (interface{}, error) {
-		return c.getAPI().QueryRange(ctx, key.Query, r)
+		return c.g.Get(ctx, key)
 	})
 
 	if err != nil {

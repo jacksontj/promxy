@@ -6,19 +6,22 @@ import (
 	"log"
 	"sync"
 
-	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	yaml "gopkg.in/yaml.v2"
-
-	"github.com/jacksontj/promxy/promclient"
 )
 
-type Cache interface {
-	SetAPI(promclient.API)
-	GetMatrix(context.Context, CacheKey, v1.Range) (model.Value, error)
+// Interface which actually fetches data from the real source
+type Getter interface {
+	// Get will retrive the model.Value for a given CacheKey
+	Get(ctx context.Context, key CacheKey) (model.Value, error)
 }
 
-type newCache func(options interface{}) (Cache, error)
+// Cache is the interface for cache implementations to implement
+type Cache interface {
+	Get(context.Context, CacheKey) (model.Value, error)
+}
+
+type newCache func(options interface{}, getter Getter) (Cache, error)
 
 type cacheType struct {
 	newOptions func() interface{}
@@ -40,7 +43,7 @@ func Register(name string, newOptions func() interface{}, n newCache) {
 	cacheMap[name] = &cacheType{newOptions, n}
 }
 
-func New(name string, opts map[string]interface{}) (Cache, error) {
+func New(name string, opts map[string]interface{}, g Getter) (Cache, error) {
 	cacheMapMutex.Lock()
 	cacheType, ok := cacheMap[name]
 	cacheMapMutex.Unlock()
@@ -53,5 +56,5 @@ func New(name string, opts map[string]interface{}) (Cache, error) {
 	if err := yaml.Unmarshal(b, options); err != nil {
 		return nil, err
 	}
-	return cacheType.newCache(options)
+	return cacheType.newCache(options, g)
 }

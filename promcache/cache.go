@@ -2,6 +2,7 @@ package promcache
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -26,14 +27,14 @@ type CacheClientOptions struct {
 
 // NewCacheClient creates a CacheClient with appropriate cache based on the given options
 func NewCacheClient(o CacheClientOptions, a promclient.API) (*CacheClient, error) {
-	cache, err := New(o.CachePlugin, o.CacheOptions)
+	cClient := &CacheClient{API: a, o: o}
+
+	cache, err := New(o.CachePlugin, o.CacheOptions, cClient)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating cache plugin")
 	}
+	cClient.c = cache
 
-	cClient := &CacheClient{API: a, c: cache, o: o}
-
-	cache.SetAPI(a)
 	return cClient, nil
 }
 
@@ -43,6 +44,22 @@ type CacheClient struct {
 	promclient.API
 	o CacheClientOptions
 	c Cache
+}
+
+func (c *CacheClient) Get(ctx context.Context, k CacheKey) (model.Value, error) {
+	// TODO: specific type and vars
+	switch k.Func {
+	case "query_range":
+		start := time.Unix(0, k.Start)
+		r := v1.Range{
+			Start: start,
+			End:   start.Add(time.Nanosecond * time.Duration(k.BucketSize)),
+			Step:  time.Nanosecond * time.Duration(k.StepSize),
+		}
+		return c.API.QueryRange(ctx, k.Query, r)
+	default:
+		return nil, fmt.Errorf("unsupported func %s", k.Func)
+	}
 }
 
 // Query performs a query for the given time.
@@ -68,7 +85,7 @@ func (c *CacheClient) QueryRange(ctx context.Context, query string, r v1.Range) 
 			StepOffset: stepOffset.Nanoseconds(),
 			StepSize:   r.Step.Nanoseconds(),
 		}
-		v, err := c.c.GetMatrix(ctx, key, v1.Range{Start: start, End: start.Add(bucketSize), Step: r.Step})
+		v, err := c.c.Get(ctx, key)
 		if err != nil {
 			return nil, err
 		}

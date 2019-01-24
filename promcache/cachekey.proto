@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package promcache;
 
+// TODO: add some sort of generation number for servergroup (or ident)
 message CacheKey {
     string Func = 1;
     string Query = 2;
