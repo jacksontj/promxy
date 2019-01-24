@@ -4,11 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/jacksontj/promxy/promclient"
-	"github.com/jacksontj/promxy/promhttputil"
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+
+	"github.com/jacksontj/promxy/promclient"
+	"github.com/jacksontj/promxy/promhttputil"
 )
 
 // CacheClientOptions contains all the options for creating a CacheClient

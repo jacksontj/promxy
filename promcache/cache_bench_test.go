@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jacksontj/promxy/promclient"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/prometheus/promql"
+
+	"github.com/jacksontj/promxy/promclient"
 )
 
 func BenchmarkCache(b *testing.B) {

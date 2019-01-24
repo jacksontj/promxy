@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jacksontj/promxy/promclient"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
@@ -17,6 +16,8 @@ import (
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
 	webv1 "github.com/prometheus/prometheus/web/api/v1"
+
+	"github.com/jacksontj/promxy/promclient"
 )
 
 var cacheTestData = `

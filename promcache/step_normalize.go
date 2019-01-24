@@ -3,9 +3,10 @@ package promcache
 import (
 	"context"
 
-	"github.com/jacksontj/promxy/promclient"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+
+	"github.com/jacksontj/promxy/promclient"
 )
 
 // StepNormalizingClient is client that simply normalizes the steps for QueryRange

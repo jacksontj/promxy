@@ -6,10 +6,11 @@ import (
 	"log"
 	"sync"
 
-	"github.com/jacksontj/promxy/promclient"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	yaml "gopkg.in/yaml.v2"
+
+	"github.com/jacksontj/promxy/promclient"
 )
 
 type Cache interface {

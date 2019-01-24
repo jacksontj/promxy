@@ -6,10 +6,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jacksontj/promxy/promclient"
 	"github.com/karlseguin/ccache"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+
+	"github.com/jacksontj/promxy/promclient"
 )
 
 var DefaultCCacheOptions = CCacheOptions{

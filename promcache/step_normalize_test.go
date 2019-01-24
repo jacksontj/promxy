@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jacksontj/promxy/promclient"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/promql"
+
+	"github.com/jacksontj/promxy/promclient"
 )
 
 func allSameValue(a []model.Value) bool {
@@ -31,9 +32,9 @@ func TestStepNormalize(t *testing.T) {
 		{
 			"http_requests",
 			[]v1.Range{
-				v1.Range{Start: zeroTime.Add(0 * time.Second), End: zeroTime.Add(100 * time.Second), Step: time.Second * 25},
-				v1.Range{Start: zeroTime.Add(1 * time.Second), End: zeroTime.Add(101 * time.Second), Step: time.Second * 25},
-				v1.Range{Start: zeroTime.Add(24 * time.Second), End: zeroTime.Add(124 * time.Second), Step: time.Second * 25},
+				{Start: zeroTime.Add(0 * time.Second), End: zeroTime.Add(100 * time.Second), Step: time.Second * 25},
+				{Start: zeroTime.Add(1 * time.Second), End: zeroTime.Add(101 * time.Second), Step: time.Second * 25},
+				{Start: zeroTime.Add(24 * time.Second), End: zeroTime.Add(124 * time.Second), Step: time.Second * 25},
 			},
 		},
 	}
