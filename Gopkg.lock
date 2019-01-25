@@ -411,6 +411,14 @@
   version = "v1.1"
 
 [[projects]]
+  digest = "1:881012fbe449b25e76dcf590e8e80fe0bb7024846bbec2aa820d6c83ffebc702"
+  name = "github.com/karlseguin/ccache"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "a2d62155777b39595c825ed3824279e642a5db3c"
+  version = "v2.0.2"
+
+[[projects]]
   branch = "master"
   digest = "1:f91bb67d051a94cf6ab2cf07eee0550432afc31655838d42cdec258db4b348f0"
   name = "github.com/kr/logfmt"
@@ -1032,12 +1040,15 @@
     "github.com/golang/snappy",
     "github.com/jessevdk/go-flags",
     "github.com/julienschmidt/httprouter",
+    "github.com/karlseguin/ccache",
     "github.com/mailru/easyjson/jlexer",
     "github.com/pkg/errors",
     "github.com/prometheus/client_golang/api",
     "github.com/prometheus/client_golang/api/prometheus/v1",
     "github.com/prometheus/client_golang/prometheus",
+    "github.com/prometheus/client_model/go",
     "github.com/prometheus/common/config",
+    "github.com/prometheus/common/expfmt",
     "github.com/prometheus/common/log",
     "github.com/prometheus/common/model",
     "github.com/prometheus/common/promlog",
