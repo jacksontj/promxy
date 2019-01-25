@@ -10,7 +10,6 @@ import (
 	"github.com/prometheus/common/model"
 
 	"github.com/jacksontj/promxy/promclient"
-	"github.com/jacksontj/promxy/promhttputil"
 )
 
 // CacheClientOptions contains all the options for creating a CacheClient
@@ -74,14 +73,14 @@ func (c *CacheClient) Get(ctx context.Context, k CacheKey) (model.Value, error) 
 // Query performs a query for the given time.
 func (c *CacheClient) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, error) {
 	bucketSize := r.Step * time.Duration(c.o.StepsPerBucket)
-	var matrix model.Value
 
 	// Offset within the normalized step
 	stepOffset := r.Start.Sub(r.Start.Truncate(r.Step))
 	// Start by truncating to the bucket size, this is the
 	start := r.Start.Truncate(bucketSize).Add(stepOffset)
 
-	// TODO: parallelize / configurable
+	fetchers := make([]promclient.Fetcher, 0, (r.End.Sub(start)/bucketSize)+1)
+
 	for start.Before(r.End) {
 		nextBucket := start.Add(bucketSize)
 
@@ -95,22 +94,21 @@ func (c *CacheClient) QueryRange(ctx context.Context, query string, r v1.Range) 
 			StepOffset:     stepOffset.Nanoseconds(),
 			StepSize:       r.Step.Nanoseconds(),
 		}
-		v, err := c.c.Get(ctx, key)
-		if err != nil {
-			return nil, err
-		}
-		matrix, err = promhttputil.MergeValues(model.Time(0), matrix, v)
-		if err != nil {
-			return nil, err
-		}
+		fetchers = append(fetchers, promclient.FetcherFunc(func(ctx context.Context) (model.Value, error) {
+			return c.c.Get(ctx, key)
+		}))
 		for start.Before(nextBucket) {
 			start = start.Add(r.Step)
 		}
+	}
+	v, err := promclient.MultiFetch(ctx, model.Time(0), fetchers...)
+	if err != nil {
+		return nil, err
 	}
 
 	rangeStart := model.TimeFromUnixNano(r.Start.UnixNano())
 	rangeEnd := model.TimeFromUnixNano(r.End.UnixNano())
 
-	TrimMatrix(matrix.(model.Matrix), rangeStart, rangeEnd)
-	return matrix, nil
+	TrimMatrix(v.(model.Matrix), rangeStart, rangeEnd)
+	return v, nil
 }
