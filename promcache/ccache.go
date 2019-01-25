@@ -6,8 +6,20 @@ import (
 	"time"
 
 	"github.com/karlseguin/ccache"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 )
+
+var (
+	ccacheHitRate = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "ccache_requests_total",
+		Help: "total number of requests",
+	}, []string{"status"})
+)
+
+func init() {
+	prometheus.MustRegister(ccacheHitRate)
+}
 
 var DefaultCCacheOptions = CCacheOptions{
 	MaxSize:      10000,
@@ -56,15 +68,19 @@ type CCache struct {
 
 func (c *CCache) Get(ctx context.Context, key CacheKey) (model.Value, error) {
 	b, _ := key.Marshal()
+	k := string(b)
 
-	item, err := c.Cache.Fetch(string(b), c.opts.TTL, func() (interface{}, error) {
-		fmt.Println("miss")
-		return c.g.Get(ctx, key)
-	})
-
+	item := c.Cache.Get(k)
+	if item != nil && !item.Expired() {
+		ccacheHitRate.WithLabelValues("hit").Inc()
+		return item.Value().(model.Value), nil
+	}
+	ccacheHitRate.WithLabelValues("miss").Inc()
+	value, err := c.g.Get(ctx, key)
 	if err != nil {
 		return nil, err
 	}
-
-	return item.Value().(model.Value), nil
+	// miss
+	c.Set(k, value, c.opts.TTL)
+	return value, nil
 }
