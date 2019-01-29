@@ -129,22 +129,9 @@ func main() {
 	}
 
 	// Use log level
-	level := logrus.InfoLevel
-	switch strings.ToLower(opts.LogLevel) {
-	case "panic":
-		level = logrus.PanicLevel
-	case "fatal":
-		level = logrus.FatalLevel
-	case "error":
-		level = logrus.ErrorLevel
-	case "warn":
-		level = logrus.WarnLevel
-	case "info":
-		level = logrus.InfoLevel
-	case "debug":
-		level = logrus.DebugLevel
-	default:
-		logrus.Fatalf("Unknown log level: %s", opts.LogLevel)
+	level, err := logrus.ParseLevel(opts.LogLevel)
+	if err != nil {
+		logrus.Fatalf("Unknown log level %s: %v", opts.LogLevel, err)
 	}
 	logrus.SetLevel(level)
 
