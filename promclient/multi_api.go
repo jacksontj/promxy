@@ -317,7 +317,7 @@ func (m *MultiAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 	// Scatter out all the queries
 	for i, api := range m.apis {
 		resultChans[i] = make(chan interface{}, 1)
-		go func(retChan chan interface{}, api API) {
+		go func(i int, retChan chan interface{}, api API) {
 			queryStart := time.Now()
 			result, err := api.GetValue(childContext, start, end, matchers)
 			took := time.Now().Sub(queryStart)
@@ -328,7 +328,7 @@ func (m *MultiAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 				m.recordMetric(i, "get_value", "success", took.Seconds())
 				retChan <- result
 			}
-		}(resultChans[i], api)
+		}(i, resultChans[i], api)
 	}
 
 	// Wait for results as we get them
