@@ -3,6 +3,9 @@ notifications:
 
 language: go
 
+# use container infrastructure
+sudo: false
+
 # cache go build cache and pkg mod
 cache:
   directories:
