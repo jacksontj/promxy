@@ -30,6 +30,8 @@ remote_write:
 ##
 promxy:
   server_groups:
+    # All upstream prometheus service discovery mechanisms are supported with the same
+    # markup, all defined in https://github.com/prometheus/prometheus/blob/master/discovery/config/config.go#L33
     - static_configs:
         - targets:
           - localhost:9090
