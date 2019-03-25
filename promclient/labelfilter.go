@@ -1,4 +1,4 @@
-package servergroup
+package promclient
 
 import (
 	"github.com/prometheus/common/model"
@@ -7,7 +7,6 @@ import (
 )
 
 type LabelFilterVisitor struct {
-	s           *ServerGroup
 	ls          model.LabelSet
 	filterMatch bool
 }

@@ -19,13 +19,10 @@ import (
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/relabel"
 	"github.com/prometheus/prometheus/storage/remote"
-	"github.com/sirupsen/logrus"
 
 	"github.com/jacksontj/promxy/promclient"
-	"github.com/jacksontj/promxy/promhttputil"
 
 	sd_config "github.com/prometheus/prometheus/discovery/config"
 )
@@ -69,8 +66,6 @@ type ServerGroupState struct {
 	// Targets is the list of target URLs for this discovery round
 	Targets   []string
 	apiClient promclient.API
-	// Labels that should be applied to metrics from this serverGroup
-	Labels model.LabelSet
 }
 
 type ServerGroup struct {
@@ -100,7 +95,6 @@ func (s *ServerGroup) Sync() {
 	for targetGroupMap := range syncCh {
 		targets := make([]string, 0)
 		apiClients := make([]promclient.API, 0)
-		var ls model.LabelSet
 
 		for _, targetGroupList := range targetGroupMap {
 			for _, targetGroup := range targetGroupList {
@@ -126,6 +120,7 @@ func (s *ServerGroup) Sync() {
 
 					promAPIClient := v1.NewAPI(client)
 
+					var apiClient promclient.API
 					if s.Cfg.RemoteRead {
 						u.Path = path.Join(u.Path, "api/v1/read")
 						cfg := &remote.ClientConfig{
@@ -138,9 +133,9 @@ func (s *ServerGroup) Sync() {
 							panic(err)
 						}
 
-						apiClients = append(apiClients, &promclient.PromAPIRemoteRead{promAPIClient, remoteStorageClient})
+						apiClient = &promclient.PromAPIRemoteRead{promAPIClient, remoteStorageClient}
 					} else {
-						apiClients = append(apiClients, &promclient.PromAPIV1{promAPIClient})
+						apiClient = &promclient.PromAPIV1{promAPIClient}
 					}
 
 					// We remove all private labels after we set the target entry
@@ -150,42 +145,7 @@ func (s *ServerGroup) Sync() {
 						}
 					}
 
-					// Now we want to generate the labelset for this servergroup based
-					// on the relabel_config. In the event that the relabel_config returns
-					// different labelsets per-host we'll take the intersection. This is
-					// important as these labels will be added to each result from these
-					// targets, and since they are in the same targetgroup they are supposed
-					// to be the same-- so if they had different labels we'd be duplicating
-					// the metrics, which we don't want.
-					if ls == nil {
-						ls = target
-					} else {
-						if !ls.Equal(target) {
-							// If not equal, we want ls to be the intersection of all the labelsets
-							// we see, this is because targetManager.SyncCh() has no error reporting
-							// mechanism
-							changedKeys := make([]model.LabelName, 0)
-							for k, v := range ls {
-								// if the new labelset doesn't have it, remove it
-								if oV, ok := target[k]; !ok {
-									delete(ls, k)
-									changedKeys = append(changedKeys, k)
-								} else if v != oV { // If the keys both exist but values don't
-									delete(ls, k)
-									delete(target, k)
-									changedKeys = append(changedKeys, k)
-								}
-							}
-							for k := range target {
-								// if the new labelset doesn't have it, remove it
-								if _, ok := ls[k]; !ok {
-									delete(target, k)
-									changedKeys = append(changedKeys, k)
-								}
-							}
-							logrus.Warnf("relabel_configs for server group created different labelsets for targets within the same server group; using intersection of labelsets: different keys=%v", changedKeys)
-						}
-					}
+					apiClients = append(apiClients, &promclient.AddLabelClient{apiClient, target.Merge(s.Cfg.Labels)})
 				}
 			}
 		}
@@ -197,9 +157,6 @@ func (s *ServerGroup) Sync() {
 		s.state.Store(&ServerGroupState{
 			Targets:   targets,
 			apiClient: promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc),
-			// Merge labels we just got with the statically configured ones, this way the
-			// static ones take priority
-			Labels: ls.Merge(s.Cfg.Labels),
 		})
 
 		if !s.loaded {
@@ -264,138 +221,25 @@ func (s *ServerGroup) State() *ServerGroupState {
 
 // GetValue loads the raw data for a given set of matchers in the time range
 func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
-	state := s.State()
-	filteredMatchers, ok := FilterMatchers(state.Labels, matchers)
-	if !ok {
-		return nil, nil
-	}
-
-	val, err := state.apiClient.GetValue(ctx, start, end, filteredMatchers)
-	if err != nil {
-		return nil, err
-	}
-	if err := promhttputil.ValueAddLabelSet(val, state.Labels); err != nil {
-		return nil, err
-	}
-
-	return val, nil
+	return s.State().apiClient.GetValue(ctx, start, end, matchers)
 }
 
 // Query performs a query for the given time.
 func (s *ServerGroup) Query(ctx context.Context, query string, ts time.Time) (model.Value, error) {
-	state := s.State()
-
-	// Parse out the promql query into expressions etc.
-	e, err := promql.ParseExpr(query)
-	if err != nil {
-		return nil, err
-	}
-
-	// Walk the expression, to filter out any LabelMatchers that match etc.
-	filterVisitor := &LabelFilterVisitor{s, state.Labels, true}
-	if _, err := promql.Walk(ctx, filterVisitor, &promql.EvalStmt{Expr: e}, e, nil, nil); err != nil {
-		return nil, err
-	}
-	if !filterVisitor.filterMatch {
-		return nil, nil
-	}
-
-	val, err := state.apiClient.Query(ctx, e.String(), ts)
-	if err != nil {
-		return nil, err
-	}
-	if err := promhttputil.ValueAddLabelSet(val, state.Labels); err != nil {
-		return nil, err
-	}
-	return val, nil
+	return s.State().apiClient.Query(ctx, query, ts)
 }
 
 // QueryRange performs a query for the given range.
 func (s *ServerGroup) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, error) {
-	state := s.State()
-
-	// Parse out the promql query into expressions etc.
-	e, err := promql.ParseExpr(query)
-	if err != nil {
-		return nil, err
-	}
-
-	// Walk the expression, to filter out any LabelMatchers that match etc.
-	filterVisitor := &LabelFilterVisitor{s, state.Labels, true}
-	if _, err := promql.Walk(ctx, filterVisitor, &promql.EvalStmt{Expr: e}, e, nil, nil); err != nil {
-		return nil, err
-	}
-	if !filterVisitor.filterMatch {
-		return nil, nil
-	}
-
-	val, err := state.apiClient.QueryRange(ctx, e.String(), r)
-	if err != nil {
-		return nil, err
-	}
-	if err := promhttputil.ValueAddLabelSet(val, state.Labels); err != nil {
-		return nil, err
-	}
-	return val, nil
+	return s.State().apiClient.QueryRange(ctx, query, r)
 }
 
 // LabelValues performs a query for the values of the given label.
 func (s *ServerGroup) LabelValues(ctx context.Context, label string) (model.LabelValues, error) {
-	state := s.State()
-
-	val, err := state.apiClient.LabelValues(ctx, label)
-	if err != nil {
-		return nil, err
-	}
-	// do we have labels that match in our state
-	if value, ok := state.Labels[model.LabelName(label)]; ok {
-		return promclient.MergeLabelValues(val, model.LabelValues{value}), nil
-	}
-	return val, nil
+	return s.State().apiClient.LabelValues(ctx, label)
 }
 
 // Series finds series by label matchers.
 func (s *ServerGroup) Series(ctx context.Context, matches []string, startTime, endTime time.Time) ([]model.LabelSet, error) {
-	state := s.State()
-
-	// Now we need to filter the matches sent to us for the labels associated with this
-	// servergroup
-	filteredMatches := make([]string, 0, len(matches))
-	for _, matcher := range matches {
-		// Parse out the promql query into expressions etc.
-		e, err := promql.ParseExpr(matcher)
-		if err != nil {
-			return nil, err
-		}
-
-		// Walk the expression, to filter out any LabelMatchers that match etc.
-		filterVisitor := &LabelFilterVisitor{s, state.Labels, true}
-		if _, err := promql.Walk(ctx, filterVisitor, &promql.EvalStmt{Expr: e}, e, nil, nil); err != nil {
-			return nil, err
-		}
-		// If we didn't match, lets skip
-		if !filterVisitor.filterMatch {
-			continue
-		}
-		// if we did match, lets assign the filtered version of the matcher
-		filteredMatches = append(filteredMatches, e.String())
-	}
-
-	// If no matchers remain, then we don't have anything -- so skip
-	if len(filteredMatches) == 0 {
-		return nil, nil
-	}
-
-	v, err := state.apiClient.Series(ctx, filteredMatches, startTime, endTime)
-	if err != nil {
-		return nil, err
-	}
-
-	// add our state's labels to the labelsets we return
-	for _, lset := range v {
-		for k, v := range state.Labels {
-			lset[k] = v
-		}
-	}
-	return v, nil
+	return s.State().apiClient.Series(ctx, matches, startTime, endTime)
 }
