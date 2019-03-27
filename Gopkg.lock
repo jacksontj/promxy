@@ -340,12 +340,12 @@
   version = "v1.3.1"
 
 [[projects]]
-  digest = "1:c17c26d41a797e4377bbd26e2ca8dfb4103624a7509f7e4e62e262d720c42dcd"
+  digest = "1:adf097b949dbc1e452fbad15322c78651f6e7accb4661dffa38fed30273c5966"
   name = "github.com/hashicorp/consul"
   packages = ["api"]
   pruneopts = "NUT"
-  revision = "112c0603d3d6fb23ab5f15e8fdb1a761da8eaf9a"
-  version = "v0.9.3"
+  revision = "ea5210a30e154f4da9a4c8e729b45b8ce7b9b92c"
+  version = "v1.4.4"
 
 [[projects]]
   branch = "master"
@@ -457,6 +457,14 @@
   packages = ["."]
   pruneopts = "NUT"
   revision = "b8bc1bf767474819792c23f32d8286a45736f1c6"
+
+[[projects]]
+  digest = "1:a45ae66dea4c899d79fceb116accfa1892105c251f0dcd9a217ddc276b42ec68"
+  name = "github.com/mitchellh/mapstructure"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "3536a929edddb9a5b34bd6861dc4a9647cb459fe"
+  version = "v1.1.2"
 
 [[projects]]
   digest = "1:2f42fa12d6911c7b7659738758631bec870b7e9b4c6be5444f963cdcfccc191f"
@@ -587,7 +595,7 @@
 
 [[projects]]
   branch = "release-2.3_fork_promxy"
-  digest = "1:e7957bc4e5b099bd59cb4ec65c36f512242ba93e906ea3d438f0f3a9a3cfe3a0"
+  digest = "1:32a8027a6c7277e708c5a5921f4464965aec3a49c4e45fb48a2976cab772d9bf"
   name = "github.com/prometheus/prometheus"
   packages = [
     "config",
@@ -633,7 +641,7 @@
     "web/ui",
   ]
   pruneopts = "NUT"
-  revision = "6fd27a1bc5a9a6cc4fa09f94766dd0ee3fe258a8"
+  revision = "6460e0fe729097d4d78c04a0f7558acb557607f1"
   source = "github.com/jacksontj/prometheus"
 
 [[projects]]
@@ -1037,7 +1045,9 @@
     "github.com/prometheus/client_golang/api",
     "github.com/prometheus/client_golang/api/prometheus/v1",
     "github.com/prometheus/client_golang/prometheus",
+    "github.com/prometheus/client_model/go",
     "github.com/prometheus/common/config",
+    "github.com/prometheus/common/expfmt",
     "github.com/prometheus/common/log",
     "github.com/prometheus/common/model",
     "github.com/prometheus/common/promlog",
