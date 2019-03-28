@@ -47,8 +47,11 @@ type Config struct {
 	// Labels is a set of labels that will be added to all metrics retrieved
 	// from this server group
 	Labels model.LabelSet `json:"labels"`
-	// RelabelConfigs is identical in function and configuration as prometheus'
-	// relabel config for scrape jobs
+	// RelabelConfigs are similar in function and identical in configuration as prometheus'
+	// relabel config for scrape jobs. The difference here being that the source labels
+	// you can pull from are from the downstream servergroup target and the labels you are
+	// relabeling are that of the timeseries being returned. This allows you to mutate the
+	// labelsets returned by that target at runtime.
 	RelabelConfigs []*config.RelabelConfig `yaml:"relabel_configs,omitempty"`
 	// Hosts is a set of ServiceDiscoveryConfig options that allow promxy to discover
 	// all hosts in the server_group
