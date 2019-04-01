@@ -52,6 +52,27 @@ type Config struct {
 	// you can pull from are from the downstream servergroup target and the labels you are
 	// relabeling are that of the timeseries being returned. This allows you to mutate the
 	// labelsets returned by that target at runtime.
+	// To further illustrate the difference we'll look at an example:
+	//
+	//      relabel_configs:
+	//    - source_labels: [__meta_consul_tags]
+	//      regex: '.*,prod,.*'
+	//      action: keep
+	//    - source_labels: [__meta_consul_dc]
+	//      regex: '.+'
+	//      action: replace
+	//      target_label: datacenter
+	//
+	// If we saw this in a scrape-config we would expect:
+	//   (1) the scrape would only target hosts with a prod consul label
+	//   (2) it would add a label to all returned series of datacenter with the value set to whatever the value of __meat_consul_dc was.
+	//
+	// If we saw this same config in promxy (pointing at prometheus hosts instead of some exporter), we'd expect a similar behavior:
+	//   (1) only targets with the prod consul label would be included in the servergroup
+	//   (2) it would add a label to all returned series of this servergroup of datacenter with the value set to whatever the value of __meat_consul_dc was.
+	//
+	// So in reality its "the same", the difference is in prometheus these apply to the labels/targets of a scrape job,
+	// in promxy they apply to the prometheus hosts in the servergroup - but the behavior is the same.
 	RelabelConfigs []*config.RelabelConfig `yaml:"relabel_configs,omitempty"`
 	// Hosts is a set of ServiceDiscoveryConfig options that allow promxy to discover
 	// all hosts in the server_group
