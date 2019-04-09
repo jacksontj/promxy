@@ -68,6 +68,8 @@ type CLIOpts struct {
 
 	NotificationQueueCapacity int    `long:"alertmanager.notification-queue-capacity" description:"The capacity of the queue for pending alert manager notifications." default:"10000"`
 	AccessLogDestination      string `long:"access-log-destination" description:"where to log access logs, options (none, stderr, stdout)" default:"stdout"`
+
+	ShutdownTimeout time.Duration `long:"http.shutdown-timeout" description:"max time to wait for a graceful shutdown of the HTTP server" default:"60s"`
 }
 
 func (c *CLIOpts) ToFlags() map[string]string {
@@ -375,8 +377,12 @@ func main() {
 					log.Errorf("Error reloading config: %s", err)
 				}
 			case syscall.SIGTERM, syscall.SIGINT:
-				log.Infof("promxy exiting")
-				cancel()
+				log.Infof("promxy exiting with timeout: %v", opts.ShutdownTimeout)
+				defer cancel()
+				if opts.ShutdownTimeout > 0 {
+					ctx, cancel = context.WithTimeout(ctx, opts.ShutdownTimeout)
+					defer cancel()
+				}
 				srv.Shutdown(ctx)
 				return
 			default:
