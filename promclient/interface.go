@@ -22,3 +22,10 @@ type API interface {
 	// GetValue loads the raw data for a given set of matchers in the time range
 	GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error)
 }
+
+// APILabels includes a Key() mechanism to differentiate which APIs are "the same"
+type APILabels interface {
+	API
+	// Key returns a labelset used to determine other api clients that are the "same"
+	Key() model.LabelSet
+}

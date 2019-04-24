@@ -2,7 +2,6 @@ package promclient
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -55,19 +54,43 @@ func NormalizePromError(err error) error {
 type MultiAPIMetricFunc func(i int, api, status string, took float64)
 
 // NewMultiAPI returns a MultiAPI
-func NewMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricFunc) *MultiAPI {
+func NewMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricFunc, requiredCount int) *MultiAPI {
+	fingerprintCounts := make(map[model.Fingerprint]int)
+	apiFingerprints := make([]model.Fingerprint, len(apis))
+	for i, api := range apis {
+		var fingerprint model.Fingerprint
+		if apiLabels, ok := api.(APILabels); ok {
+			if keys := apiLabels.Key(); keys != nil {
+				fingerprint = keys.FastFingerprint()
+			}
+		}
+		apiFingerprints[i] = fingerprint
+		fingerprintCounts[fingerprint]++
+	}
+
+	for _, v := range fingerprintCounts {
+		if v < requiredCount {
+			// TODO: return an error
+			panic("not possible")
+		}
+	}
+
 	return &MultiAPI{
-		apis:         apis,
-		antiAffinity: antiAffinity,
-		metricFunc:   metricFunc,
+		apis:            apis,
+		apiFingerprints: apiFingerprints,
+		antiAffinity:    antiAffinity,
+		metricFunc:      metricFunc,
+		requiredCount:   requiredCount,
 	}
 }
 
 // MultiAPI implements the API interface while merging the results from the apis it wraps
 type MultiAPI struct {
-	apis         []API
-	antiAffinity model.Time
-	metricFunc   MultiAPIMetricFunc
+	apis            []API
+	apiFingerprints []model.Fingerprint
+	antiAffinity    model.Time
+	metricFunc      MultiAPIMetricFunc
+	requiredCount   int // number "per key" that we require to respond
 }
 
 func (m *MultiAPI) recordMetric(i int, api, status string, took float64) {
@@ -80,20 +103,32 @@ func (m *MultiAPI) recordMetric(i int, api, status string, took float64) {
 func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(m.apis))
+
+	type chanResult struct {
+		v   model.LabelValues
+		err error
+		ls  model.Fingerprint
+	}
+
+	resultChans := make([]chan chanResult, len(m.apis))
+	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
-		resultChans[i] = make(chan interface{}, 1)
-		go func(i int, retChan chan interface{}, api API, label string) {
+		resultChans[i] = make(chan chanResult, 1)
+		outstandingRequests[m.apiFingerprints[i]]++
+		go func(i int, retChan chan chanResult, api API, label string) {
 			start := time.Now()
 			result, err := api.LabelValues(childContext, label)
 			took := time.Now().Sub(start)
 			if err != nil {
 				m.recordMetric(i, "label_values", "error", took.Seconds())
-				retChan <- NormalizePromError(err)
 			} else {
 				m.recordMetric(i, "label_values", "success", took.Seconds())
-				retChan <- result
+			}
+			retChan <- chanResult{
+				v:   result,
+				err: NormalizePromError(err),
+				ls:  m.apiFingerprints[i],
 			}
 		}(i, resultChans[i], api, label)
 	}
@@ -101,31 +136,36 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 	// Wait for results as we get them
 	var result []model.LabelValue
 	var lastError error
-	errCount := 0
+	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
 	for i := 0; i < len(m.apis); i++ {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
+
 		case ret := <-resultChans[i]:
-			switch retTyped := ret.(type) {
-			case error:
-				lastError = retTyped
-				errCount++
-			case model.LabelValues:
-				if result == nil {
-					result = retTyped
-				} else {
-					result = MergeLabelValues(result, retTyped)
+			outstandingRequests[ret.ls]--
+			if ret.err != nil {
+				// If there aren't enough outstanding requests to possibly succeed, no reason to wait
+				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
+					return nil, ret.err
 				}
-			default:
-				return nil, fmt.Errorf("Unknown return type")
+				lastError = ret.err
+			} else {
+				successMap[ret.ls]++
+				if result == nil {
+					result = ret.v
+				} else {
+					result = MergeLabelValues(result, ret.v)
+				}
 			}
 		}
 	}
 
-	// If we got only errors, lets return that
-	if errCount == len(m.apis) {
-		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+	// Verify that we hit the requiredCount for all of the buckets
+	for k := range outstandingRequests {
+		if successMap[k] < m.requiredCount {
+			return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+		}
 	}
 
 	return result, nil
@@ -135,20 +175,32 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(m.apis))
+
+	type chanResult struct {
+		v   model.Value
+		err error
+		ls  model.Fingerprint
+	}
+
+	resultChans := make([]chan chanResult, len(m.apis))
+	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
-		resultChans[i] = make(chan interface{}, 1)
-		go func(i int, retChan chan interface{}, api API, query string, ts time.Time) {
+		resultChans[i] = make(chan chanResult, 1)
+		outstandingRequests[m.apiFingerprints[i]]++
+		go func(i int, retChan chan chanResult, api API, query string, ts time.Time) {
 			start := time.Now()
 			result, err := api.Query(childContext, query, ts)
 			took := time.Now().Sub(start)
 			if err != nil {
 				m.recordMetric(i, "query", "error", took.Seconds())
-				retChan <- NormalizePromError(err)
 			} else {
 				m.recordMetric(i, "query", "success", took.Seconds())
-				retChan <- result
+			}
+			retChan <- chanResult{
+				v:   result,
+				err: NormalizePromError(err),
+				ls:  m.apiFingerprints[i],
 			}
 		}(i, resultChans[i], api, query, ts)
 	}
@@ -156,37 +208,40 @@ func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model
 	// Wait for results as we get them
 	var result model.Value
 	var lastError error
-	errCount := 0
+	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
 	for i := 0; i < len(m.apis); i++ {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 
 		case ret := <-resultChans[i]:
-			switch retTyped := ret.(type) {
-			case error:
-				lastError = retTyped
-				errCount++
-			case model.Value:
+			outstandingRequests[ret.ls]--
+			if ret.err != nil {
+				// If there aren't enough outstanding requests to possibly succeed, no reason to wait
+				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
+					return nil, ret.err
+				}
+				lastError = ret.err
+			} else {
+				successMap[ret.ls]++
 				if result == nil {
-					result = retTyped
+					result = ret.v
 				} else {
 					var err error
-					result, err = promhttputil.MergeValues(m.antiAffinity, result, retTyped)
+					result, err = promhttputil.MergeValues(m.antiAffinity, result, ret.v)
 					if err != nil {
 						return nil, err
 					}
 				}
-			case nil:
-				continue
-			default:
-				return nil, fmt.Errorf("Unknown return type")
 			}
 		}
 	}
 
-	if errCount != 0 && errCount == len(m.apis) {
-		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+	// Verify that we hit the requiredCount for all of the buckets
+	for k := range outstandingRequests {
+		if successMap[k] < m.requiredCount {
+			return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+		}
 	}
 
 	return result, nil
@@ -196,20 +251,32 @@ func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model
 func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(m.apis))
+
+	type chanResult struct {
+		v   model.Value
+		err error
+		ls  model.Fingerprint
+	}
+
+	resultChans := make([]chan chanResult, len(m.apis))
+	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
-		resultChans[i] = make(chan interface{}, 1)
-		go func(i int, retChan chan interface{}, api API, query string, r v1.Range) {
+		resultChans[i] = make(chan chanResult, 1)
+		outstandingRequests[m.apiFingerprints[i]]++
+		go func(i int, retChan chan chanResult, api API, query string, r v1.Range) {
 			start := time.Now()
 			result, err := api.QueryRange(childContext, query, r)
 			took := time.Now().Sub(start)
 			if err != nil {
 				m.recordMetric(i, "query_range", "error", took.Seconds())
-				retChan <- NormalizePromError(err)
 			} else {
 				m.recordMetric(i, "query_range", "success", took.Seconds())
-				retChan <- result
+			}
+			retChan <- chanResult{
+				v:   result,
+				err: NormalizePromError(err),
+				ls:  m.apiFingerprints[i],
 			}
 		}(i, resultChans[i], api, query, r)
 	}
@@ -217,37 +284,40 @@ func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 	// Wait for results as we get them
 	var result model.Value
 	var lastError error
-	errCount := 0
+	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
 	for i := 0; i < len(m.apis); i++ {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 
 		case ret := <-resultChans[i]:
-			switch retTyped := ret.(type) {
-			case error:
-				lastError = retTyped
-				errCount++
-			case model.Value:
+			outstandingRequests[ret.ls]--
+			if ret.err != nil {
+				// If there aren't enough outstanding requests to possibly succeed, no reason to wait
+				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
+					return nil, ret.err
+				}
+				lastError = ret.err
+			} else {
+				successMap[ret.ls]++
 				if result == nil {
-					result = retTyped
+					result = ret.v
 				} else {
 					var err error
-					result, err = promhttputil.MergeValues(m.antiAffinity, result, retTyped)
+					result, err = promhttputil.MergeValues(m.antiAffinity, result, ret.v)
 					if err != nil {
 						return nil, err
 					}
 				}
-			case nil:
-				continue
-			default:
-				return nil, fmt.Errorf("Unknown return type")
 			}
 		}
 	}
 
-	if errCount != 0 && errCount == len(m.apis) {
-		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+	// Verify that we hit the requiredCount for all of the buckets
+	for k := range outstandingRequests {
+		if successMap[k] < m.requiredCount {
+			return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+		}
 	}
 
 	return result, nil
@@ -257,20 +327,32 @@ func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(m.apis))
+
+	type chanResult struct {
+		v   []model.LabelSet
+		err error
+		ls  model.Fingerprint
+	}
+
+	resultChans := make([]chan chanResult, len(m.apis))
+	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
-		resultChans[i] = make(chan interface{}, 1)
-		go func(i int, retChan chan interface{}, api API) {
+		resultChans[i] = make(chan chanResult, 1)
+		outstandingRequests[m.apiFingerprints[i]]++
+		go func(i int, retChan chan chanResult, api API) {
 			start := time.Now()
 			result, err := api.Series(childContext, matches, startTime, endTime)
 			took := time.Now().Sub(start)
 			if err != nil {
 				m.recordMetric(i, "series", "error", took.Seconds())
-				retChan <- NormalizePromError(err)
 			} else {
 				m.recordMetric(i, "series", "success", took.Seconds())
-				retChan <- result
+			}
+			retChan <- chanResult{
+				v:   result,
+				err: NormalizePromError(err),
+				ls:  m.apiFingerprints[i],
 			}
 		}(i, resultChans[i], api)
 	}
@@ -278,31 +360,36 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 	// Wait for results as we get them
 	var result []model.LabelSet
 	var lastError error
-	errCount := 0
+	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
 	for i := 0; i < len(m.apis); i++ {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
+
 		case ret := <-resultChans[i]:
-			switch retTyped := ret.(type) {
-			case error:
-				lastError = retTyped
-				errCount++
-			case []model.LabelSet:
-				if result == nil {
-					result = retTyped
-				} else {
-					result = MergeLabelSets(result, retTyped)
+			outstandingRequests[ret.ls]--
+			if ret.err != nil {
+				// If there aren't enough outstanding requests to possibly succeed, no reason to wait
+				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
+					return nil, ret.err
 				}
-			default:
-				return nil, fmt.Errorf("Unknown return type")
+				lastError = ret.err
+			} else {
+				successMap[ret.ls]++
+				if result == nil {
+					result = ret.v
+				} else {
+					result = MergeLabelSets(result, ret.v)
+				}
 			}
 		}
 	}
 
-	// If we got only errors, lets return that
-	if errCount == len(m.apis) {
-		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+	// Verify that we hit the requiredCount for all of the buckets
+	for k := range outstandingRequests {
+		if successMap[k] < m.requiredCount {
+			return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+		}
 	}
 
 	return result, nil
@@ -312,21 +399,33 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 func (m *MultiAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
-	resultChans := make([]chan interface{}, len(m.apis))
+
+	type chanResult struct {
+		v   model.Value
+		err error
+		ls  model.Fingerprint
+	}
+
+	resultChans := make([]chan chanResult, len(m.apis))
+	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	// Scatter out all the queries
 	for i, api := range m.apis {
-		resultChans[i] = make(chan interface{}, 1)
-		go func(i int, retChan chan interface{}, api API) {
+		resultChans[i] = make(chan chanResult, 1)
+		outstandingRequests[m.apiFingerprints[i]]++
+		go func(i int, retChan chan chanResult, api API) {
 			queryStart := time.Now()
 			result, err := api.GetValue(childContext, start, end, matchers)
 			took := time.Now().Sub(queryStart)
 			if err != nil {
 				m.recordMetric(i, "get_value", "error", took.Seconds())
-				retChan <- err
 			} else {
 				m.recordMetric(i, "get_value", "success", took.Seconds())
-				retChan <- result
+			}
+			retChan <- chanResult{
+				v:   result,
+				err: NormalizePromError(err),
+				ls:  m.apiFingerprints[i],
 			}
 		}(i, resultChans[i], api)
 	}
@@ -334,30 +433,40 @@ func (m *MultiAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 	// Wait for results as we get them
 	var result model.Value
 	var lastError error
-	errCount := 0
+	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
 	for i := 0; i < len(m.apis); i++ {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
+
 		case ret := <-resultChans[i]:
-			switch retTyped := ret.(type) {
-			case error:
-				lastError = retTyped
-				errCount++
-			case model.Value:
-				var err error
-				result, err = promhttputil.MergeValues(model.TimeFromUnix(0), result, retTyped)
-				if err != nil {
-					return nil, err
+			outstandingRequests[ret.ls]--
+			if ret.err != nil {
+				// If there aren't enough outstanding requests to possibly succeed, no reason to wait
+				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
+					return nil, ret.err
+				}
+				lastError = ret.err
+			} else {
+				successMap[ret.ls]++
+				if result == nil {
+					result = ret.v
+				} else {
+					var err error
+					result, err = promhttputil.MergeValues(m.antiAffinity, result, ret.v)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
-
 	}
 
-	// If we got only errors, lets return that
-	if errCount == len(m.apis) {
-		return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+	// Verify that we hit the requiredCount for all of the buckets
+	for k := range outstandingRequests {
+		if successMap[k] < m.requiredCount {
+			return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+		}
 	}
 
 	return result, nil
