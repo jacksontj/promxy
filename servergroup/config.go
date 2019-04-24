@@ -90,6 +90,9 @@ type Config struct {
 	// any one of these can cause the resulting data in prometheus to have the same time but in reality
 	// come from different points in time. Best practice for this value is to set it to your scrape interval
 	AntiAffinity *time.Duration `yaml:"anti_affinity,omitempty"`
+
+	// IgnoreError will hide all errors from this given servergroup
+	IgnoreError bool `yaml:"ignore_error"`
 }
 
 func (c *Config) GetScheme() string {

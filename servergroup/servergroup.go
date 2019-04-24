@@ -154,10 +154,16 @@ func (s *ServerGroup) Sync() {
 			serverGroupSummary.WithLabelValues(targets[i], api, status).Observe(took)
 		}
 
-		s.state.Store(&ServerGroupState{
+		newState := &ServerGroupState{
 			Targets:   targets,
 			apiClient: promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc, 1),
-		})
+		}
+
+		if s.Cfg.IgnoreError {
+			newState.apiClient = &promclient.IgnoreErrorAPI{newState.apiClient}
+		}
+
+		s.state.Store(newState)
 
 		if !s.loaded {
 			s.loaded = true
