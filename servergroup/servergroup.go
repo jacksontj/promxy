@@ -156,7 +156,7 @@ func (s *ServerGroup) Sync() {
 
 		s.state.Store(&ServerGroupState{
 			Targets:   targets,
-			apiClient: promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc),
+			apiClient: promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc, 1),
 		})
 
 		if !s.loaded {

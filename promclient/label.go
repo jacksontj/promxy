@@ -50,6 +50,10 @@ type AddLabelClient struct {
 	Labels model.LabelSet
 }
 
+func (c *AddLabelClient) Key() model.LabelSet {
+	return c.Labels
+}
+
 // LabelValues performs a query for the values of the given label.
 func (c *AddLabelClient) LabelValues(ctx context.Context, label string) (model.LabelValues, error) {
 	val, err := c.API.LabelValues(ctx, label)
