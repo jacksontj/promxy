@@ -15,17 +15,16 @@ package kubernetes
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
+	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/api"
-	apiv1 "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
@@ -69,13 +68,13 @@ func NewPod(l log.Logger, pods cache.SharedInformer) *Pod {
 	return p
 }
 
-func (e *Pod) enqueue(obj interface{}) {
+func (p *Pod) enqueue(obj interface{}) {
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		return
 	}
 
-	e.queue.Add(key)
+	p.queue.Add(key)
 }
 
 // Run implements the Discoverer interface.
@@ -132,7 +131,7 @@ func convertToPod(o interface{}) (*apiv1.Pod, error) {
 		return pod, nil
 	}
 
-	return nil, fmt.Errorf("Received unexpected object: %v", o)
+	return nil, errors.Errorf("received unexpected object: %v", o)
 }
 
 const (
@@ -143,8 +142,11 @@ const (
 	podContainerPortNumberLabel   = metaLabelPrefix + "pod_container_port_number"
 	podContainerPortProtocolLabel = metaLabelPrefix + "pod_container_port_protocol"
 	podReadyLabel                 = metaLabelPrefix + "pod_ready"
+	podPhaseLabel                 = metaLabelPrefix + "pod_phase"
 	podLabelPrefix                = metaLabelPrefix + "pod_label_"
+	podLabelPresentPrefix         = metaLabelPrefix + "pod_labelpresent_"
 	podAnnotationPrefix           = metaLabelPrefix + "pod_annotation_"
+	podAnnotationPresentPrefix    = metaLabelPrefix + "pod_annotationpresent_"
 	podNodeNameLabel              = metaLabelPrefix + "pod_node_name"
 	podHostIPLabel                = metaLabelPrefix + "pod_host_ip"
 	podUID                        = metaLabelPrefix + "pod_uid"
@@ -168,6 +170,7 @@ func podLabels(pod *apiv1.Pod) model.LabelSet {
 		podNameLabel:     lv(pod.ObjectMeta.Name),
 		podIPLabel:       lv(pod.Status.PodIP),
 		podReadyLabel:    podReady(pod),
+		podPhaseLabel:    lv(string(pod.Status.Phase)),
 		podNodeNameLabel: lv(pod.Spec.NodeName),
 		podHostIPLabel:   lv(pod.Status.HostIP),
 		podUID:           lv(string(pod.ObjectMeta.UID)),
@@ -184,13 +187,15 @@ func podLabels(pod *apiv1.Pod) model.LabelSet {
 	}
 
 	for k, v := range pod.Labels {
-		ln := strutil.SanitizeLabelName(podLabelPrefix + k)
-		ls[model.LabelName(ln)] = lv(v)
+		ln := strutil.SanitizeLabelName(k)
+		ls[model.LabelName(podLabelPrefix+ln)] = lv(v)
+		ls[model.LabelName(podLabelPresentPrefix+ln)] = presentValue
 	}
 
 	for k, v := range pod.Annotations {
-		ln := strutil.SanitizeLabelName(podAnnotationPrefix + k)
-		ls[model.LabelName(ln)] = lv(v)
+		ln := strutil.SanitizeLabelName(k)
+		ls[model.LabelName(podAnnotationPrefix+ln)] = lv(v)
+		ls[model.LabelName(podAnnotationPresentPrefix+ln)] = presentValue
 	}
 
 	return ls
@@ -252,5 +257,5 @@ func podReady(pod *apiv1.Pod) model.LabelValue {
 			return lv(strings.ToLower(string(cond.Status)))
 		}
 	}
-	return lv(strings.ToLower(string(api.ConditionUnknown)))
+	return lv(strings.ToLower(string(apiv1.ConditionUnknown)))
 }

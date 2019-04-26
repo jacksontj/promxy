@@ -32,28 +32,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
+	"golang.org/x/net/http2"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer/streaming"
 	"k8s.io/apimachinery/pkg/util/net"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/pkg/api/v1"
 	restclientwatch "k8s.io/client-go/rest/watch"
 	"k8s.io/client-go/tools/metrics"
 	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/klog"
 )
 
 var (
-	// specialParams lists parameters that are handled specially and which users of Request
-	// are therefore not allowed to set manually.
-	specialParams = sets.NewString("timeout")
-
 	// longThrottleLatency defines threshold for logging requests. All requests being
 	// throttle for more than longThrottleLatency will be logged.
 	longThrottleLatency = 50 * time.Millisecond
@@ -119,9 +112,9 @@ type Request struct {
 }
 
 // NewRequest creates a new request helper object for accessing runtime.Objects on a server.
-func NewRequest(client HTTPClient, verb string, baseURL *url.URL, versionedAPIPath string, content ContentConfig, serializers Serializers, backoff BackoffManager, throttle flowcontrol.RateLimiter) *Request {
+func NewRequest(client HTTPClient, verb string, baseURL *url.URL, versionedAPIPath string, content ContentConfig, serializers Serializers, backoff BackoffManager, throttle flowcontrol.RateLimiter, timeout time.Duration) *Request {
 	if backoff == nil {
-		glog.V(2).Infof("Not implementing request backoff strategy.")
+		klog.V(2).Infof("Not implementing request backoff strategy.")
 		backoff = &NoBackoff{}
 	}
 
@@ -138,6 +131,7 @@ func NewRequest(client HTTPClient, verb string, baseURL *url.URL, versionedAPIPa
 		serializers: serializers,
 		backoffMgr:  backoff,
 		throttle:    throttle,
+		timeout:     timeout,
 	}
 	switch {
 	case len(content.AcceptContentTypes) > 0:
@@ -186,7 +180,25 @@ func (r *Request) Resource(resource string) *Request {
 	return r
 }
 
-// SubResource sets a sub-resource path which can be multiple segments segment after the resource
+// BackOff sets the request's backoff manager to the one specified,
+// or defaults to the stub implementation if nil is provided
+func (r *Request) BackOff(manager BackoffManager) *Request {
+	if manager == nil {
+		r.backoffMgr = &NoBackoff{}
+		return r
+	}
+
+	r.backoffMgr = manager
+	return r
+}
+
+// Throttle receives a rate-limiter and sets or replaces an existing request limiter
+func (r *Request) Throttle(limiter flowcontrol.RateLimiter) *Request {
+	r.throttle = limiter
+	return r
+}
+
+// SubResource sets a sub-resource path which can be multiple segments after the resource
 // name but before the suffix.
 func (r *Request) SubResource(subresources ...string) *Request {
 	if r.err != nil {
@@ -269,7 +281,7 @@ func (r *Request) AbsPath(segments ...string) *Request {
 }
 
 // RequestURI overwrites existing path and parameters with the value of the provided server relative
-// URI. Some parameters (those in specialParameters) cannot be overwritten.
+// URI.
 func (r *Request) RequestURI(uri string) *Request {
 	if r.err != nil {
 		return r
@@ -291,143 +303,6 @@ func (r *Request) RequestURI(uri string) *Request {
 	return r
 }
 
-const (
-	// A constant that clients can use to refer in a field selector to the object name field.
-	// Will be automatically emitted as the correct name for the API version.
-	nodeUnschedulable = "spec.unschedulable"
-	objectNameField   = "metadata.name"
-	podHost           = "spec.nodeName"
-	podStatus         = "status.phase"
-	secretType        = "type"
-
-	eventReason                  = "reason"
-	eventSource                  = "source"
-	eventType                    = "type"
-	eventInvolvedKind            = "involvedObject.kind"
-	eventInvolvedNamespace       = "involvedObject.namespace"
-	eventInvolvedName            = "involvedObject.name"
-	eventInvolvedUID             = "involvedObject.uid"
-	eventInvolvedAPIVersion      = "involvedObject.apiVersion"
-	eventInvolvedResourceVersion = "involvedObject.resourceVersion"
-	eventInvolvedFieldPath       = "involvedObject.fieldPath"
-)
-
-type clientFieldNameToAPIVersionFieldName map[string]string
-
-func (c clientFieldNameToAPIVersionFieldName) filterField(field, value string) (newField, newValue string, err error) {
-	newFieldName, ok := c[field]
-	if !ok {
-		return "", "", fmt.Errorf("%v - %v - no field mapping defined", field, value)
-	}
-	return newFieldName, value, nil
-}
-
-type resourceTypeToFieldMapping map[string]clientFieldNameToAPIVersionFieldName
-
-func (r resourceTypeToFieldMapping) filterField(resourceType, field, value string) (newField, newValue string, err error) {
-	fMapping, ok := r[resourceType]
-	if !ok {
-		return "", "", fmt.Errorf("%v - %v - %v - no field mapping defined", resourceType, field, value)
-	}
-	return fMapping.filterField(field, value)
-}
-
-type versionToResourceToFieldMapping map[schema.GroupVersion]resourceTypeToFieldMapping
-
-// filterField transforms the given field/value selector for the given groupVersion and resource
-func (v versionToResourceToFieldMapping) filterField(groupVersion *schema.GroupVersion, resourceType, field, value string) (newField, newValue string, err error) {
-	rMapping, ok := v[*groupVersion]
-	if !ok {
-		// no groupVersion overrides registered, default to identity mapping
-		return field, value, nil
-	}
-	newField, newValue, err = rMapping.filterField(resourceType, field, value)
-	if err != nil {
-		// no groupVersionResource overrides registered, default to identity mapping
-		return field, value, nil
-	}
-	return newField, newValue, nil
-}
-
-var fieldMappings = versionToResourceToFieldMapping{
-	v1.SchemeGroupVersion: resourceTypeToFieldMapping{
-		"nodes": clientFieldNameToAPIVersionFieldName{
-			objectNameField:   objectNameField,
-			nodeUnschedulable: nodeUnschedulable,
-		},
-		"pods": clientFieldNameToAPIVersionFieldName{
-			objectNameField: objectNameField,
-			podHost:         podHost,
-			podStatus:       podStatus,
-		},
-		"secrets": clientFieldNameToAPIVersionFieldName{
-			secretType: secretType,
-		},
-		"serviceAccounts": clientFieldNameToAPIVersionFieldName{
-			objectNameField: objectNameField,
-		},
-		"endpoints": clientFieldNameToAPIVersionFieldName{
-			objectNameField: objectNameField,
-		},
-		"events": clientFieldNameToAPIVersionFieldName{
-			objectNameField:              objectNameField,
-			eventReason:                  eventReason,
-			eventSource:                  eventSource,
-			eventType:                    eventType,
-			eventInvolvedKind:            eventInvolvedKind,
-			eventInvolvedNamespace:       eventInvolvedNamespace,
-			eventInvolvedName:            eventInvolvedName,
-			eventInvolvedUID:             eventInvolvedUID,
-			eventInvolvedAPIVersion:      eventInvolvedAPIVersion,
-			eventInvolvedResourceVersion: eventInvolvedResourceVersion,
-			eventInvolvedFieldPath:       eventInvolvedFieldPath,
-		},
-	},
-}
-
-// FieldsSelectorParam adds the given selector as a query parameter with the name paramName.
-func (r *Request) FieldsSelectorParam(s fields.Selector) *Request {
-	if r.err != nil {
-		return r
-	}
-	if s == nil {
-		return r
-	}
-	if s.Empty() {
-		return r
-	}
-	s2, err := s.Transform(func(field, value string) (newField, newValue string, err error) {
-		return fieldMappings.filterField(r.content.GroupVersion, r.resource, field, value)
-	})
-	if err != nil {
-		r.err = err
-		return r
-	}
-	return r.setParam(metav1.FieldSelectorQueryParam(r.content.GroupVersion.String()), s2.String())
-}
-
-// LabelsSelectorParam adds the given selector as a query parameter
-func (r *Request) LabelsSelectorParam(s labels.Selector) *Request {
-	if r.err != nil {
-		return r
-	}
-	if s == nil {
-		return r
-	}
-	if s.Empty() {
-		return r
-	}
-	return r.setParam(metav1.LabelSelectorQueryParam(r.content.GroupVersion.String()), s.String())
-}
-
-// UintParam creates a query parameter with the given value.
-func (r *Request) UintParam(paramName string, u uint64) *Request {
-	if r.err != nil {
-		return r
-	}
-	return r.setParam(paramName, strconv.FormatUint(u, 10))
-}
-
 // Param creates a query parameter with the given string value.
 func (r *Request) Param(paramName, s string) *Request {
 	if r.err != nil {
@@ -439,62 +314,31 @@ func (r *Request) Param(paramName, s string) *Request {
 // VersionedParams will take the provided object, serialize it to a map[string][]string using the
 // implicit RESTClient API version and the default parameter codec, and then add those as parameters
 // to the request. Use this to provide versioned query parameters from client libraries.
+// VersionedParams will not write query parameters that have omitempty set and are empty. If a
+// parameter has already been set it is appended to (Params and VersionedParams are additive).
 func (r *Request) VersionedParams(obj runtime.Object, codec runtime.ParameterCodec) *Request {
+	return r.SpecificallyVersionedParams(obj, codec, *r.content.GroupVersion)
+}
+
+func (r *Request) SpecificallyVersionedParams(obj runtime.Object, codec runtime.ParameterCodec, version schema.GroupVersion) *Request {
 	if r.err != nil {
 		return r
 	}
-	params, err := codec.EncodeParameters(obj, *r.content.GroupVersion)
+	params, err := codec.EncodeParameters(obj, version)
 	if err != nil {
 		r.err = err
 		return r
 	}
 	for k, v := range params {
-		for _, value := range v {
-			// TODO: Move it to setParam method, once we get rid of
-			// FieldSelectorParam & LabelSelectorParam methods.
-			if k == metav1.LabelSelectorQueryParam(r.content.GroupVersion.String()) && value == "" {
-				// Don't set an empty selector for backward compatibility.
-				// Since there is no way to get the difference between empty
-				// and unspecified string, we don't set it to avoid having
-				// labelSelector= param in every request.
-				continue
-			}
-			if k == metav1.FieldSelectorQueryParam(r.content.GroupVersion.String()) {
-				if len(value) == 0 {
-					// Don't set an empty selector for backward compatibility.
-					// Since there is no way to get the difference between empty
-					// and unspecified string, we don't set it to avoid having
-					// fieldSelector= param in every request.
-					continue
-				}
-				// TODO: Filtering should be handled somewhere else.
-				selector, err := fields.ParseSelector(value)
-				if err != nil {
-					r.err = fmt.Errorf("unparsable field selector: %v", err)
-					return r
-				}
-				filteredSelector, err := selector.Transform(
-					func(field, value string) (newField, newValue string, err error) {
-						return fieldMappings.filterField(r.content.GroupVersion, r.resource, field, value)
-					})
-				if err != nil {
-					r.err = fmt.Errorf("untransformable field selector: %v", err)
-					return r
-				}
-				value = filteredSelector.String()
-			}
-
-			r.setParam(k, value)
+		if r.params == nil {
+			r.params = make(url.Values)
 		}
+		r.params[k] = append(r.params[k], v...)
 	}
 	return r
 }
 
 func (r *Request) setParam(paramName, value string) *Request {
-	if specialParams.Has(paramName) {
-		r.err = fmt.Errorf("must set %v through the corresponding function, not directly.", paramName)
-		return r
-	}
 	if r.params == nil {
 		r.params = make(url.Values)
 	}
@@ -502,16 +346,19 @@ func (r *Request) setParam(paramName, value string) *Request {
 	return r
 }
 
-func (r *Request) SetHeader(key, value string) *Request {
+func (r *Request) SetHeader(key string, values ...string) *Request {
 	if r.headers == nil {
 		r.headers = http.Header{}
 	}
-	r.headers.Set(key, value)
+	r.headers.Del(key)
+	for _, value := range values {
+		r.headers.Add(key, value)
+	}
 	return r
 }
 
-// Timeout makes the request use the given duration as a timeout. Sets the "timeout"
-// parameter.
+// Timeout makes the request use the given duration as an overall timeout for the
+// request. Additionally, if set passes the value as "timeout" parameter in URL.
 func (r *Request) Timeout(d time.Duration) *Request {
 	if r.err != nil {
 		return r
@@ -608,17 +455,9 @@ func (r *Request) URL() *url.URL {
 
 // finalURLTemplate is similar to URL(), but will make all specific parameter values equal
 // - instead of name or namespace, "{name}" and "{namespace}" will be used, and all query
-// parameters will be reset. This creates a copy of the request so as not to change the
-// underyling object.  This means some useful request info (like the types of field
-// selectors in use) will be lost.
-// TODO: preserve field selector keys
+// parameters will be reset. This creates a copy of the url so as not to change the
+// underlying object.
 func (r Request) finalURLTemplate() url.URL {
-	if len(r.resourceName) != 0 {
-		r.resourceName = "{name}"
-	}
-	if r.namespaceSet && len(r.namespace) != 0 {
-		r.namespace = "{namespace}"
-	}
 	newParams := url.Values{}
 	v := []string{"{value}"}
 	for k := range r.params {
@@ -626,6 +465,59 @@ func (r Request) finalURLTemplate() url.URL {
 	}
 	r.params = newParams
 	url := r.URL()
+	segments := strings.Split(r.URL().Path, "/")
+	groupIndex := 0
+	index := 0
+	if r.URL() != nil && r.baseURL != nil && strings.Contains(r.URL().Path, r.baseURL.Path) {
+		groupIndex += len(strings.Split(r.baseURL.Path, "/"))
+	}
+	if groupIndex >= len(segments) {
+		return *url
+	}
+
+	const CoreGroupPrefix = "api"
+	const NamedGroupPrefix = "apis"
+	isCoreGroup := segments[groupIndex] == CoreGroupPrefix
+	isNamedGroup := segments[groupIndex] == NamedGroupPrefix
+	if isCoreGroup {
+		// checking the case of core group with /api/v1/... format
+		index = groupIndex + 2
+	} else if isNamedGroup {
+		// checking the case of named group with /apis/apps/v1/... format
+		index = groupIndex + 3
+	} else {
+		// this should not happen that the only two possibilities are /api... and /apis..., just want to put an
+		// outlet here in case more API groups are added in future if ever possible:
+		// https://kubernetes.io/docs/concepts/overview/kubernetes-api/#api-groups
+		// if a wrong API groups name is encountered, return the {prefix} for url.Path
+		url.Path = "/{prefix}"
+		url.RawQuery = ""
+		return *url
+	}
+	//switch segLength := len(segments) - index; segLength {
+	switch {
+	// case len(segments) - index == 1:
+	// resource (with no name) do nothing
+	case len(segments)-index == 2:
+		// /$RESOURCE/$NAME: replace $NAME with {name}
+		segments[index+1] = "{name}"
+	case len(segments)-index == 3:
+		if segments[index+2] == "finalize" || segments[index+2] == "status" {
+			// /$RESOURCE/$NAME/$SUBRESOURCE: replace $NAME with {name}
+			segments[index+1] = "{name}"
+		} else {
+			// /namespace/$NAMESPACE/$RESOURCE: replace $NAMESPACE with {namespace}
+			segments[index+1] = "{namespace}"
+		}
+	case len(segments)-index >= 4:
+		segments[index+1] = "{namespace}"
+		// /namespace/$NAMESPACE/$RESOURCE/$NAME: replace $NAMESPACE with {namespace},  $NAME with {name}
+		if segments[index+3] != "finalize" && segments[index+3] != "status" {
+			// /$RESOURCE/$NAME/$SUBRESOURCE: replace $NAME with {name}
+			segments[index+3] = "{name}"
+		}
+	}
+	url.Path = path.Join(segments...)
 	return *url
 }
 
@@ -635,13 +527,26 @@ func (r *Request) tryThrottle() {
 		r.throttle.Accept()
 	}
 	if latency := time.Since(now); latency > longThrottleLatency {
-		glog.V(4).Infof("Throttling request took %v, request: %s:%s", latency, r.verb, r.URL().String())
+		klog.V(4).Infof("Throttling request took %v, request: %s:%s", latency, r.verb, r.URL().String())
 	}
 }
 
 // Watch attempts to begin watching the requested location.
 // Returns a watch.Interface, or an error.
 func (r *Request) Watch() (watch.Interface, error) {
+	return r.WatchWithSpecificDecoders(
+		func(body io.ReadCloser) streaming.Decoder {
+			framer := r.serializers.Framer.NewFrameReader(body)
+			return streaming.NewDecoder(framer, r.serializers.StreamingSerializer)
+		},
+		r.serializers.Decoder,
+	)
+}
+
+// WatchWithSpecificDecoders attempts to begin watching the requested location with a *different* decoder.
+// Turns out that you want one "standard" decoder for the watch event and one "personal" decoder for the content
+// Returns a watch.Interface, or an error.
+func (r *Request) WatchWithSpecificDecoders(wrapperDecoderFn func(io.ReadCloser) streaming.Decoder, embeddedDecoder runtime.Decoder) (watch.Interface, error) {
 	// We specifically don't want to rate limit watches, so we
 	// don't use r.throttle here.
 	if r.err != nil {
@@ -689,9 +594,8 @@ func (r *Request) Watch() (watch.Interface, error) {
 		}
 		return nil, fmt.Errorf("for request '%+v', got status: %v", url, resp.StatusCode)
 	}
-	framer := r.serializers.Framer.NewFrameReader(resp.Body)
-	decoder := streaming.NewDecoder(framer, r.serializers.StreamingSerializer)
-	return watch.NewStreamWatcher(restclientwatch.NewDecoder(decoder, r.serializers.Decoder)), nil
+	wrapperDecoder := wrapperDecoderFn(resp.Body)
+	return watch.NewStreamWatcher(restclientwatch.NewDecoder(wrapperDecoder, embeddedDecoder)), nil
 }
 
 // updateURLMetrics is a convenience function for pushing metrics.
@@ -779,7 +683,7 @@ func (r *Request) request(fn func(*http.Request, *http.Response)) error {
 	}()
 
 	if r.err != nil {
-		glog.V(4).Infof("Error in request: %v", r.err)
+		klog.V(4).Infof("Error in request: %v", r.err)
 		return r.err
 	}
 
@@ -797,7 +701,6 @@ func (r *Request) request(fn func(*http.Request, *http.Response)) error {
 	}
 
 	// Right now we make about ten retry attempts if we get a Retry-After response.
-	// TODO: Change to a timeout based approach.
 	maxRetries := 10
 	retries := 0
 	for {
@@ -805,6 +708,14 @@ func (r *Request) request(fn func(*http.Request, *http.Response)) error {
 		req, err := http.NewRequest(r.verb, url, r.body)
 		if err != nil {
 			return err
+		}
+		if r.timeout > 0 {
+			if r.ctx == nil {
+				r.ctx = context.Background()
+			}
+			var cancelFn context.CancelFunc
+			r.ctx, cancelFn = context.WithTimeout(r.ctx, r.timeout)
+			defer cancelFn()
 		}
 		if r.ctx != nil {
 			req = req.WithContext(r.ctx)
@@ -859,13 +770,13 @@ func (r *Request) request(fn func(*http.Request, *http.Response)) error {
 				if seeker, ok := r.body.(io.Seeker); ok && r.body != nil {
 					_, err := seeker.Seek(0, 0)
 					if err != nil {
-						glog.V(4).Infof("Could not retry request, can't Seek() back to beginning of body for %T", r.body)
+						klog.V(4).Infof("Could not retry request, can't Seek() back to beginning of body for %T", r.body)
 						fn(req, resp)
 						return true
 					}
 				}
 
-				glog.V(4).Infof("Got a Retry-After %s response for attempt %d to %v", seconds, retries, url)
+				klog.V(4).Infof("Got a Retry-After %ds response for attempt %d to %v", seconds, retries, url)
 				r.backoffMgr.Sleep(time.Duration(seconds) * time.Second)
 				return false
 			}
@@ -921,8 +832,29 @@ func (r *Request) DoRaw() ([]byte, error) {
 func (r *Request) transformResponse(resp *http.Response, req *http.Request) Result {
 	var body []byte
 	if resp.Body != nil {
-		if data, err := ioutil.ReadAll(resp.Body); err == nil {
+		data, err := ioutil.ReadAll(resp.Body)
+		switch err.(type) {
+		case nil:
 			body = data
+		case http2.StreamError:
+			// This is trying to catch the scenario that the server may close the connection when sending the
+			// response body. This can be caused by server timeout due to a slow network connection.
+			// TODO: Add test for this. Steps may be:
+			// 1. client-go (or kubectl) sends a GET request.
+			// 2. Apiserver sends back the headers and then part of the body
+			// 3. Apiserver closes connection.
+			// 4. client-go should catch this and return an error.
+			klog.V(2).Infof("Stream error %#v when reading response body, may be caused by closed connection.", err)
+			streamErr := fmt.Errorf("Stream error %#v when reading response body, may be caused by closed connection. Please retry.", err)
+			return Result{
+				err: streamErr,
+			}
+		default:
+			klog.Errorf("Unexpected error when reading response body: %#v", err)
+			unexpectedErr := fmt.Errorf("Unexpected error %#v when reading response body. Please retry.", err)
+			return Result{
+				err: unexpectedErr,
+			}
 		}
 	}
 
@@ -978,17 +910,36 @@ func (r *Request) transformResponse(resp *http.Response, req *http.Request) Resu
 	}
 }
 
+// truncateBody decides if the body should be truncated, based on the glog Verbosity.
+func truncateBody(body string) string {
+	max := 0
+	switch {
+	case bool(klog.V(10)):
+		return body
+	case bool(klog.V(9)):
+		max = 10240
+	case bool(klog.V(8)):
+		max = 1024
+	}
+
+	if len(body) <= max {
+		return body
+	}
+
+	return body[:max] + fmt.Sprintf(" [truncated %d chars]", len(body)-max)
+}
+
 // glogBody logs a body output that could be either JSON or protobuf. It explicitly guards against
 // allocating a new string for the body output unless necessary. Uses a simple heuristic to determine
 // whether the body is printable.
 func glogBody(prefix string, body []byte) {
-	if glog.V(8) {
+	if klog.V(8) {
 		if bytes.IndexFunc(body, func(r rune) bool {
 			return r < 0x0a
 		}) != -1 {
-			glog.Infof("%s:\n%s", prefix, hex.Dump(body))
+			klog.Infof("%s:\n%s", prefix, truncateBody(hex.Dump(body)))
 		} else {
-			glog.Infof("%s: %s", prefix, string(body))
+			klog.Infof("%s: %s", prefix, truncateBody(string(body)))
 		}
 	}
 }
@@ -1069,7 +1020,7 @@ func isTextResponse(resp *http.Response) bool {
 func checkWait(resp *http.Response) (int, bool) {
 	switch r := resp.StatusCode; {
 	// any 500 error code and 429 can trigger a wait
-	case r == errors.StatusTooManyRequests, r >= 500:
+	case r == http.StatusTooManyRequests, r >= 500:
 	default:
 		return 0, false
 	}
@@ -1148,6 +1099,9 @@ func (r Result) Into(obj runtime.Object) error {
 	if r.decoder == nil {
 		return fmt.Errorf("serializer for %s doesn't exist", r.contentType)
 	}
+	if len(r.body) == 0 {
+		return fmt.Errorf("0-length response")
+	}
 
 	out, _, err := r.decoder.Decode(r.body, nil, obj)
 	if err != nil || out == obj {
@@ -1187,7 +1141,7 @@ func (r Result) Error() error {
 	// to be backwards compatible with old servers that do not return a version, default to "v1"
 	out, _, err := r.decoder.Decode(r.body, &schema.GroupVersionKind{Version: "v1"}, nil)
 	if err != nil {
-		glog.V(5).Infof("body was not decodable (unable to check for Status): %v", err)
+		klog.V(5).Infof("body was not decodable (unable to check for Status): %v", err)
 		return r.err
 	}
 	switch t := out.(type) {

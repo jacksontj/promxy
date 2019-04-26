@@ -31,8 +31,10 @@ import (
 	"github.com/go-kit/kit/log/level"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/tsdb/encoding"
 	"github.com/prometheus/tsdb/fileutil"
 	"github.com/prometheus/tsdb/labels"
+	"github.com/prometheus/tsdb/wal"
 )
 
 // WALEntryType indicates what data a WAL entry contains.
@@ -82,6 +84,8 @@ func newWalMetrics(wal *SegmentWAL, r prometheus.Registerer) *walMetrics {
 
 // WAL is a write ahead log that can log new series labels and samples.
 // It must be completely read before new entries are logged.
+//
+// DEPRECATED: use wal pkg combined with the record codex instead.
 type WAL interface {
 	Reader() WALReader
 	LogSeries([]RefSeries) error
@@ -90,27 +94,6 @@ type WAL interface {
 	Truncate(mint int64, keep func(uint64) bool) error
 	Close() error
 }
-
-// NopWAL is a WAL that does nothing.
-func NopWAL() WAL {
-	return nopWAL{}
-}
-
-type nopWAL struct{}
-
-func (nopWAL) Read(
-	seriesf func([]RefSeries),
-	samplesf func([]RefSample),
-	deletesf func([]Stone),
-) error {
-	return nil
-}
-func (w nopWAL) Reader() WALReader                     { return w }
-func (nopWAL) LogSeries([]RefSeries) error             { return nil }
-func (nopWAL) LogSamples([]RefSample) error            { return nil }
-func (nopWAL) LogDeletes([]Stone) error                { return nil }
-func (nopWAL) Truncate(int64, func(uint64) bool) error { return nil }
-func (nopWAL) Close() error                            { return nil }
 
 // WALReader reads entries from a WAL.
 type WALReader interface {
@@ -173,6 +156,8 @@ func newCRC32() hash.Hash32 {
 }
 
 // SegmentWAL is a write ahead log for series data.
+//
+// DEPRECATED: use wal pkg combined with the record coders instead.
 type SegmentWAL struct {
 	mtx     sync.Mutex
 	metrics *walMetrics
@@ -303,21 +288,21 @@ func (w *SegmentWAL) Reader() WALReader {
 	}
 }
 
-func (w *SegmentWAL) getBuffer() *encbuf {
+func (w *SegmentWAL) getBuffer() *encoding.Encbuf {
 	b := w.buffers.Get()
 	if b == nil {
-		return &encbuf{b: make([]byte, 0, 64*1024)}
+		return &encoding.Encbuf{B: make([]byte, 0, 64*1024)}
 	}
-	return b.(*encbuf)
+	return b.(*encoding.Encbuf)
 }
 
-func (w *SegmentWAL) putBuffer(b *encbuf) {
-	b.reset()
+func (w *SegmentWAL) putBuffer(b *encoding.Encbuf) {
+	b.Reset()
 	w.buffers.Put(b)
 }
 
 // Truncate deletes the values prior to mint and the series which the keep function
-// does not indiciate to preserve.
+// does not indicate to preserve.
 func (w *SegmentWAL) Truncate(mint int64, keep func(uint64) bool) error {
 	// The last segment is always active.
 	if len(w.files) < 2 {
@@ -382,7 +367,7 @@ func (w *SegmentWAL) Truncate(mint int64, keep func(uint64) bool) error {
 		buf := w.getBuffer()
 		flag = w.encodeSeries(buf, activeSeries)
 
-		_, err = w.writeTo(csf, crc32, WALEntrySeries, flag, buf.get())
+		_, err = w.writeTo(csf, crc32, WALEntrySeries, flag, buf.Get())
 		w.putBuffer(buf)
 
 		if err != nil {
@@ -443,7 +428,7 @@ func (w *SegmentWAL) LogSeries(series []RefSeries) error {
 	w.mtx.Lock()
 	defer w.mtx.Unlock()
 
-	err := w.write(WALEntrySeries, flag, buf.get())
+	err := w.write(WALEntrySeries, flag, buf.Get())
 
 	w.putBuffer(buf)
 
@@ -470,7 +455,7 @@ func (w *SegmentWAL) LogSamples(samples []RefSample) error {
 	w.mtx.Lock()
 	defer w.mtx.Unlock()
 
-	err := w.write(WALEntrySamples, flag, buf.get())
+	err := w.write(WALEntrySamples, flag, buf.Get())
 
 	w.putBuffer(buf)
 
@@ -496,7 +481,7 @@ func (w *SegmentWAL) LogDeletes(stones []Stone) error {
 	w.mtx.Lock()
 	defer w.mtx.Unlock()
 
-	err := w.write(WALEntryDeletes, flag, buf.get())
+	err := w.write(WALEntryDeletes, flag, buf.Get())
 
 	w.putBuffer(buf)
 
@@ -718,6 +703,13 @@ func (w *SegmentWAL) run(interval time.Duration) {
 
 // Close syncs all data and closes the underlying resources.
 func (w *SegmentWAL) Close() error {
+	// Make sure you can call Close() multiple times.
+	select {
+	case <-w.stopc:
+		return nil // Already closed.
+	default:
+	}
+
 	close(w.stopc)
 	<-w.donec
 
@@ -730,20 +722,13 @@ func (w *SegmentWAL) Close() error {
 	// On opening, a WAL must be fully consumed once. Afterwards
 	// only the current segment will still be open.
 	if hf := w.head(); hf != nil {
-		return errors.Wrapf(hf.Close(), "closing WAL head %s", hf.Name())
+		if err := hf.Close(); err != nil {
+			return errors.Wrapf(err, "closing WAL head %s", hf.Name())
+		}
 	}
 
-	return w.dirFile.Close()
+	return errors.Wrapf(w.dirFile.Close(), "closing WAL dir %s", w.dirFile.Name())
 }
-
-const (
-	minSectorSize = 512
-
-	// walPageBytes is the alignment for flushing records to the backing Writer.
-	// It should be a multiple of the minimum sector size so that WAL can safely
-	// distinguish between torn writes and ordinary data corruption.
-	walPageBytes = 16 * minSectorSize
-)
 
 func (w *SegmentWAL) write(t WALEntryType, flag uint8, buf []byte) error {
 	// Cut to the next segment if the entry exceeds the file size unless it would also
@@ -799,20 +784,20 @@ const (
 	walDeletesSimple = 1
 )
 
-func (w *SegmentWAL) encodeSeries(buf *encbuf, series []RefSeries) uint8 {
+func (w *SegmentWAL) encodeSeries(buf *encoding.Encbuf, series []RefSeries) uint8 {
 	for _, s := range series {
-		buf.putBE64(s.Ref)
-		buf.putUvarint(len(s.Labels))
+		buf.PutBE64(s.Ref)
+		buf.PutUvarint(len(s.Labels))
 
 		for _, l := range s.Labels {
-			buf.putUvarintStr(l.Name)
-			buf.putUvarintStr(l.Value)
+			buf.PutUvarintStr(l.Name)
+			buf.PutUvarintStr(l.Value)
 		}
 	}
 	return walSeriesSimple
 }
 
-func (w *SegmentWAL) encodeSamples(buf *encbuf, samples []RefSample) uint8 {
+func (w *SegmentWAL) encodeSamples(buf *encoding.Encbuf, samples []RefSample) uint8 {
 	if len(samples) == 0 {
 		return walSamplesSimple
 	}
@@ -822,23 +807,23 @@ func (w *SegmentWAL) encodeSamples(buf *encbuf, samples []RefSample) uint8 {
 	// TODO(fabxc): optimize for all samples having the same timestamp.
 	first := samples[0]
 
-	buf.putBE64(first.Ref)
-	buf.putBE64int64(first.T)
+	buf.PutBE64(first.Ref)
+	buf.PutBE64int64(first.T)
 
 	for _, s := range samples {
-		buf.putVarint64(int64(s.Ref) - int64(first.Ref))
-		buf.putVarint64(s.T - first.T)
-		buf.putBE64(math.Float64bits(s.V))
+		buf.PutVarint64(int64(s.Ref) - int64(first.Ref))
+		buf.PutVarint64(s.T - first.T)
+		buf.PutBE64(math.Float64bits(s.V))
 	}
 	return walSamplesSimple
 }
 
-func (w *SegmentWAL) encodeDeletes(buf *encbuf, stones []Stone) uint8 {
+func (w *SegmentWAL) encodeDeletes(buf *encoding.Encbuf, stones []Stone) uint8 {
 	for _, s := range stones {
 		for _, iv := range s.intervals {
-			buf.putBE64(s.ref)
-			buf.putVarint64(iv.Mint)
-			buf.putVarint64(iv.Maxt)
+			buf.PutBE64(s.ref)
+			buf.PutVarint64(iv.Mint)
+			buf.PutVarint64(iv.Maxt)
 		}
 	}
 	return walDeletesSimple
@@ -904,16 +889,19 @@ func (r *walReader) Read(
 				if seriesf != nil {
 					seriesf(v)
 				}
+				//lint:ignore SA6002 safe to ignore and actually fixing it has some performance penalty.
 				seriesPool.Put(v[:0])
 			case []RefSample:
 				if samplesf != nil {
 					samplesf(v)
 				}
+				//lint:ignore SA6002 safe to ignore and actually fixing it has some performance penalty.
 				samplePool.Put(v[:0])
 			case []Stone:
 				if deletesf != nil {
 					deletesf(v)
 				}
+				//lint:ignore SA6002 safe to ignore and actually fixing it has some performance penalty.
 				deletePool.Put(v[:0])
 			default:
 				level.Error(r.logger).Log("msg", "unexpected data type")
@@ -937,7 +925,7 @@ func (r *walReader) Read(
 				series = v.([]RefSeries)
 			}
 
-			err := r.decodeSeries(flag, b, &series)
+			err = r.decodeSeries(flag, b, &series)
 			if err != nil {
 				err = errors.Wrap(err, "decode series entry")
 				break
@@ -958,7 +946,7 @@ func (r *walReader) Read(
 				samples = v.([]RefSample)
 			}
 
-			err := r.decodeSamples(flag, b, &samples)
+			err = r.decodeSamples(flag, b, &samples)
 			if err != nil {
 				err = errors.Wrap(err, "decode samples entry")
 				break
@@ -980,7 +968,7 @@ func (r *walReader) Read(
 				deletes = v.([]Stone)
 			}
 
-			err := r.decodeDeletes(flag, b, &deletes)
+			err = r.decodeDeletes(flag, b, &deletes)
 			if err != nil {
 				err = errors.Wrap(err, "decode delete entry")
 				break
@@ -1128,16 +1116,16 @@ func (r *walReader) entry(cr io.Reader) (WALEntryType, byte, []byte, error) {
 }
 
 func (r *walReader) decodeSeries(flag byte, b []byte, res *[]RefSeries) error {
-	dec := decbuf{b: b}
+	dec := encoding.Decbuf{B: b}
 
-	for len(dec.b) > 0 && dec.err() == nil {
-		ref := dec.be64()
+	for len(dec.B) > 0 && dec.Err() == nil {
+		ref := dec.Be64()
 
-		lset := make(labels.Labels, dec.uvarint())
+		lset := make(labels.Labels, dec.Uvarint())
 
 		for i := range lset {
-			lset[i].Name = dec.uvarintStr()
-			lset[i].Value = dec.uvarintStr()
+			lset[i].Name = dec.UvarintStr()
+			lset[i].Value = dec.UvarintStr()
 		}
 		sort.Sort(lset)
 
@@ -1146,11 +1134,11 @@ func (r *walReader) decodeSeries(flag byte, b []byte, res *[]RefSeries) error {
 			Labels: lset,
 		})
 	}
-	if dec.err() != nil {
-		return dec.err()
+	if dec.Err() != nil {
+		return dec.Err()
 	}
-	if len(dec.b) > 0 {
-		return errors.Errorf("unexpected %d bytes left in entry", len(dec.b))
+	if len(dec.B) > 0 {
+		return errors.Errorf("unexpected %d bytes left in entry", len(dec.B))
 	}
 	return nil
 }
@@ -1159,17 +1147,17 @@ func (r *walReader) decodeSamples(flag byte, b []byte, res *[]RefSample) error {
 	if len(b) == 0 {
 		return nil
 	}
-	dec := decbuf{b: b}
+	dec := encoding.Decbuf{B: b}
 
 	var (
-		baseRef  = dec.be64()
-		baseTime = dec.be64int64()
+		baseRef  = dec.Be64()
+		baseTime = dec.Be64int64()
 	)
 
-	for len(dec.b) > 0 && dec.err() == nil {
-		dref := dec.varint64()
-		dtime := dec.varint64()
-		val := dec.be64()
+	for len(dec.B) > 0 && dec.Err() == nil {
+		dref := dec.Varint64()
+		dtime := dec.Varint64()
+		val := dec.Be64()
 
 		*res = append(*res, RefSample{
 			Ref: uint64(int64(baseRef) + dref),
@@ -1178,31 +1166,141 @@ func (r *walReader) decodeSamples(flag byte, b []byte, res *[]RefSample) error {
 		})
 	}
 
-	if dec.err() != nil {
-		return errors.Wrapf(dec.err(), "decode error after %d samples", len(*res))
+	if dec.Err() != nil {
+		return errors.Wrapf(dec.Err(), "decode error after %d samples", len(*res))
 	}
-	if len(dec.b) > 0 {
-		return errors.Errorf("unexpected %d bytes left in entry", len(dec.b))
+	if len(dec.B) > 0 {
+		return errors.Errorf("unexpected %d bytes left in entry", len(dec.B))
 	}
 	return nil
 }
 
 func (r *walReader) decodeDeletes(flag byte, b []byte, res *[]Stone) error {
-	dec := &decbuf{b: b}
+	dec := &encoding.Decbuf{B: b}
 
-	for dec.len() > 0 && dec.err() == nil {
+	for dec.Len() > 0 && dec.Err() == nil {
 		*res = append(*res, Stone{
-			ref: dec.be64(),
+			ref: dec.Be64(),
 			intervals: Intervals{
-				{Mint: dec.varint64(), Maxt: dec.varint64()},
+				{Mint: dec.Varint64(), Maxt: dec.Varint64()},
 			},
 		})
 	}
-	if dec.err() != nil {
-		return dec.err()
+	if dec.Err() != nil {
+		return dec.Err()
 	}
-	if len(dec.b) > 0 {
-		return errors.Errorf("unexpected %d bytes left in entry", len(dec.b))
+	if len(dec.B) > 0 {
+		return errors.Errorf("unexpected %d bytes left in entry", len(dec.B))
+	}
+	return nil
+}
+
+func deprecatedWALExists(logger log.Logger, dir string) (bool, error) {
+	// Detect whether we still have the old WAL.
+	fns, err := sequenceFiles(dir)
+	if err != nil && !os.IsNotExist(err) {
+		return false, errors.Wrap(err, "list sequence files")
+	}
+	if len(fns) == 0 {
+		return false, nil // No WAL at all yet.
+	}
+	// Check header of first segment to see whether we are still dealing with an
+	// old WAL.
+	f, err := os.Open(fns[0])
+	if err != nil {
+		return false, errors.Wrap(err, "check first existing segment")
+	}
+	defer f.Close()
+
+	var hdr [4]byte
+	if _, err := f.Read(hdr[:]); err != nil && err != io.EOF {
+		return false, errors.Wrap(err, "read header from first segment")
+	}
+	// If we cannot read the magic header for segments of the old WAL, abort.
+	// Either it's migrated already or there's a corruption issue with which
+	// we cannot deal here anyway. Subsequent attempts to open the WAL will error in that case.
+	if binary.BigEndian.Uint32(hdr[:]) != WALMagic {
+		return false, nil
+	}
+	return true, nil
+}
+
+// MigrateWAL rewrites the deprecated write ahead log into the new format.
+func MigrateWAL(logger log.Logger, dir string) (err error) {
+	if logger == nil {
+		logger = log.NewNopLogger()
+	}
+	if exists, err := deprecatedWALExists(logger, dir); err != nil || !exists {
+		return err
+	}
+	level.Info(logger).Log("msg", "migrating WAL format")
+
+	tmpdir := dir + ".tmp"
+	if err := os.RemoveAll(tmpdir); err != nil {
+		return errors.Wrap(err, "cleanup replacement dir")
+	}
+	repl, err := wal.New(logger, nil, tmpdir)
+	if err != nil {
+		return errors.Wrap(err, "open new WAL")
+	}
+
+	// It should've already been closed as part of the previous finalization.
+	// Do it once again in case of prior errors.
+	defer func() {
+		if err != nil {
+			repl.Close()
+		}
+	}()
+
+	w, err := OpenSegmentWAL(dir, logger, time.Minute, nil)
+	if err != nil {
+		return errors.Wrap(err, "open old WAL")
+	}
+	defer w.Close()
+
+	rdr := w.Reader()
+
+	var (
+		enc RecordEncoder
+		b   []byte
+	)
+	decErr := rdr.Read(
+		func(s []RefSeries) {
+			if err != nil {
+				return
+			}
+			err = repl.Log(enc.Series(s, b[:0]))
+		},
+		func(s []RefSample) {
+			if err != nil {
+				return
+			}
+			err = repl.Log(enc.Samples(s, b[:0]))
+		},
+		func(s []Stone) {
+			if err != nil {
+				return
+			}
+			err = repl.Log(enc.Tombstones(s, b[:0]))
+		},
+	)
+	if decErr != nil {
+		return errors.Wrap(err, "decode old entries")
+	}
+	if err != nil {
+		return errors.Wrap(err, "write new entries")
+	}
+	// We explicitly close even when there is a defer for Windows to be
+	// able to delete it. The defer is in place to close it in-case there
+	// are errors above.
+	if err := w.Close(); err != nil {
+		return errors.Wrap(err, "close old WAL")
+	}
+	if err := repl.Close(); err != nil {
+		return errors.Wrap(err, "close new WAL")
+	}
+	if err := fileutil.Replace(tmpdir, dir); err != nil {
+		return errors.Wrap(err, "replace old WAL")
 	}
 	return nil
 }

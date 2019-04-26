@@ -15,8 +15,9 @@ package promql
 
 import (
 	"context"
-	"fmt"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/storage"
@@ -49,18 +50,6 @@ type Statement interface {
 	stmt()
 }
 
-// Statements is a list of statement nodes that implements Node.
-type Statements []Statement
-
-// AlertStmt represents an added alert rule.
-type AlertStmt struct {
-	Name        string
-	Expr        Expr
-	Duration    time.Duration
-	Labels      labels.Labels
-	Annotations labels.Labels
-}
-
 // EvalStmt holds an expression and information on the range it should
 // be evaluated on.
 type EvalStmt struct {
@@ -73,16 +62,7 @@ type EvalStmt struct {
 	Interval time.Duration
 }
 
-// RecordStmt represents an added recording rule.
-type RecordStmt struct {
-	Name   string
-	Expr   Expr
-	Labels labels.Labels
-}
-
-func (*AlertStmt) stmt()  {}
-func (*EvalStmt) stmt()   {}
-func (*RecordStmt) stmt() {}
+func (*EvalStmt) stmt() {}
 
 // Expr is a generic interface for all expression types.
 type Expr interface {
@@ -133,8 +113,9 @@ type MatrixSelector struct {
 	Offset        time.Duration
 	LabelMatchers []*labels.Matcher
 
-	// The series are populated at query preparation time.
-	series []storage.Series
+	// The unexpanded seriesSet populated at query preparation time.
+	unexpandedSeriesSet storage.SeriesSet
+	series              []storage.Series
 }
 
 func (m *MatrixSelector) SetSeries(series []storage.Series) {
@@ -143,6 +124,14 @@ func (m *MatrixSelector) SetSeries(series []storage.Series) {
 
 func (m *MatrixSelector) HasSeries() bool {
 	return m.series != nil
+}
+
+// SubqueryExpr represents a subquery.
+type SubqueryExpr struct {
+	Expr   Expr
+	Range  time.Duration
+	Offset time.Duration
+	Step   time.Duration
 }
 
 // NumberLiteral represents a number.
@@ -174,8 +163,9 @@ type VectorSelector struct {
 	Offset        time.Duration
 	LabelMatchers []*labels.Matcher
 
-	// The series are populated at query preparation time.
-	series []storage.Series
+	// The unexpanded seriesSet populated at query preparation time.
+	unexpandedSeriesSet storage.SeriesSet
+	series              []storage.Series
 }
 
 func (m *VectorSelector) SetSeries(series []storage.Series) {
@@ -189,6 +179,7 @@ func (m *VectorSelector) HasSeries() bool {
 func (e *AggregateExpr) Type() ValueType  { return ValueTypeVector }
 func (e *Call) Type() ValueType           { return e.Func.ReturnType }
 func (e *MatrixSelector) Type() ValueType { return ValueTypeMatrix }
+func (e *SubqueryExpr) Type() ValueType   { return ValueTypeMatrix }
 func (e *NumberLiteral) Type() ValueType  { return ValueTypeScalar }
 func (e *ParenExpr) Type() ValueType      { return e.Expr.Type() }
 func (e *StringLiteral) Type() ValueType  { return ValueTypeString }
@@ -205,6 +196,7 @@ func (*AggregateExpr) expr()  {}
 func (*BinaryExpr) expr()     {}
 func (*Call) expr()           {}
 func (*MatrixSelector) expr() {}
+func (*SubqueryExpr) expr()   {}
 func (*NumberLiteral) expr()  {}
 func (*ParenExpr) expr()      {}
 func (*StringLiteral) expr()  {}
@@ -292,35 +284,12 @@ func Walk(ctx context.Context, v Visitor, st *EvalStmt, node Node, path []Node, 
 	path = append(path, node)
 
 	switch n := node.(type) {
-	case Statements:
-		for i, s := range n {
-			if tmp, err := Walk(ctx, v, st, s, path, nr); err != nil {
-				return nil, err
-			} else {
-				n[i] = tmp.(Statement)
-			}
-		}
-	case *AlertStmt:
-		if tmp, err := Walk(ctx, v, st, n.Expr, path, nr); err != nil {
-			return nil, err
-		} else {
-			n.Expr = tmp.(Expr)
-		}
-
 	case *EvalStmt:
 		if tmp, err := Walk(ctx, v, st, n.Expr, path, nr); err != nil {
 			return nil, err
 		} else {
 			n.Expr = tmp.(Expr)
 		}
-
-	case *RecordStmt:
-		if tmp, err := Walk(ctx, v, st, n.Expr, path, nr); err != nil {
-			return nil, err
-		} else {
-			n.Expr = tmp.(Expr)
-		}
-
 	case Expressions:
 		for i, e := range n {
 			if tmp, err := Walk(ctx, v, st, e, path, nr); err != nil {
@@ -331,6 +300,14 @@ func Walk(ctx context.Context, v Visitor, st *EvalStmt, node Node, path []Node, 
 
 		}
 	case *AggregateExpr:
+		if n.Param != nil {
+			if tmp, err := Walk(ctx, v, st, n.Param, path, nr); err != nil {
+				return nil, err
+			} else {
+				n.Param = tmp.(Expr)
+			}
+		}
+
 		if tmp, err := Walk(ctx, v, st, n.Expr, path, nr); err != nil {
 			return nil, err
 		} else {
@@ -376,6 +353,13 @@ func Walk(ctx context.Context, v Visitor, st *EvalStmt, node Node, path []Node, 
 			n.Args = tmp.(Expressions)
 		}
 
+	case *SubqueryExpr:
+		if tmp, err := Walk(ctx, v, st, n.Expr, path, nr); err != nil {
+			return nil, err
+		} else {
+			n.Expr = tmp.(Expr)
+		}
+
 	case *ParenExpr:
 		if tmp, err := Walk(ctx, v, st, n.Expr, path, nr); err != nil {
 			return nil, err
@@ -394,11 +378,10 @@ func Walk(ctx context.Context, v Visitor, st *EvalStmt, node Node, path []Node, 
 		// nothing to do
 
 	default:
-		panic(fmt.Errorf("promql.Walk: unhandled node type %T", node))
+		panic(errors.Errorf("promql.Walk: unhandled node type %T", node))
 	}
 
-	_, err = v.Visit(nil, path)
-	if err != nil {
+	if _, err = v.Visit(nil, path); err != nil {
 		return nil, err
 	}
 	return node, nil
@@ -407,11 +390,11 @@ func Walk(ctx context.Context, v Visitor, st *EvalStmt, node Node, path []Node, 
 type inspector func(Node, []Node) error
 
 func (f inspector) Visit(node Node, path []Node) (Visitor, error) {
-	if err := f(node, path); err == nil {
-		return f, nil
-	} else {
+	if err := f(node, path); err != nil {
 		return nil, err
 	}
+
+	return f, nil
 }
 
 // Inspect traverses an AST in depth-first order: It starts by calling

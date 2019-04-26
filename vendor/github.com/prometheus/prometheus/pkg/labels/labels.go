@@ -81,11 +81,88 @@ func (ls *Labels) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// MarshalYAML implements yaml.Marshaler.
+func (ls Labels) MarshalYAML() (interface{}, error) {
+	return ls.Map(), nil
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler.
+func (ls *Labels) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var m map[string]string
+
+	if err := unmarshal(&m); err != nil {
+		return err
+	}
+
+	*ls = FromMap(m)
+	return nil
+}
+
+// MatchLabels returns a subset of Labels that matches/does not match with the provided label names based on the 'on' boolean.
+// If on is set to true, it returns the subset of labels that match with the provided label names and its inverse when 'on' is set to false.
+func (ls Labels) MatchLabels(on bool, names ...string) Labels {
+	matchedLabels := Labels{}
+
+	nameSet := map[string]struct{}{}
+	for _, n := range names {
+		nameSet[n] = struct{}{}
+	}
+
+	for _, v := range ls {
+		if _, ok := nameSet[v.Name]; on == ok {
+			matchedLabels = append(matchedLabels, v)
+		}
+	}
+
+	return matchedLabels
+}
+
 // Hash returns a hash value for the label set.
 func (ls Labels) Hash() uint64 {
 	b := make([]byte, 0, 1024)
 
 	for _, v := range ls {
+		b = append(b, v.Name...)
+		b = append(b, sep)
+		b = append(b, v.Value...)
+		b = append(b, sep)
+	}
+	return xxhash.Sum64(b)
+}
+
+// HashForLabels returns a hash value for the labels matching the provided names.
+func (ls Labels) HashForLabels(names ...string) uint64 {
+	b := make([]byte, 0, 1024)
+
+	for _, v := range ls {
+		for _, n := range names {
+			if v.Name == n {
+				b = append(b, v.Name...)
+				b = append(b, sep)
+				b = append(b, v.Value...)
+				b = append(b, sep)
+				break
+			}
+		}
+	}
+	return xxhash.Sum64(b)
+}
+
+// HashWithoutLabels returns a hash value for all labels except those matching
+// the provided names.
+func (ls Labels) HashWithoutLabels(names ...string) uint64 {
+	b := make([]byte, 0, 1024)
+
+Outer:
+	for _, v := range ls {
+		if v.Name == MetricName {
+			continue
+		}
+		for _, n := range names {
+			if v.Name == n {
+				continue Outer
+			}
+		}
 		b = append(b, v.Name...)
 		b = append(b, sep)
 		b = append(b, v.Value...)
@@ -199,7 +276,7 @@ func Compare(a, b Labels) int {
 	return len(a) - len(b)
 }
 
-// Builder allows modifiying Labels.
+// Builder allows modifying Labels.
 type Builder struct {
 	base Labels
 	del  []string

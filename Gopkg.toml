@@ -17,7 +17,7 @@
   source = "github.com/jacksontj/common"
 
 [[constraint]]
-  branch = "release-2.3_fork_promxy"
+  branch = "release-2.9_fork_promxy"
   name = "github.com/prometheus/prometheus"
   source = "github.com/jacksontj/prometheus"
 
@@ -49,3 +49,11 @@
 [[override]]
   name = "github.com/cockroachdb/cockroach"
   revision = "84bc9597164f671c0130543778228928d6865c5c"
+
+[[override]]
+  name = "k8s.io/apimachinery"
+  revision = "2b1284ed4c93a43499e781493253e2ac5959c4fd"
+
+[[override]]
+  name = "k8s.io/client-go"
+  revision = "a47917edff34c2c3f7be36398e3ebad6011ce05c"
