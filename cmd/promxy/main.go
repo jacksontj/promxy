@@ -66,7 +66,7 @@ type cliOpts struct {
 
 	QueryTimeout        time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
 	QueryMaxConcurrency int           `long:"query.max-concurrency" description:"Maximum number of queries executed concurrently." default:"1000"`
-	QueryMaxSamples int           `long:"query.max-samples" description:"Maximum number of samples a single query can load into memory. Note that queries will fail if they would load more samples than this into memory, so this also limits the number of samples a query can return." default:"50000000"`
+	QueryMaxSamples     int           `long:"query.max-samples" description:"Maximum number of samples a single query can load into memory. Note that queries will fail if they would load more samples than this into memory, so this also limits the number of samples a query can return." default:"50000000"`
 
 	NotificationQueueCapacity int    `long:"alertmanager.notification-queue-capacity" description:"The capacity of the queue for pending alert manager notifications." default:"10000"`
 	AccessLogDestination      string `long:"access-log-destination" description:"where to log access logs, options (none, stderr, stdout)" default:"stdout"`
@@ -164,11 +164,11 @@ func main() {
 	proxyStorage = ps
 
 	engine := promql.NewEngine(promql.EngineOpts{
-	    Reg: prometheus.DefaultRegisterer,
-	    MaxConcurrent: opts.QueryMaxConcurrency,
-	    Timeout: opts.QueryTimeout,
-	    MaxSamples: opts.QueryMaxSamples,
-    })
+		Reg:           prometheus.DefaultRegisterer,
+		MaxConcurrent: opts.QueryMaxConcurrency,
+		Timeout:       opts.QueryTimeout,
+		MaxSamples:    opts.QueryMaxSamples,
+	})
 	engine.NodeReplacer = ps.NodeReplacer
 
 	// TODO: rename

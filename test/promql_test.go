@@ -116,9 +116,9 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 
 	api := v1.NewAPI(
 		promql.NewEngine(promql.EngineOpts{
-		    MaxConcurrent: 20,
-		    Timeout: 10*time.Minute,
-		    MaxSamples: 50000000,
+			MaxConcurrent: 20,
+			Timeout:       10 * time.Minute,
+			MaxSamples:    50000000,
 		}),
 		s.(storage.Queryable),
 		nil,

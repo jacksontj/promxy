@@ -106,7 +106,7 @@ func (h *ProxyQuerier) LabelValues(name string) ([]string, error) {
 
 // LabelNames returns all the unique label names present in the block in sorted order.
 func (h *ProxyQuerier) LabelNames() ([]string, error) {
-    return nil, errors.New("Not implemented yet")
+	return nil, errors.New("Not implemented yet")
 }
 
 // Close closes the querier. Behavior for subsequent calls to Querier methods

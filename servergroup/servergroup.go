@@ -105,12 +105,12 @@ func (s *ServerGroup) Sync() {
 		for _, targetGroupList := range targetGroupMap {
 			for _, targetGroup := range targetGroupList {
 				for _, target := range targetGroup.Targets {
-		            lbls := make([]labels.Label, 0, len(target))
+					lbls := make([]labels.Label, 0, len(target))
 
-		            for ln, lv := range target {
-			            lbls = append(lbls, labels.Label{Name: string(ln), Value: string(lv)})
-		            }
-            		lset := labels.New(lbls...)
+					for ln, lv := range target {
+						lbls = append(lbls, labels.Label{Name: string(ln), Value: string(lv)})
+					}
+					lset := labels.New(lbls...)
 
 					lset = relabel.Process(lset, s.Cfg.RelabelConfigs...)
 					// Check if the target was dropped, if so we skip it

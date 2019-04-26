@@ -102,13 +102,13 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 
 	// Check for remote_write (for appender)
 	if c.PromConfig.RemoteWriteConfigs != nil {
-	    if oldState.remoteStorage != nil {
+		if oldState.remoteStorage != nil {
 			if err := oldState.remoteStorage.ApplyConfig(&c.PromConfig); err != nil {
 				return err
 			}
-		// if it was an appenderstub we just need to replace
-	    } else {
-	        // TODO: configure path?
+			// if it was an appenderstub we just need to replace
+		} else {
+			// TODO: configure path?
 			remote := remote.NewStorage(nil, prometheus.DefaultRegisterer, func() (int64, error) { return 0, nil }, "/tmp/promxy_remote_write", 1*time.Second)
 			if err := remote.ApplyConfig(&c.PromConfig); err != nil {
 				return err
@@ -117,10 +117,10 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 			var err error
 			newState.appender, err = remote.Appender()
 			if err != nil {
-			    return errors.Wrap(err, "unable to create remote_write appender")
+				return errors.Wrap(err, "unable to create remote_write appender")
 			}
 			newState.appenderCloser = remote.Close
-	    }
+		}
 	} else {
 		newState.appender = &appenderStub{}
 	}
