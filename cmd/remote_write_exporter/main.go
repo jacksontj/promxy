@@ -102,11 +102,11 @@ func main() {
 			var sample *prompb.Sample
 			for _, s := range ts.Samples {
 				if sample == nil {
-					sample = s
+					sample = &s
 					continue
 				}
 				if s.Timestamp > sample.Timestamp {
-					sample = s
+					sample = &s
 				}
 			}
 

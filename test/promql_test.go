@@ -108,15 +108,19 @@ func getProxyStorage(cfg string) *proxystorage.ProxyStorage {
 	return ps
 }
 
-func startAPIForTest(storage storage.Storage, listen string) (*http.Server, chan struct{}) {
+func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struct{}) {
 	// Start up API server for engine
 	cfgFunc := func() config.Config { return config.DefaultConfig }
 	// Return 503 until ready (for us there isn't much startup, so this might not need to be implemented
 	readyFunc := func(f http.HandlerFunc) http.HandlerFunc { return f }
 
 	api := v1.NewAPI(
-		promql.NewEngine(nil, nil, 20, 10*time.Minute),
-		storage,
+		promql.NewEngine(promql.EngineOpts{
+		    MaxConcurrent: 20,
+		    Timeout: 10*time.Minute,
+		    MaxSamples: 50000000,
+		}),
+		s.(storage.Queryable),
 		nil,
 		nil,
 		cfgFunc,
@@ -124,6 +128,11 @@ func startAPIForTest(storage storage.Storage, listen string) (*http.Server, chan
 		readyFunc,
 		nil,
 		true,
+		nil,
+		nil,
+		50000000,
+		1000,
+		nil,
 	)
 
 	apiRouter := route.New()

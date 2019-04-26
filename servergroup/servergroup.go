@@ -105,16 +105,22 @@ func (s *ServerGroup) Sync() {
 		for _, targetGroupList := range targetGroupMap {
 			for _, targetGroup := range targetGroupList {
 				for _, target := range targetGroup.Targets {
+		            lbls := make([]labels.Label, 0, len(target))
 
-					target = relabel.Process(target, s.Cfg.RelabelConfigs...)
+		            for ln, lv := range target {
+			            lbls = append(lbls, labels.Label{Name: string(ln), Value: string(lv)})
+		            }
+            		lset := labels.New(lbls...)
+
+					lset = relabel.Process(lset, s.Cfg.RelabelConfigs...)
 					// Check if the target was dropped, if so we skip it
-					if target == nil {
+					if len(lset) == 0 {
 						continue
 					}
 
 					u := &url.URL{
 						Scheme: string(s.Cfg.GetScheme()),
-						Host:   string(target[model.AddressLabel]),
+						Host:   string(lset.Get(model.AddressLabel)),
 						Path:   s.Cfg.PathPrefix,
 					}
 					targets = append(targets, u.Host)
