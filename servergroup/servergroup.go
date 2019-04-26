@@ -20,7 +20,7 @@ import (
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/prometheus/prometheus/relabel"
+	"github.com/prometheus/prometheus/pkg/relabel"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/sirupsen/logrus"
 
