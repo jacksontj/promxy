@@ -9,12 +9,11 @@ import (
 
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
-	"github.com/prometheus/prometheus/storage/remote"
+	"github.com/jacksontj/promxy/remote"
 	"github.com/sirupsen/logrus"
 
 	proxyconfig "github.com/jacksontj/promxy/config"
@@ -109,7 +108,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 			// if it was an appenderstub we just need to replace
 		} else {
 			// TODO: configure path?
-			remote := remote.NewStorage(nil, prometheus.DefaultRegisterer, func() (int64, error) { return 0, nil }, "/tmp/promxy_remote_write", 1*time.Second)
+			remote := remote.NewStorage(nil, func() (int64, error) { return 0, nil }, 1*time.Second)
 			if err := remote.ApplyConfig(&c.PromConfig); err != nil {
 				return err
 			}

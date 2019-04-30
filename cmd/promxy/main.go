@@ -227,6 +227,7 @@ func main() {
 		ExternalURL: externalUrl, // URL listed as URL for "who fired this alert"
 		QueryFunc:   rules.EngineQueryFunc(engine, proxyStorage),
 		NotifyFunc:  sendAlerts(notifierManager, externalUrl.String()),
+		TSDB:   proxyStorage,  // TODO: return to something either local or no-op return?
 		Appendable:  proxyStorage,
 		Logger:      logger,
 	})

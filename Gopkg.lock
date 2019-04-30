@@ -531,6 +531,14 @@
   version = "v0.8.0"
 
 [[projects]]
+  digest = "1:0028cb19b2e4c3112225cd871870f2d9cf49b9b4276531f03438a88e94be86fe"
+  name = "github.com/pmezard/go-difflib"
+  packages = ["difflib"]
+  pruneopts = "NUT"
+  revision = "792786c7400a136282c1664665ae0a8db921c6c2"
+  version = "v1.0.0"
+
+[[projects]]
   branch = "master"
   digest = "1:a563b5e22bdfb30f15f9e41093592d170e5e27e855829b6925cc718c896fe90b"
   name = "github.com/prometheus/client_golang"
@@ -706,6 +714,17 @@
   pruneopts = "NUT"
   revision = "e09e9389d85d8492d313d73d1469c029e710623f"
   version = "v0.1.4"
+
+[[projects]]
+  digest = "1:85adecf1dbfae5769cc62a8bcea6498f8e9f0e2452e4e6686eb36fa4428a5a6e"
+  name = "github.com/stretchr/testify"
+  packages = [
+    "assert",
+    "require",
+  ]
+  pruneopts = "NUT"
+  revision = "ffdc059bfe9ce6a4e144ba849dbedead332c6053"
+  version = "v1.3.0"
 
 [[projects]]
   digest = "1:58f2854b50ff8862eb6a347f20dedaac83e1166f4040472e17bc37736841a12f"
@@ -1117,6 +1136,7 @@
   analyzer-version = 1
   input-imports = [
     "github.com/go-kit/kit/log",
+    "github.com/go-kit/kit/log/level",
     "github.com/gogo/protobuf/proto",
     "github.com/golang/snappy",
     "github.com/jessevdk/go-flags",
@@ -1151,6 +1171,8 @@
     "github.com/prometheus/prometheus/web",
     "github.com/prometheus/prometheus/web/api/v1",
     "github.com/sirupsen/logrus",
+    "github.com/stretchr/testify/require",
+    "golang.org/x/time/rate",
     "gopkg.in/yaml.v2",
   ]
   solver-name = "gps-cdcl"
