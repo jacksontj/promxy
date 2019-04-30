@@ -13,8 +13,9 @@ import (
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
-	"github.com/jacksontj/promxy/remote"
 	"github.com/sirupsen/logrus"
+
+	"github.com/jacksontj/promxy/remote"
 
 	proxyconfig "github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/promclient"
