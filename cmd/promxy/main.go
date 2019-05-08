@@ -322,8 +322,7 @@ func main() {
 				w.WriteHeader(http.StatusServiceUnavailable)
 				fmt.Fprintf(w, "Promxy is Stopping.\n")
 			} else {
-				w.WriteHeader(http.StatusOK)
-				fmt.Fprintf(w, "Promxy is Ready.\n")
+				webHandler.GetRouter().ServeHTTP(w, r)
 			}
 		} else {
 			// all else we send direct to the local prometheus UI
