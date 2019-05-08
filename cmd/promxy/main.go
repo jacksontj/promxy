@@ -69,6 +69,7 @@ type CLIOpts struct {
 	NotificationQueueCapacity int    `long:"alertmanager.notification-queue-capacity" description:"The capacity of the queue for pending alert manager notifications." default:"10000"`
 	AccessLogDestination      string `long:"access-log-destination" description:"where to log access logs, options (none, stderr, stdout)" default:"stdout"`
 
+	ShutdownDelay   time.Duration `long:"http.shutdown-delay" description:"time to wait before shutting down the http server, this allows for a grace period for upstreams (e.g. LoadBalancers) to discover the new stopping status through healthchecks" default:"10s"`
 	ShutdownTimeout time.Duration `long:"http.shutdown-timeout" description:"max time to wait for a graceful shutdown of the HTTP server" default:"60s"`
 }
 
@@ -309,12 +310,21 @@ func main() {
 	// TODO: configurable metrics path
 	r.HandlerFunc("GET", "/metrics", prometheus.Handler().ServeHTTP)
 
+	stopping := false
 	r.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Have our fallback rules
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			apiRouter.ServeHTTP(w, r)
 		} else if strings.HasPrefix(r.URL.Path, "/debug") {
 			http.DefaultServeMux.ServeHTTP(w, r)
+		} else if r.URL.Path == "/-/ready" {
+			if stopping {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				fmt.Fprintf(w, "Promxy is Stopping.\n")
+			} else {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprintf(w, "Promxy is Ready.\n")
+			}
 		} else {
 			// all else we send direct to the local prometheus UI
 			webHandler.GetRouter().ServeHTTP(w, r)
@@ -377,6 +387,17 @@ func main() {
 					log.Errorf("Error reloading config: %s", err)
 				}
 			case syscall.SIGTERM, syscall.SIGINT:
+				log.Info("promxy recieved exit signal, starting graceful shutdown")
+
+				// Stop all services we are running
+				stopping = true        // start failing healthchecks
+				notifierManager.Stop() // stop alert notifier
+				ruleManager.Stop()     // Stop rule manager
+
+				if opts.ShutdownDelay > 0 {
+					log.Infof("promxy delaying shutdown by %v", opts.ShutdownDelay)
+					time.Sleep(opts.ShutdownDelay)
+				}
 				log.Infof("promxy exiting with timeout: %v", opts.ShutdownTimeout)
 				defer cancel()
 				if opts.ShutdownTimeout > 0 {
