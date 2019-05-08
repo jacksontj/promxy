@@ -2,6 +2,7 @@ package promclient
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -25,13 +26,18 @@ var (
 // into errors that the prometheus API server actually handles and returns proper
 // error codes for
 func NormalizePromError(err error) error {
+	type result struct {
+		ErrorType promhttputil.ErrorType `json:"errorType,omitempty"`
+		Error     string                 `json:"error,omitempty"`
+	}
+
 	if typedErr, ok := err.(*v1.Error); ok {
-		res := &DataResult{}
+		res := &result{}
 		// The prometheus client does a terrible job of handling and returning errors
 		// so we need to do the work ourselves.
 		// The `Detail` is actually just the body of the response so we need
 		// to unmarshal that so we can see what happened
-		if err := res.UnmarshalJSON([]byte(typedErr.Detail)); err != nil {
+		if err := json.Unmarshal([]byte(typedErr.Detail), res); err != nil {
 			// If the body can't be unmarshaled, return the original error
 			return typedErr
 		}
