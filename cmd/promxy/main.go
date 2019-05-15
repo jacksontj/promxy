@@ -363,7 +363,10 @@ func main() {
 	go func() {
 		logrus.Infof("promxy starting")
 		if err := srv.ListenAndServe(); err != nil {
-			log.Fatalf("Error listening: %v", err)
+			if err == http.ErrServerClosed {
+				return
+			}
+			log.Errorf("Error listening: %v", err)
 		}
 	}()
 
