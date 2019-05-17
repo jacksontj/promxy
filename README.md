@@ -82,3 +82,4 @@ endpoint must be defined in the promxy config (which is where it will send those
 
 ## Questions/Bugs/etc.
 Feedback is **greatly** appreciated. If you find a bug, have a feature request, or just have a general question feel free to open up an issue!
+If you prefer a more real-time channel you can also reach out on [#proxy on Freenode](https://webchat.freenode.net/?channels=%23promxy).
