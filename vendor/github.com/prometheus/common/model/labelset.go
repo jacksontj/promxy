@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/mailru/easyjson/jwriter"
 )
 
 // A LabelSet is a collection of LabelName and LabelValue pairs.  The LabelSet
@@ -150,29 +148,6 @@ func (ls LabelSet) Fingerprint() Fingerprint {
 // algorithm, which is, however, more susceptible to hash collisions.
 func (ls LabelSet) FastFingerprint() Fingerprint {
 	return labelSetToFastFingerprint(ls)
-}
-
-func (l LabelSet) MarshalEasyJSON(w *jwriter.Writer) {
-	w.RawByte('{')
-	first := true
-	for k, v := range l {
-		if !first {
-			w.RawByte(',')
-		} else {
-			first = false
-		}
-		w.RawString(`"` + string(k) + `"`)
-		w.RawByte(':')
-		w.RawString(`"` + string(v) + `"`)
-	}
-	w.RawByte('}')
-}
-
-// MarshalJSON implements the json.Marshaler interface.
-func (l LabelSet) MarshalJSON() ([]byte, error) {
-	w := jwriter.Writer{}
-	l.MarshalEasyJSON(&w)
-	return w.Buffer.BuildBytes(), w.Error
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.

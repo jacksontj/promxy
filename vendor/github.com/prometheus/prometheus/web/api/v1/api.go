@@ -694,7 +694,7 @@ type Alert struct {
 	Annotations labels.Labels `json:"annotations"`
 	State       string        `json:"state"`
 	ActiveAt    *time.Time    `json:"activeAt,omitempty"`
-	Value       float64       `json:"value"`
+	Value       string        `json:"value"`
 }
 
 func (api *API) alerts(r *http.Request) apiFuncResult {
@@ -721,7 +721,7 @@ func rulesAlertsToAPIAlerts(rulesAlerts []*rules.Alert) []*Alert {
 			Annotations: ruleAlert.Annotations,
 			State:       ruleAlert.State.String(),
 			ActiveAt:    &ruleAlert.ActiveAt,
-			Value:       ruleAlert.Value,
+			Value:       strconv.FormatFloat(ruleAlert.Value, 'e', -1, 64),
 		}
 	}
 
@@ -838,7 +838,10 @@ func (api *API) serveFlags(r *http.Request) apiFuncResult {
 }
 
 func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) {
-	api.remoteReadGate.Start(r.Context())
+	if err := api.remoteReadGate.Start(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	remoteReadQueries.Inc()
 
 	defer api.remoteReadGate.Done()

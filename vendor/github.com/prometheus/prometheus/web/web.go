@@ -48,6 +48,7 @@ import (
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/route"
+	"github.com/prometheus/common/server"
 	"github.com/prometheus/tsdb"
 	"github.com/soheilhy/cmux"
 	"golang.org/x/net/netutil"
@@ -296,7 +297,7 @@ func New(logger log.Logger, o *Options) *Handler {
 
 	router.Get("/static/*filepath", func(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = path.Join("/static", route.Param(r.Context(), "filepath"))
-		fs := http.FileServer(ui.Assets)
+		fs := server.StaticFileServer(ui.Assets)
 		fs.ServeHTTP(w, r)
 	})
 
@@ -507,12 +508,16 @@ func (h *Handler) Run(ctx context.Context) error {
 }
 
 func (h *Handler) alerts(w http.ResponseWriter, r *http.Request) {
-	alerts := h.ruleManager.AlertingRules()
-	alertsSorter := byAlertStateAndNameSorter{alerts: alerts}
-	sort.Sort(alertsSorter)
+
+	var groups []*rules.Group
+	for _, group := range h.ruleManager.RuleGroups() {
+		if group.HasAlertingRules() {
+			groups = append(groups, group)
+		}
+	}
 
 	alertStatus := AlertStatus{
-		AlertingRules: alertsSorter.alerts,
+		Groups: groups,
 		AlertStateToRowClass: map[rules.AlertState]string{
 			rules.StateInactive: "success",
 			rules.StatePending:  "warning",
@@ -549,19 +554,39 @@ func (h *Handler) consoles(w http.ResponseWriter, r *http.Request) {
 	for k, v := range rawParams {
 		params[k] = v[0]
 	}
+
+	externalLabels := map[string]string{}
+	h.mtx.RLock()
+	els := h.config.GlobalConfig.ExternalLabels
+	h.mtx.RUnlock()
+	for _, el := range els {
+		externalLabels[el.Name] = el.Value
+	}
+
+	// Inject some convenience variables that are easier to remember for users
+	// who are not used to Go's templating system.
+	defs := []string{
+		"{{$rawParams := .RawParams }}",
+		"{{$params := .Params}}",
+		"{{$path := .Path}}",
+		"{{$externalLabels := .ExternalLabels}}",
+	}
+
 	data := struct {
-		RawParams url.Values
-		Params    map[string]string
-		Path      string
+		RawParams      url.Values
+		Params         map[string]string
+		Path           string
+		ExternalLabels map[string]string
 	}{
-		RawParams: rawParams,
-		Params:    params,
-		Path:      strings.TrimLeft(name, "/"),
+		RawParams:      rawParams,
+		Params:         params,
+		Path:           strings.TrimLeft(name, "/"),
+		ExternalLabels: externalLabels,
 	}
 
 	tmpl := template.NewTemplateExpander(
 		h.context,
-		string(text),
+		strings.Join(append(defs, string(text)), ""),
 		"__console_"+name,
 		data,
 		h.now(),
@@ -914,24 +939,6 @@ func (h *Handler) executeTemplate(w http.ResponseWriter, name string, data inter
 
 // AlertStatus bundles alerting rules and the mapping of alert states to row classes.
 type AlertStatus struct {
-	AlertingRules        []*rules.AlertingRule
+	Groups               []*rules.Group
 	AlertStateToRowClass map[rules.AlertState]string
-}
-
-type byAlertStateAndNameSorter struct {
-	alerts []*rules.AlertingRule
-}
-
-func (s byAlertStateAndNameSorter) Len() int {
-	return len(s.alerts)
-}
-
-func (s byAlertStateAndNameSorter) Less(i, j int) bool {
-	return s.alerts[i].State() > s.alerts[j].State() ||
-		(s.alerts[i].State() == s.alerts[j].State() &&
-			s.alerts[i].Name() < s.alerts[j].Name())
-}
-
-func (s byAlertStateAndNameSorter) Swap(i, j int) {
-	s.alerts[i], s.alerts[j] = s.alerts[j], s.alerts[i]
 }

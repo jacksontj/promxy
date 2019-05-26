@@ -400,14 +400,9 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:ae530dc3d3093094e56c02e60429cf97888c9a3204a7c3bf2d513fbfdc801efb"
+  digest = "1:5c5209de81033d9cf00e73c4127f58d608ec595b6edfcc34699cb604c38994b8"
   name = "github.com/mailru/easyjson"
-  packages = [
-    ".",
-    "buffer",
-    "jlexer",
-    "jwriter",
-  ]
+  packages = ["jlexer"]
   pruneopts = "NUT"
   revision = "2a92e673c9a6302dd05c3a691ae1f24aef46457d"
 
@@ -562,8 +557,8 @@
   revision = "6f3806018612930941127f2a7c6c453ba2c527d2"
 
 [[projects]]
-  branch = "tjackson_fork_23"
-  digest = "1:3010e5e7c138879128e3f4813619ba41f78b5aa5b3945b0ee7bc1067daf56a06"
+  branch = "master"
+  digest = "1:6851bc1c0ad73b11ebd782fc5ee7cf3dec1d9d3fa785818605a49fd61ac0f99a"
   name = "github.com/prometheus/common"
   packages = [
     "config",
@@ -573,11 +568,11 @@
     "model",
     "promlog",
     "route",
+    "server",
     "version",
   ]
   pruneopts = "NUT"
-  revision = "b6328fa22d05e30e511feed43277a9165c159ddb"
-  source = "github.com/jacksontj/common"
+  revision = "17f5ca1748182ddf24fc33a5a7caaaf790a52fcc"
 
 [[projects]]
   branch = "master"
@@ -591,8 +586,8 @@
   revision = "e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2"
 
 [[projects]]
-  branch = "release-2.9_fork_promxy"
-  digest = "1:fedaa3e3369c16e463d9e5c147a802cf83fd3df72159eedfa01659d795b1d199"
+  branch = "release-2.10_fork_promxy"
+  digest = "1:47b83fd4461078c21f3cd5f674acb3434e5e3dafb8f37fc973b92f9cfc055173"
   name = "github.com/prometheus/prometheus"
   packages = [
     "config",
@@ -641,7 +636,7 @@
     "web/ui",
   ]
   pruneopts = "NUT"
-  revision = "871d250ab905fbddada716895a14a3aaba588dc3"
+  revision = "33dffe86afefdbf2c876b1cd09ed100dee88a38f"
   source = "github.com/jacksontj/prometheus"
 
 [[projects]]

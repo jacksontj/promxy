@@ -401,6 +401,7 @@ func (f inspector) Visit(node Node, path []Node) (Visitor, error) {
 // f(node, path); node must not be nil. If f returns a nil error, Inspect invokes f
 // for all the non-nil children of node, recursively.
 func Inspect(ctx context.Context, s *EvalStmt, f inspector, nr NodeReplacer) (Node, error) {
+	//nolint: errcheck
 	return Walk(ctx, f, s, s.Expr, nil, nr)
 }
 
