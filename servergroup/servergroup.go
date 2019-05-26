@@ -52,7 +52,7 @@ func New() *ServerGroup {
 	}
 
 	logCfg := &promlog.Config{
-		Level: &promlog.AllowedLevel{},
+		Level:  &promlog.AllowedLevel{},
 		Format: &promlog.AllowedFormat{},
 	}
 	if err := logCfg.Level.Set("info"); err != nil {
