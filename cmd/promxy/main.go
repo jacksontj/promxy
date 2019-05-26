@@ -179,11 +179,15 @@ func main() {
 	}
 
 	// Alert notifier
-	lvl := promlog.AllowedLevel{}
-	if err := lvl.Set("info"); err != nil {
+	logCfg := &promlog.Config{
+		Level:  &promlog.AllowedLevel{},
+		Format: &promlog.AllowedFormat{},
+	}
+	if err := logCfg.Level.Set("info"); err != nil {
 		panic(err)
 	}
-	logger := promlog.New(lvl)
+
+	logger := promlog.New(logCfg)
 
 	notifierManager := notifier.NewManager(
 		&notifier.Options{
@@ -245,7 +249,7 @@ func main() {
 			}
 			files = append(files, fs...)
 		}
-		if err := ruleManager.Update(time.Duration(cfg.GlobalConfig.EvaluationInterval), files); err != nil {
+		if err := ruleManager.Update(time.Duration(cfg.GlobalConfig.EvaluationInterval), files, cfg.GlobalConfig.ExternalLabels); err != nil {
 			return err
 		}
 
