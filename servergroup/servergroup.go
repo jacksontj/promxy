@@ -51,11 +51,14 @@ func New() *ServerGroup {
 		Ready:     make(chan struct{}),
 	}
 
-	lvl := promlog.AllowedLevel{}
-	if err := lvl.Set("info"); err != nil {
+	logCfg := &promlog.Config{
+		Level: &promlog.AllowedLevel{},
+		Format: &promlog.AllowedFormat{},
+	}
+	if err := logCfg.Level.Set("info"); err != nil {
 		panic(err)
 	}
-	sg.targetManager = discovery.NewManager(ctx, promlog.New(lvl))
+	sg.targetManager = discovery.NewManager(ctx, promlog.New(logCfg))
 	// Background the updating
 	go sg.targetManager.Run()
 	go sg.Sync()

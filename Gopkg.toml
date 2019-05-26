@@ -55,4 +55,4 @@
 
 [[override]]
   name = "k8s.io/client-go"
-  revision = "a47917edff34c2c3f7be36398e3ebad6011ce05c"
+  version = "v11.0.0"
