@@ -51,7 +51,7 @@ prometheus or rebooting the host
 ### What versions of prometheus does promxy support?
 Promxy uses the `/v1` API of prometheus under-the-hood, meaning that promxy simply
 requires that API to be present. Promxy has been used with as early as prom 1.7
-and as recent as 2.7. If you run into issues with any prometheus version with the `/v1`
+and as recent as 2.10. If you run into issues with any prometheus version with the `/v1`
 API please open up an issue.
 
 ### What changes are required to my prometheus infra for promxy?
