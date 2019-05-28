@@ -544,7 +544,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:4f213b94b6029af89f31144cdbc6501318da4d62bb41499b092beae052ff012a"
+  digest = "1:609237b72a6060b9410232e05623690094ceda206f49672d152b0974d723e5e8"
   name = "github.com/prometheus/client_golang"
   packages = [
     "api",
@@ -554,7 +554,7 @@
     "prometheus/promhttp",
   ]
   pruneopts = "NUT"
-  revision = "3f6cbd95606771ac9f7b1c9247d2ca186cb72cb9"
+  revision = "f0a455664ecb0634bfb64d58b0c8226c2dab0804"
 
 [[projects]]
   branch = "master"
@@ -1040,7 +1040,6 @@
     "github.com/golang/snappy",
     "github.com/jessevdk/go-flags",
     "github.com/julienschmidt/httprouter",
-    "github.com/mailru/easyjson/jlexer",
     "github.com/pkg/errors",
     "github.com/prometheus/client_golang/api",
     "github.com/prometheus/client_golang/api/prometheus/v1",

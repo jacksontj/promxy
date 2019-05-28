@@ -118,7 +118,7 @@ func (s *ServerGroup) Sync() {
 						panic(err) // TODO: shouldn't be possible? If this happens I guess we log and skip?
 					}
 
-					promAPIClient := v1.NewAPI(client)
+					promAPIClient := &promclient.PromAPIV1{v1.NewAPI(client)}
 
 					var apiClient promclient.API
 					if s.Cfg.RemoteRead {
@@ -135,7 +135,7 @@ func (s *ServerGroup) Sync() {
 
 						apiClient = &promclient.PromAPIRemoteRead{promAPIClient, remoteStorageClient}
 					} else {
-						apiClient = &promclient.PromAPIV1{promAPIClient}
+						apiClient = promAPIClient
 					}
 
 					// We remove all private labels after we set the target entry

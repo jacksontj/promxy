@@ -20,6 +20,26 @@ type PromAPIV1 struct {
 	v1.API
 }
 
+// LabelValues performs a query for the values of the given label.
+func (p *PromAPIV1) LabelValues(ctx context.Context, label string) (model.LabelValues, error) {
+	return p.API.LabelValues(ctx, label)
+}
+
+// Query performs a query for the given time.
+func (p *PromAPIV1) Query(ctx context.Context, query string, ts time.Time) (model.Value, error) {
+	return p.API.Query(ctx, query, ts)
+}
+
+// QueryRange performs a query for the given range.
+func (p *PromAPIV1) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, error) {
+	return p.API.QueryRange(ctx, query, r)
+}
+
+// Series finds series by label matchers.
+func (p *PromAPIV1) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, error) {
+	return p.API.Series(ctx, matches, startTime, endTime)
+}
+
 // GetValue loads the raw data for a given set of matchers in the time range
 func (p *PromAPIV1) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
 	// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
@@ -33,13 +53,13 @@ func (p *PromAPIV1) GetValue(ctx context.Context, start, end time.Time, matchers
 	// with any rounding error etc since the duration is a floating point and we are casting
 	// to an int64
 	query := pql + fmt.Sprintf("[%ds]", int64(end.Sub(start).Seconds())+1)
-	return p.Query(ctx, query, end)
+	return p.API.Query(ctx, query, end)
 }
 
 // PromAPIRemoteRead implements our internal API interface using a combination of
 // the v1 HTTP API and the "experimental" remote_read API
 type PromAPIRemoteRead struct {
-	v1.API
+	API
 	*remote.Client
 }
 
