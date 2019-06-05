@@ -32,7 +32,6 @@ func IteratorsForValue(v model.Value) []*SeriesIterator {
 	default:
 		msg := fmt.Sprintf("Unknown type %v", reflect.TypeOf(v))
 		panic(msg)
-		return nil
 	}
 }
 
@@ -69,7 +68,6 @@ func (s *SeriesIterator) Seek(t int64) bool {
 		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
 		panic(msg)
 	}
-	return false
 }
 
 // At returns the current timestamp/value pair.
@@ -84,8 +82,6 @@ func (s *SeriesIterator) At() (t int64, v float64) {
 		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
 		panic(msg)
 	}
-
-	return 0, 0
 }
 
 // Next advances the iterator by one.
@@ -108,7 +104,6 @@ func (s *SeriesIterator) Next() bool {
 		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
 		panic(msg)
 	}
-	return false
 }
 
 // Err returns the current error.
