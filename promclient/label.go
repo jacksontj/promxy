@@ -12,6 +12,7 @@ import (
 	"github.com/jacksontj/promxy/promhttputil"
 )
 
+// MergeLabelValues merges the labels from b into a
 func MergeLabelValues(a, b []model.LabelValue) []model.LabelValue {
 	labels := make(map[model.LabelValue]struct{})
 	for _, item := range a {
@@ -27,6 +28,7 @@ func MergeLabelValues(a, b []model.LabelValue) []model.LabelValue {
 	return a
 }
 
+// MergeLabelSets merges the labelset b into a
 func MergeLabelSets(a, b []model.LabelSet) []model.LabelSet {
 	added := make(map[model.Fingerprint]struct{})
 	for _, item := range a {
@@ -50,6 +52,7 @@ type AddLabelClient struct {
 	Labels model.LabelSet
 }
 
+// Key defines the labelset which identifies this client
 func (c *AddLabelClient) Key() model.LabelSet {
 	return c.Labels
 }

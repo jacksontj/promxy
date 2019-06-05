@@ -50,10 +50,11 @@ var (
 		Name: "process_reload_time_seconds",
 		Help: "Last reload (SIGHUP) time of the process since unix epoch in seconds.",
 	})
+	// Version of promxy
 	Version = "<version>"
 )
 
-type CLIOpts struct {
+type cliOpts struct {
 	Version bool `long:"version" short:"v" description:"print out version and exit"`
 
 	BindAddr   string `long:"bind-addr" description:"address for promxy to listen on" default:":8082"`
@@ -73,7 +74,7 @@ type CLIOpts struct {
 	ShutdownTimeout time.Duration `long:"http.shutdown-timeout" description:"max time to wait for a graceful shutdown of the HTTP server" default:"60s"`
 }
 
-func (c *CLIOpts) ToFlags() map[string]string {
+func (c *cliOpts) ToFlags() map[string]string {
 	tmp := make(map[string]string)
 	// TODO: better
 	b, _ := json.Marshal(opts)
@@ -81,7 +82,7 @@ func (c *CLIOpts) ToFlags() map[string]string {
 	return tmp
 }
 
-var opts CLIOpts
+var opts cliOpts
 
 func reloadConfig(rls ...proxyconfig.Reloadable) error {
 	cfg, err := proxyconfig.ConfigFromFile(opts.ConfigFile)

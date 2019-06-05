@@ -39,6 +39,7 @@ func init() {
 	prometheus.MustRegister(serverGroupSummary)
 }
 
+// New creates a new servergroup
 func New() *ServerGroup {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	// Create the targetSet (which will maintain all of the updating etc. in the background)
@@ -68,6 +69,7 @@ type ServerGroupState struct {
 	apiClient promclient.API
 }
 
+// Servergroup encapsulates a set of prometheus downstreams to query/aggregate
 type ServerGroup struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
@@ -85,10 +87,12 @@ type ServerGroup struct {
 	state atomic.Value
 }
 
+// Cancel stops backround processes (e.g. discovery manager)
 func (s *ServerGroup) Cancel() {
 	s.ctxCancel()
 }
 
+// Sync updates the targets from our discovery manager
 func (s *ServerGroup) Sync() {
 	syncCh := s.targetManager.SyncCh()
 
@@ -172,6 +176,7 @@ func (s *ServerGroup) Sync() {
 	}
 }
 
+// ApplyConfig applies new configuration to the ServerGroup
 // TODO: move config + client into state object to be swapped with atomics
 func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	s.Cfg = cfg
@@ -216,13 +221,13 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	return nil
 }
 
+// State returns the current ServerGroupState
 func (s *ServerGroup) State() *ServerGroupState {
 	tmp := s.state.Load()
 	if ret, ok := tmp.(*ServerGroupState); ok {
 		return ret
-	} else {
-		return nil
 	}
+	return nil
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range

@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
+// IteratorsForValue returns SeriesIterators for the value passed in
 func IteratorsForValue(v model.Value) []*SeriesIterator {
 	switch valueTyped := v.(type) {
 	case *model.Scalar:
@@ -41,6 +42,7 @@ func NewSeriesIterator(v interface{}) *SeriesIterator {
 	return &SeriesIterator{V: v, offset: -1}
 }
 
+// SeriesIterator implements the prometheus SeriesIterator interface
 type SeriesIterator struct {
 	V      interface{}
 	offset int
@@ -97,9 +99,8 @@ func (s *SeriesIterator) Next() bool {
 		if s.offset < (len(valueTyped.Values) - 1) {
 			s.offset++
 			return true
-		} else {
-			return false
 		}
+		return false
 	default:
 		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
 		panic(msg)
@@ -111,7 +112,7 @@ func (s *SeriesIterator) Err() error {
 	return nil
 }
 
-// Returns the metric of the series that the iterator corresponds to.
+// Labels returns the labels of the series that the iterator corresponds to.
 func (s *SeriesIterator) Labels() labels.Labels {
 	switch valueTyped := s.V.(type) {
 	case *model.Scalar:

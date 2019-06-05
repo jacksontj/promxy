@@ -6,11 +6,13 @@ import (
 	"github.com/prometheus/prometheus/promql"
 )
 
+// LabelFilterVisitor implements the promql.Visitor interface to filter selectors based on a labelstet
 type LabelFilterVisitor struct {
 	ls          model.LabelSet
 	filterMatch bool
 }
 
+// Visit checks if the given node matches the labels in the filter
 func (l *LabelFilterVisitor) Visit(node promql.Node, path []promql.Node) (w promql.Visitor, err error) {
 	switch nodeTyped := node.(type) {
 	case *promql.VectorSelector:
@@ -48,6 +50,8 @@ func (l *LabelFilterVisitor) Visit(node promql.Node, path []promql.Node) (w prom
 	return l, nil
 }
 
+// FilterMatchers applies the matchers to the given labelset to determine if there is a match
+// and to return all remaining matchers to be matched
 func FilterMatchers(ls model.LabelSet, matchers []*labels.Matcher) ([]*labels.Matcher, bool) {
 	filteredMatchers := make([]*labels.Matcher, 0, len(matchers))
 
