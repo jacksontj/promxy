@@ -389,7 +389,7 @@ func main() {
 					log.Errorf("Error reloading config: %s", err)
 				}
 			case syscall.SIGTERM, syscall.SIGINT:
-				log.Info("promxy recieved exit signal, starting graceful shutdown")
+				log.Info("promxy received exit signal, starting graceful shutdown")
 
 				// Stop all services we are running
 				stopping = true        // start failing healthchecks
