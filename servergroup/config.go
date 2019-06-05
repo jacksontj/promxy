@@ -10,7 +10,10 @@ import (
 )
 
 var (
+	// DefaultConfig is the Default base promxy configuration
 	DefaultConfig = Config{
+		AntiAffinity: time.Second * 10,
+		Scheme:       "http",
 		HTTPConfig: HTTPClientConfig{
 			DialTimeout: time.Millisecond * 2000, // Default dial timeout of 200ms
 		},
@@ -89,24 +92,20 @@ type Config struct {
 	// cause variable scrape completion time (slow exporter, serial exporter, network latency, etc.)
 	// any one of these can cause the resulting data in prometheus to have the same time but in reality
 	// come from different points in time. Best practice for this value is to set it to your scrape interval
-	AntiAffinity *time.Duration `yaml:"anti_affinity,omitempty"`
+	AntiAffinity time.Duration `yaml:"anti_affinity,omitempty"`
 
 	// IgnoreError will hide all errors from this given servergroup
 	IgnoreError bool `yaml:"ignore_error"`
 }
 
+// GetScheme returns the scheme for this servergroup
 func (c *Config) GetScheme() string {
-	if c.Scheme == "" {
-		return "http"
-	}
 	return c.Scheme
 }
 
+// GetAntiAffinity returns the AntiAffinity time for this servergroup
 func (c *Config) GetAntiAffinity() model.Time {
-	if c.AntiAffinity == nil {
-		return model.TimeFromUnix(10) // 10s
-	}
-	return model.TimeFromUnix(int64((*c.AntiAffinity).Seconds()))
+	return model.TimeFromUnix(int64((c.AntiAffinity).Seconds()))
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface.
@@ -119,6 +118,7 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return unmarshal((*plain)(c))
 }
 
+// HTTPClientConfig extends prometheus' HTTPClientConfig
 type HTTPClientConfig struct {
 	DialTimeout time.Duration                `yaml:"dial_timeout"`
 	HTTPConfig  config_util.HTTPClientConfig `yaml:",inline"`

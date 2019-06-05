@@ -11,6 +11,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
+// ConfigFromFile loads a config file at path
 func ConfigFromFile(path string) (*Config, error) {
 	// load the config file
 	cfg := &Config{

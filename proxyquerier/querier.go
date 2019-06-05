@@ -16,6 +16,7 @@ import (
 	"github.com/jacksontj/promxy/promhttputil"
 )
 
+// ProxyQuerier Implements prometheus' Querier interface
 type ProxyQuerier struct {
 	Ctx    context.Context
 	Start  time.Time

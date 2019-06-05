@@ -30,12 +30,14 @@ type proxyStorageState struct {
 	appenderCloser func() error
 }
 
+// Ready blocks until all servergroups are ready
 func (p *proxyStorageState) Ready() {
 	for _, sg := range p.sgs {
 		<-sg.Ready
 	}
 }
 
+// Cancel this state
 func (p *proxyStorageState) Cancel(n *proxyStorageState) {
 	if p.sgs != nil {
 		for _, sg := range p.sgs {
@@ -50,15 +52,17 @@ func (p *proxyStorageState) Cancel(n *proxyStorageState) {
 	}
 }
 
+// NewProxyStorage creates a new ProxyStorage
 func NewProxyStorage() (*ProxyStorage, error) {
 	return &ProxyStorage{}, nil
 }
 
-// TODO: rename?
+// ProxyStorage implements prometheus' Storage interface
 type ProxyStorage struct {
 	state atomic.Value
 }
 
+// GetState returns the current state of the ProxyStorage
 func (p *ProxyStorage) GetState() *proxyStorageState {
 	tmp := p.state.Load()
 	if sg, ok := tmp.(*proxyStorageState); ok {
@@ -68,6 +72,7 @@ func (p *ProxyStorage) GetState() *proxyStorageState {
 	}
 }
 
+// ApplyConfig updates the current state of this ProxyStorage
 func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	oldState := p.GetState() // Fetch the old state
 
@@ -126,6 +131,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	return nil
 }
 
+// Querier returns a new Querier on the storage.
 func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
 	state := p.GetState()
 	return &proxyquerier.ProxyQuerier{
@@ -138,19 +144,21 @@ func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Q
 	}, nil
 }
 
+// StartTime returns the oldest timestamp stored in the storage.
 func (p *ProxyStorage) StartTime() (int64, error) {
 	return 0, nil
 }
 
+// Appender returns a new appender against the storage.
 func (p *ProxyStorage) Appender() (storage.Appender, error) {
 	state := p.GetState()
 	return state.appender, nil
 }
 
-// TODO: actually close things?
+// Close releases the resources of the Querier.
 func (p *ProxyStorage) Close() error { return nil }
 
-// This replaces promql Nodes with more efficient-to-fetch ones. This works by taking lower-layer
+// NodeReplacer replaces promql Nodes with more efficient-to-fetch ones. This works by taking lower-layer
 // chunks of the query, farming them out to prometheus hosts, then stitching the results back together.
 // An example would be a sum, we can sum multiple sums and come up with the same result -- so we do.
 // There are a few ground rules for this:
