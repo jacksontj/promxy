@@ -13,7 +13,7 @@ cache:
     - $HOME/gopath/pkg/mod
 
 go:
-  - "1.10.x"
+  - "1.12.x"
 
 # only build commits/PRs targeted to the master branch
 # this avoids duplicate builds for push + PR
