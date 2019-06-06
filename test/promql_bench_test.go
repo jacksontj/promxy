@@ -2,28 +2,17 @@ package test
 
 import (
 	"context"
-	"log"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"net/http"
-	_ "net/http/pprof"
-	"net/url"
-
-	config_util "github.com/prometheus/common/config"
-	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/storage"
-	"github.com/prometheus/prometheus/storage/remote"
 )
 
-func init() {
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-}
-
 func BenchmarkEvaluations(b *testing.B) {
+	//this outer bench isn't real, it only spins through the others, no need to collect data
+	b.StopTimer()
+
 	files, err := filepath.Glob("benchdata/*.test")
 	if err != nil {
 		b.Fatal(err)
@@ -56,18 +45,7 @@ func BenchmarkEvaluations(b *testing.B) {
 			origStorage := test.Storage()
 
 			b.Run("direct", func(b *testing.B) {
-				srv, stopChan := startAPIForTest(testLoad.Storage(), ":8085")
-				serverURL, _ := url.Parse("http://localhost:8085")
-				client, err := remote.NewClient(1, &remote.ClientConfig{
-					URL:     &config_util.URL{URL: serverURL},
-					Timeout: model.Duration(time.Second),
-				})
-				if err != nil {
-					b.Fatalf("Error creating remote_read client: %v", err)
-				}
-
-				lStorage := &RemoteStorage{remote.QueryableClient(client), testLoad.Storage()}
-				test.SetStorage(lStorage)
+				test.SetStorage(testLoad.Storage())
 
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
