@@ -67,9 +67,8 @@ func (p *ProxyStorage) GetState() *proxyStorageState {
 	tmp := p.state.Load()
 	if sg, ok := tmp.(*proxyStorageState); ok {
 		return sg
-	} else {
-		return &proxyStorageState{}
 	}
+	return &proxyStorageState{}
 }
 
 // ApplyConfig updates the current state of this ProxyStorage

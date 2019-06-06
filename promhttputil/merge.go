@@ -55,9 +55,8 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, 
 
 		if aTyped.Value != 0 && aTyped.Timestamp != 0 {
 			return aTyped, nil
-		} else {
-			return bTyped, nil
 		}
+		return bTyped, nil
 
 	// In the case where it is a single datapoint, we're going to assume that
 	// either is valid, we just need one
@@ -66,9 +65,8 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, 
 
 		if aTyped.Value != "" && aTyped.Timestamp != 0 {
 			return aTyped, nil
-		} else {
-			return bTyped, nil
 		}
+		return bTyped, nil
 
 	// List of *model.Sample -- only 1 value (guaranteed same timestamp)
 	case model.Vector:
