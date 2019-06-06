@@ -14,7 +14,7 @@ import (
 	"github.com/jacksontj/promxy/promhttputil"
 )
 
-// PromAPI implements our internal API interface using *only* the v1 HTTP API
+// PromAPIV1 implements our internal API interface using *only* the v1 HTTP API
 // Simply wraps the prom API to fullfil our internal API interface
 type PromAPIV1 struct {
 	v1.API
@@ -63,6 +63,7 @@ type PromAPIRemoteRead struct {
 	*remote.Client
 }
 
+// GetValue loads the raw data for a given set of matchers in the time range
 func (p *PromAPIRemoteRead) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
 	query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), matchers, nil)
 	if err != nil {

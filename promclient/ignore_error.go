@@ -9,7 +9,7 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
-// OptionalAPI simply swallows all errors from the given API. This allows the API to
+// IgnoreErrorAPI simply swallows all errors from the given API. This allows the API to
 // be used with all the regular error merging logic and effectively have its errors
 // not considered
 type IgnoreErrorAPI struct {

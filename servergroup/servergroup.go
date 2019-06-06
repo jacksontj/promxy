@@ -62,14 +62,14 @@ func New() *ServerGroup {
 
 }
 
-// Encapsulate the state of a serverGroup from service discovery
+// ServerGroupState encapsulates the state of a serverGroup from service discovery
 type ServerGroupState struct {
 	// Targets is the list of target URLs for this discovery round
 	Targets   []string
 	apiClient promclient.API
 }
 
-// Servergroup encapsulates a set of prometheus downstreams to query/aggregate
+// ServerGroup encapsulates a set of prometheus downstreams to query/aggregate
 type ServerGroup struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc

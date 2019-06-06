@@ -7,10 +7,12 @@ import (
 	"github.com/prometheus/prometheus/promql"
 )
 
+// MultiVisitor runs a set of visitors on the same pass over the node tree
 type MultiVisitor struct {
 	visitors []promql.Visitor
 }
 
+// Visit runs on each node in the tree
 func (v *MultiVisitor) Visit(node promql.Node, path []promql.Node) (promql.Visitor, error) {
 	var visitorErr error
 	for i, visitor := range v.visitors {
@@ -28,12 +30,14 @@ func (v *MultiVisitor) Visit(node promql.Node, path []promql.Node) (promql.Visit
 
 }
 
+// OffsetFinder finds the offset (if any) within the tree
 type OffsetFinder struct {
 	Found  bool
 	Offset time.Duration
 	Error  error
 }
 
+// Visit runs on each node in the tree
 func (o *OffsetFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor, error) {
 	switch n := node.(type) {
 	case *promql.VectorSelector:
@@ -63,9 +67,11 @@ func (o *OffsetFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor,
 	}
 }
 
-// When we send the queries below, we want to actually *remove* the offset.
+// OffsetRemover removes any offset found in the node tree
+// This is required when we send the queries below as we want to actually *remove* the offset.
 type OffsetRemover struct{}
 
+// Visit runs on each node in the tree
 func (o *OffsetRemover) Visit(node promql.Node, _ []promql.Node) (promql.Visitor, error) {
 	switch n := node.(type) {
 	case *promql.VectorSelector:
@@ -77,12 +83,13 @@ func (o *OffsetRemover) Visit(node promql.Node, _ []promql.Node) (promql.Visitor
 	return o, nil
 }
 
-// Use given func to determine if something is in there or notret := &promql.VectorSelector{Offset: offset}
+// BooleanFinder uses the given func to determine if something is in there or notret := &promql.VectorSelector{Offset: offset}
 type BooleanFinder struct {
 	Func  func(promql.Node) bool
 	Found int
 }
 
+// Visit runs on each node in the tree
 func (f *BooleanFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor, error) {
 	if f.Func(node) {
 		f.Found++
