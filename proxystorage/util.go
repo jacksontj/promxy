@@ -62,9 +62,8 @@ func (o *OffsetFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor,
 	}
 	if o.Error == nil {
 		return o, nil
-	} else {
-		return nil, nil
 	}
+	return nil, nil
 }
 
 // OffsetRemover removes any offset found in the node tree
