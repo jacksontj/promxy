@@ -95,7 +95,9 @@ type Config struct {
 	// come from different points in time. Best practice for this value is to set it to your scrape interval
 	AntiAffinity time.Duration `yaml:"anti_affinity,omitempty"`
 
-	// IgnoreError will hide all errors from this given servergroup
+	// IgnoreError will hide all errors from this given servergroup effectively making
+	// the responses from this servergroup "not required" for the result.
+	// Note: this allows you to make the tradeoff between availability of queries and consistency of results
 	IgnoreError bool `yaml:"ignore_error"`
 
 	// RelativeTimeRangeConfig defines a relative time range that this servergroup will respond to
