@@ -411,6 +411,14 @@
   version = "v1.1"
 
 [[projects]]
+  digest = "1:58999a98719fddbac6303cb17e8d85b945f60b72f48e3a2df6b950b97fa926f1"
+  name = "github.com/konsorten/go-windows-terminal-sequences"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "f55edac94c9bbba5d6182a4be46d86a2c9b5b50e"
+  version = "v1.0.2"
+
+[[projects]]
   branch = "master"
   digest = "1:f91bb67d051a94cf6ab2cf07eee0550432afc31655838d42cdec258db4b348f0"
   name = "github.com/kr/logfmt"
@@ -677,11 +685,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:105f606cbe2ffdfa0cfff065dfa1272e147231344a2e2cfa975b16eb172546de"
+  digest = "1:f4aaa07a6c33f2b354726d0571acbc8ca118837c75709f6353203ae1a3f8eeab"
   name = "github.com/sirupsen/logrus"
   packages = ["."]
   pruneopts = "NUT"
-  revision = "778f2e774c725116edbc3d039dc0dfc1cc62aae8"
+  revision = "2a22dbedbad1fd454910cd1f44f210ef90c28464"
 
 [[projects]]
   digest = "1:3ab855aa584d08db6541ce99dad60c12bd6a328ecb8a7358363887f85c976347"
@@ -697,14 +705,6 @@
   packages = ["codec"]
   pruneopts = "NUT"
   revision = "f1f1a805ed361a0e078bb537e4ea78cd37dcf065"
-
-[[projects]]
-  branch = "master"
-  digest = "1:624a05c7c6ed502bf77364cd3d54631383dafc169982fddd8ee77b53c3d9cccf"
-  name = "golang.org/x/crypto"
-  packages = ["ssh/terminal"]
-  pruneopts = "NUT"
-  revision = "9419663f5a44be8b34ca85f08abc5fe1be11f8a3"
 
 [[projects]]
   branch = "master"
