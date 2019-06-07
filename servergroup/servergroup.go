@@ -2,6 +2,7 @@ package servergroup
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -140,6 +141,25 @@ func (s *ServerGroup) Sync() {
 						apiClient = &promclient.PromAPIRemoteRead{promAPIClient, remoteStorageClient}
 					} else {
 						apiClient = promAPIClient
+					}
+
+					// Optionally add time range layers
+					if s.Cfg.AbsoluteTimeRangeConfig != nil {
+						fmt.Println("absolute")
+						apiClient = &promclient.AbsoluteTimeFilter{
+							API:   apiClient,
+							Start: s.Cfg.AbsoluteTimeRangeConfig.Start,
+							End:   s.Cfg.AbsoluteTimeRangeConfig.End,
+						}
+					}
+
+					if s.Cfg.RelativeTimeRangeConfig != nil {
+						fmt.Println("relative")
+						apiClient = &promclient.RelativeTimeFilter{
+							API:   apiClient,
+							Start: s.Cfg.RelativeTimeRangeConfig.Start,
+							End:   s.Cfg.RelativeTimeRangeConfig.End,
+						}
 					}
 
 					// We remove all private labels after we set the target entry
