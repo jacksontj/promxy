@@ -135,7 +135,8 @@ type HTTPClientConfig struct {
 	HTTPConfig  config_util.HTTPClientConfig `yaml:",inline"`
 }
 
-// TODO: validate config
+// RelativeTimeRangeConfig configures durations relative from "now" to define
+// a servergroup's time range
 type RelativeTimeRangeConfig struct {
 	Start *time.Duration `yaml:"start"`
 	End   *time.Duration `yaml:"end"`
@@ -148,17 +149,17 @@ func (tr *RelativeTimeRangeConfig) UnmarshalYAML(unmarshal func(interface{}) err
 		return err
 	}
 
-	return tr.Validate()
+	return tr.validate()
 }
 
-func (tr *RelativeTimeRangeConfig) Validate() error {
+func (tr *RelativeTimeRangeConfig) validate() error {
 	if tr.End != nil && tr.Start != nil && *tr.End < *tr.Start {
 		return fmt.Errorf("RelativeTimeRangeConfig: End must be after start")
 	}
 	return nil
 }
 
-// TODO: validate config
+// AbsoluteTimeRangeConfig contains absolute times to define a servergroup's time range
 type AbsoluteTimeRangeConfig struct {
 	Start time.Time `yaml:"start"`
 	End   time.Time `yaml:"end"`
@@ -171,10 +172,10 @@ func (tr *AbsoluteTimeRangeConfig) UnmarshalYAML(unmarshal func(interface{}) err
 		return err
 	}
 
-	return tr.Validate()
+	return tr.validate()
 }
 
-func (tr *AbsoluteTimeRangeConfig) Validate() error {
+func (tr *AbsoluteTimeRangeConfig) validate() error {
 	if !tr.Start.IsZero() && !tr.End.IsZero() && tr.End.Before(tr.Start) {
 		return fmt.Errorf("AbsoluteTimeRangeConfig: End must be after start")
 	}
