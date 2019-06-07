@@ -22,6 +22,7 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/relabel"
 	"github.com/prometheus/prometheus/storage/remote"
+	"github.com/sirupsen/logrus"
 
 	"github.com/jacksontj/promxy/promclient"
 
@@ -123,9 +124,9 @@ func (s *ServerGroup) Sync() {
 						panic(err) // TODO: shouldn't be possible? If this happens I guess we log and skip?
 					}
 
-					promAPIClient := &promclient.PromAPIV1{v1.NewAPI(client)}
-
 					var apiClient promclient.API
+					apiClient = &promclient.PromAPIV1{v1.NewAPI(client)}
+
 					if s.Cfg.RemoteRead {
 						u.Path = path.Join(u.Path, "api/v1/read")
 						cfg := &remote.ClientConfig{
@@ -138,9 +139,7 @@ func (s *ServerGroup) Sync() {
 							panic(err)
 						}
 
-						apiClient = &promclient.PromAPIRemoteRead{promAPIClient, remoteStorageClient}
-					} else {
-						apiClient = promAPIClient
+						apiClient = &promclient.PromAPIRemoteRead{apiClient, remoteStorageClient}
 					}
 
 					// Optionally add time range layers
@@ -169,7 +168,17 @@ func (s *ServerGroup) Sync() {
 						}
 					}
 
-					apiClients = append(apiClients, &promclient.AddLabelClient{apiClient, target.Merge(s.Cfg.Labels)})
+					// Add labels
+					apiClient = &promclient.AddLabelClient{apiClient, target.Merge(s.Cfg.Labels)}
+
+					// If debug logging is enabled, wrap the client with a debugAPI client
+					// Since these are called in the reverse order of what we add, we want
+					// to make sure that this is the last wrap of the client
+					if logrus.GetLevel() >= logrus.DebugLevel {
+						apiClient = &promclient.DebugAPI{apiClient, u.String()}
+					}
+
+					apiClients = append(apiClients, apiClient)
 				}
 			}
 		}
