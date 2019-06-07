@@ -1,6 +1,7 @@
 package servergroup
 
 import (
+	"fmt"
 	"time"
 
 	config_util "github.com/prometheus/common/config"
@@ -96,6 +97,16 @@ type Config struct {
 
 	// IgnoreError will hide all errors from this given servergroup
 	IgnoreError bool `yaml:"ignore_error"`
+
+	// RelativeTimeRangeConfig defines a relative time range that this servergroup will respond to
+	// An example use-case would be if a specific servergroup was long-term storage, it might only
+	// have data 3d old and retain 90d of data.
+	*RelativeTimeRangeConfig `yaml:"relative_time_range"`
+
+	// AbsoluteTimeRangeConfig defines an absolute time range that this servergroup will respond to
+	// An example use-case would be if a specific servergroup was was "deprecated" and wasn't getting
+	// any new data after a specific given point in time
+	*AbsoluteTimeRangeConfig `yaml:"absolute_time_range"`
 }
 
 // GetScheme returns the scheme for this servergroup
@@ -122,4 +133,50 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 type HTTPClientConfig struct {
 	DialTimeout time.Duration                `yaml:"dial_timeout"`
 	HTTPConfig  config_util.HTTPClientConfig `yaml:",inline"`
+}
+
+// TODO: validate config
+type RelativeTimeRangeConfig struct {
+	Start *time.Duration `yaml:"start"`
+	End   *time.Duration `yaml:"end"`
+}
+
+// UnmarshalYAML implements the yaml.Unmarshaler interface.
+func (tr *RelativeTimeRangeConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain RelativeTimeRangeConfig
+	if err := unmarshal((*plain)(tr)); err != nil {
+		return err
+	}
+
+	return tr.Validate()
+}
+
+func (tr *RelativeTimeRangeConfig) Validate() error {
+	if tr.End != nil && tr.Start != nil && *tr.End < *tr.Start {
+		return fmt.Errorf("RelativeTimeRangeConfig: End must be after start")
+	}
+	return nil
+}
+
+// TODO: validate config
+type AbsoluteTimeRangeConfig struct {
+	Start time.Time `yaml:"start"`
+	End   time.Time `yaml:"end"`
+}
+
+// UnmarshalYAML implements the yaml.Unmarshaler interface.
+func (tr *AbsoluteTimeRangeConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain AbsoluteTimeRangeConfig
+	if err := unmarshal((*plain)(tr)); err != nil {
+		return err
+	}
+
+	return tr.Validate()
+}
+
+func (tr *AbsoluteTimeRangeConfig) Validate() error {
+	if !tr.Start.IsZero() && !tr.End.IsZero() && tr.End.Before(tr.Start) {
+		return fmt.Errorf("AbsoluteTimeRangeConfig: End must be after start")
+	}
+	return nil
 }

@@ -51,6 +51,23 @@ promxy:
         dial_timeout: 1s
         tls_config:
           insecure_skip_verify: true
+      
+      # relative_time_range defines a relative-to-now time range that this server group contains.
+      # this is completely optional and start/end are both optional as well
+      # an example is if this servergroup only has the most recent 3h of data 
+      # the "start" would be -3h and the end would be left out
+      relative_time_range:
+        start: -3h
+        end: -1h
+
+      # absolute_time_range defines an absolute time range that this server group contains.
+      # this is completely optional and start/end are both optional as well
+      # and example is if the servergroup has been deprecated and is no longer receiving data
+      # you could set the specific times that it has data for.
+      absolute_time_range:
+        start: 2009-10-10 23:00:00 +0000 UTC m=+0.000000001
+        end: 2009-11-10 23:00:00 +0000 UTC m=+0.000000001
+
     # as many additional server groups as you have
     - static_configs:
         - targets:
