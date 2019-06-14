@@ -496,7 +496,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:abf702d7344f26107bb9436fd49010bf0216db32c756726348aad605dfe9b457"
+  digest = "1:d7df52094d013e7b241abf9de53f32f2a2953fc65e8968fbf1d43359596d2c55"
   name = "github.com/prometheus/client_golang"
   packages = [
     "api",
@@ -507,7 +507,7 @@
     "prometheus/promhttp",
   ]
   pruneopts = "NUT"
-  revision = "2641b987480bca71fb39738eb8c8b0d577cb1d76"
+  revision = "1335ef46bddd1cb120c21240851f292904aa91f6"
 
 [[projects]]
   branch = "master"
