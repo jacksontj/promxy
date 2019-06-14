@@ -2,9 +2,9 @@ package promclient
 
 import (
 	"context"
-	"fmt"
 	"time"
 
+	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -37,50 +37,51 @@ func (d *DebugAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 }
 
 // Query performs a query for the given time.
-func (d *DebugAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, error) {
+func (d *DebugAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, api.Warnings, error) {
 	logrus.WithFields(logrus.Fields{
 		"api":   "Query",
 		"query": query,
 		"ts":    ts,
 	}).Debug(d.PrefixMessage)
 
-	v, err := d.API.Query(ctx, query, ts)
+	v, w, err := d.API.Query(ctx, query, ts)
 
 	logrus.WithFields(logrus.Fields{
-		"api":   "Query",
-		"query": query,
-		"ts":    ts,
-		"value": v,
-		"error": err,
+		"api":      "Query",
+		"query":    query,
+		"ts":       ts,
+		"value":    v,
+		"warnings": w,
+		"error":    err,
 	}).Trace(d.PrefixMessage)
 
-	return v, err
+	return v, w, err
 }
 
 // QueryRange performs a query for the given range.
-func (d *DebugAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, error) {
-	fmt.Println("what")
+func (d *DebugAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, api.Warnings, error) {
 	logrus.WithFields(logrus.Fields{
 		"api":   "QueryRange",
 		"query": query,
 		"r":     r,
 	}).Debug(d.PrefixMessage)
 
-	v, err := d.API.QueryRange(ctx, query, r)
+	v, w, err := d.API.QueryRange(ctx, query, r)
 
 	logrus.WithFields(logrus.Fields{
-		"api":   "QueryRange",
-		"query": query,
-		"r":     r,
-		"value": v,
-		"error": err,
+		"api":      "QueryRange",
+		"query":    query,
+		"r":        r,
+		"value":    v,
+		"warnings": w,
+		"error":    err,
 	}).Trace(d.PrefixMessage)
 
-	return v, err
+	return v, w, err
 }
 
 // Series finds series by label matchers.
-func (d *DebugAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, error) {
+func (d *DebugAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, api.Warnings, error) {
 	logrus.WithFields(logrus.Fields{
 		"api":       "Series",
 		"matches":   matches,
@@ -88,7 +89,7 @@ func (d *DebugAPI) Series(ctx context.Context, matches []string, startTime time.
 		"endTime":   endTime,
 	}).Debug(d.PrefixMessage)
 
-	v, err := d.API.Series(ctx, matches, startTime, endTime)
+	v, w, err := d.API.Series(ctx, matches, startTime, endTime)
 
 	logrus.WithFields(logrus.Fields{
 		"api":       "Series",
@@ -96,14 +97,15 @@ func (d *DebugAPI) Series(ctx context.Context, matches []string, startTime time.
 		"startTime": startTime,
 		"endTime":   endTime,
 		"value":     v,
+		"warnings":  w,
 		"error":     err,
 	}).Trace(d.PrefixMessage)
 
-	return v, err
+	return v, w, err
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (d *DebugAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
+func (d *DebugAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, api.Warnings, error) {
 	logrus.WithFields(logrus.Fields{
 		"api":      "GetValue",
 		"start":    start,
@@ -111,7 +113,7 @@ func (d *DebugAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 		"matchers": matchers,
 	}).Debug(d.PrefixMessage)
 
-	v, err := d.API.GetValue(ctx, start, end, matchers)
+	v, w, err := d.API.GetValue(ctx, start, end, matchers)
 
 	logrus.WithFields(logrus.Fields{
 		"api":      "GetValue",
@@ -119,8 +121,9 @@ func (d *DebugAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 		"end":      end,
 		"matchers": matchers,
 		"value":    v,
+		"warnings": w,
 		"error":    err,
 	}).Trace(d.PrefixMessage)
 
-	return v, err
+	return v, w, err
 }
