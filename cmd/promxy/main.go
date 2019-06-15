@@ -80,7 +80,7 @@ type cliOpts struct {
 func (c *cliOpts) ToFlags() map[string]string {
 	tmp := make(map[string]string)
 	// TODO: better
-	b, _ := json.Marshal(opts)
+	b, _ := json.Marshal(c)
 	json.Unmarshal(b, &tmp)
 	return tmp
 }
