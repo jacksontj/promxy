@@ -9,7 +9,8 @@ import (
 
 type noopStorage struct{}
 
-func NoopStorage() storage.Storage {
+// NewNoopStorage returns a new noop storage
+func NewNoopStorage() storage.Storage {
 	return &noopStorage{}
 }
 
@@ -25,7 +26,7 @@ func (n *noopStorage) StartTime() (int64, error) {
 
 // Appender returns a new appender against the storage.
 func (n *noopStorage) Appender() (storage.Appender, error) {
-	return NoopAppender(), nil
+	return NewNoopAppender(), nil
 }
 
 // Close closes the storage and all its underlying resources.
@@ -35,7 +36,8 @@ func (n *noopStorage) Close() error {
 
 type noopAppender struct{}
 
-func NoopAppender() storage.Appender {
+// NewNoopAppender returns a new noop storage Appender
+func NewNoopAppender() storage.Appender {
 	return &noopAppender{}
 }
 

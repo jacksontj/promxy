@@ -233,7 +233,7 @@ func main() {
 		ExternalURL: externalUrl, // URL listed as URL for "who fired this alert"
 		QueryFunc:   rules.EngineQueryFunc(engine, proxyStorage),
 		NotifyFunc:  sendAlerts(notifierManager, externalUrl.String()),
-		TSDB:        noop.NoopStorage(), // TODO: use remote_read?
+		TSDB:        noop.NewNoopStorage(), // TODO: use remote_read?
 		Appendable:  proxyStorage,
 		Logger:      logger,
 	})
