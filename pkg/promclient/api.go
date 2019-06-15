@@ -11,7 +11,7 @@ import (
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/storage/remote"
 
-	"github.com/jacksontj/promxy/promhttputil"
+	"github.com/jacksontj/promxy/pkg/promhttputil"
 )
 
 // PromAPIV1 implements our internal API interface using *only* the v1 HTTP API

@@ -12,7 +12,7 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/promql"
 
-	"github.com/jacksontj/promxy/promhttputil"
+	"github.com/jacksontj/promxy/pkg/promhttputil"
 )
 
 // Since these error types magically add in their own prefixes, we need to get

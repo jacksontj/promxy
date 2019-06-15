@@ -11,9 +11,9 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 
-	proxyconfig "github.com/jacksontj/promxy/config"
-	"github.com/jacksontj/promxy/promclient"
-	"github.com/jacksontj/promxy/promhttputil"
+	proxyconfig "github.com/jacksontj/promxy/pkg/config"
+	"github.com/jacksontj/promxy/pkg/promclient"
+	"github.com/jacksontj/promxy/pkg/promhttputil"
 )
 
 // ProxyQuerier Implements prometheus' Querier interface
