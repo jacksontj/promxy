@@ -9,7 +9,7 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/promql"
 
-	"github.com/jacksontj/promxy/promhttputil"
+	"github.com/jacksontj/promxy/pkg/promhttputil"
 )
 
 // MergeLabelValues merges the labels from b into a

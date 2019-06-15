@@ -15,12 +15,12 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 
-	"github.com/jacksontj/promxy/remote"
+	"github.com/jacksontj/promxy/pkg/remote"
 
-	proxyconfig "github.com/jacksontj/promxy/config"
-	"github.com/jacksontj/promxy/promclient"
-	"github.com/jacksontj/promxy/proxyquerier"
-	"github.com/jacksontj/promxy/servergroup"
+	proxyconfig "github.com/jacksontj/promxy/pkg/config"
+	"github.com/jacksontj/promxy/pkg/promclient"
+	"github.com/jacksontj/promxy/pkg/proxyquerier"
+	"github.com/jacksontj/promxy/pkg/servergroup"
 )
 
 type proxyStorageState struct {

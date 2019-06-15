@@ -24,7 +24,7 @@ import (
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/sirupsen/logrus"
 
-	"github.com/jacksontj/promxy/promclient"
+	"github.com/jacksontj/promxy/pkg/promclient"
 
 	sd_config "github.com/prometheus/prometheus/discovery/config"
 )

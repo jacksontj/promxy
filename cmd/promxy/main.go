@@ -41,10 +41,10 @@ import (
 	"github.com/prometheus/prometheus/web"
 	"github.com/sirupsen/logrus"
 
-	proxyconfig "github.com/jacksontj/promxy/config"
-	"github.com/jacksontj/promxy/logging"
-	"github.com/jacksontj/promxy/noop"
-	"github.com/jacksontj/promxy/proxystorage"
+	proxyconfig "github.com/jacksontj/promxy/pkg/config"
+	"github.com/jacksontj/promxy/pkg/logging"
+	"github.com/jacksontj/promxy/pkg/noop"
+	"github.com/jacksontj/promxy/pkg/proxystorage"
 )
 
 var (

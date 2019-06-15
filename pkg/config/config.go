@@ -6,7 +6,7 @@ import (
 
 	"github.com/prometheus/prometheus/config"
 
-	"github.com/jacksontj/promxy/servergroup"
+	"github.com/jacksontj/promxy/pkg/servergroup"
 
 	yaml "gopkg.in/yaml.v2"
 )

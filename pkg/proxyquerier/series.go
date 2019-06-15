@@ -4,7 +4,7 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/storage"
 
-	"github.com/jacksontj/promxy/promclient"
+	"github.com/jacksontj/promxy/pkg/promclient"
 )
 
 // Series implements prometheus' Series interface

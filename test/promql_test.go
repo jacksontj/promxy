@@ -20,8 +20,8 @@ import (
 	v1 "github.com/prometheus/prometheus/web/api/v1"
 	"github.com/sirupsen/logrus"
 
-	proxyconfig "github.com/jacksontj/promxy/config"
-	"github.com/jacksontj/promxy/proxystorage"
+	proxyconfig "github.com/jacksontj/promxy/pkg/config"
+	"github.com/jacksontj/promxy/pkg/proxystorage"
 )
 
 const rawPSConfig = `
