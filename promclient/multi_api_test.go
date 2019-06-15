@@ -13,11 +13,17 @@ import (
 )
 
 type stubAPI struct {
+	labelNames  func() []string
 	labelValues func() model.LabelValues
 	query       func() model.Value
 	queryRange  func() model.Value
 	series      func() []model.LabelSet
 	getValue    func() model.Value
+}
+
+// LabelNames returns all the unique label names present in the block in sorted order.
+func (s *stubAPI) LabelNames(ctx context.Context) ([]string, error) {
+	return s.labelNames(), nil
 }
 
 // LabelValues performs a query for the values of the given label.
@@ -107,6 +113,10 @@ func TestMultiAPIMerging(t *testing.T) {
 	}
 
 	stub := &stubAPI{
+		labelNames: func() []string {
+			return []string{"a"}
+		},
+
 		labelValues: func() model.LabelValues {
 			return model.LabelValues{}
 		},

@@ -20,9 +20,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	"github.com/mailru/easyjson/jlexer"
-	"github.com/mailru/easyjson/jwriter"
 )
 
 var (
@@ -45,26 +42,9 @@ var (
 // time.
 type SampleValue float64
 
-func (v SampleValue) MarshalEasyJSON(w *jwriter.Writer) {
-	w.RawByte('"')
-	w.Buffer.EnsureSpace(20)
-	w.Buffer.Buf = strconv.AppendFloat(w.Buffer.Buf, float64(v), 'f', -1, 64)
-	w.RawByte('"')
-}
-
-func (v *SampleValue) UnmarshalEasyJSON(in *jlexer.Lexer) {
-	f, err := strconv.ParseFloat(in.String(), 64)
-	if err != nil {
-		in.AddError(err)
-	}
-	*v = SampleValue(f)
-}
-
 // MarshalJSON implements json.Marshaler.
 func (v SampleValue) MarshalJSON() ([]byte, error) {
-	w := jwriter.Writer{}
-	v.MarshalEasyJSON(&w)
-	return w.Buffer.BuildBytes(), w.Error
+	return json.Marshal(v.String())
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -100,28 +80,17 @@ type SamplePair struct {
 	Value     SampleValue
 }
 
-func (s SamplePair) MarshalEasyJSON(w *jwriter.Writer) {
-	w.RawByte('[')
-	s.Timestamp.MarshalEasyJSON(w)
-	w.RawByte(',')
-	s.Value.MarshalEasyJSON(w)
-	w.RawByte(']')
-}
-
-func (s *SamplePair) UnmarshalEasyJSON(in *jlexer.Lexer) {
-	in.Delim('[')
-	s.Timestamp.UnmarshalEasyJSON(in)
-	in.WantComma()
-	s.Value.UnmarshalEasyJSON(in)
-	in.WantComma()
-	in.Delim(']')
-}
-
 // MarshalJSON implements json.Marshaler.
 func (s SamplePair) MarshalJSON() ([]byte, error) {
-	w := jwriter.Writer{}
-	s.MarshalEasyJSON(&w)
-	return w.Buffer.BuildBytes(), w.Error
+	t, err := json.Marshal(s.Timestamp)
+	if err != nil {
+		return nil, err
+	}
+	v, err := json.Marshal(s.Value)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf("[%s,%s]", t, v)), nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -169,43 +138,6 @@ func (s Sample) String() string {
 		Timestamp: s.Timestamp,
 		Value:     s.Value,
 	})
-}
-
-func (s Sample) MarshalEasyJSON(w *jwriter.Writer) {
-	w.RawByte('{')
-	w.RawString(`"metric":`)
-	s.Metric.MarshalEasyJSON(w)
-	w.RawString(`,"value":`)
-	SamplePair{Timestamp: s.Timestamp, Value: s.Value}.MarshalEasyJSON(w)
-	w.RawByte('}')
-}
-
-func (s *Sample) UnmarshalEasyJSON(in *jlexer.Lexer) {
-	in.Delim('{')
-	for !in.IsDelim('}') {
-		key := in.UnsafeString()
-		in.WantColon()
-		if in.IsNull() {
-			in.Skip()
-			in.WantComma()
-			continue
-		}
-
-		switch key {
-		case "metric":
-			s.Metric = Metric{}
-			s.Metric.UnmarshalEasyJSON(in)
-		case "value":
-			sp := SamplePair{}
-			sp.UnmarshalEasyJSON(in)
-			s.Timestamp = sp.Timestamp
-			s.Value = sp.Value
-		default:
-			in.SkipRecursive()
-		}
-		in.WantComma()
-	}
-	in.Delim('}')
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -288,7 +220,6 @@ func (s Samples) Equal(o Samples) bool {
 }
 
 // SampleStream is a stream of Values belonging to an attached COWMetric.
-//easyjson:json
 type SampleStream struct {
 	Metric Metric       `json:"metric"`
 	Values []SamplePair `json:"values"`
@@ -372,21 +303,17 @@ type Scalar struct {
 	Timestamp Time        `json:"timestamp"`
 }
 
-func (s Scalar) MarshalEasyJSON(w *jwriter.Writer) {
-	w.RawByte('[')
-	s.Timestamp.MarshalEasyJSON(w)
-	w.RawByte(',')
-	s.Value.MarshalEasyJSON(w)
-	w.RawByte(']')
+func (s Scalar) String() string {
+	return fmt.Sprintf("scalar: %v @[%v]", s.Value, s.Timestamp)
 }
 
 // MarshalJSON implements json.Marshaler.
 func (s Scalar) MarshalJSON() ([]byte, error) {
-	w := jwriter.Writer{}
-	s.MarshalEasyJSON(&w)
-	return w.Buffer.BuildBytes(), w.Error
+	v := strconv.FormatFloat(float64(s.Value), 'f', -1, 64)
+	return json.Marshal([...]interface{}{s.Timestamp, string(v)})
 }
 
+// UnmarshalJSON implements json.Unmarshaler.
 func (s *Scalar) UnmarshalJSON(b []byte) error {
 	var f string
 	v := [...]interface{}{&s.Timestamp, &f}
@@ -401,10 +328,6 @@ func (s *Scalar) UnmarshalJSON(b []byte) error {
 	}
 	s.Value = SampleValue(value)
 	return nil
-}
-
-func (s Scalar) String() string {
-	return fmt.Sprintf("scalar: %v @[%v]", s.Value, s.Timestamp)
 }
 
 // String is a string value evaluated at the set timestamp.
@@ -430,7 +353,6 @@ func (s *String) UnmarshalJSON(b []byte) error {
 
 // Vector is basically only an alias for Samples, but the
 // contract is that in a Vector, all Samples have the same timestamp.
-//easyjson:json
 type Vector []*Sample
 
 func (vec Vector) String() string {
@@ -473,7 +395,6 @@ func (vec Vector) Equal(o Vector) bool {
 }
 
 // Matrix is a list of time series.
-//easyjson:json
 type Matrix []*SampleStream
 
 func (m Matrix) Len() int           { return len(m) }

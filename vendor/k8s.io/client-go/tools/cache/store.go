@@ -172,6 +172,10 @@ func (c *cache) Index(indexName string, obj interface{}) ([]interface{}, error) 
 	return c.cacheStorage.Index(indexName, obj)
 }
 
+func (c *cache) IndexKeys(indexName, indexKey string) ([]string, error) {
+	return c.cacheStorage.IndexKeys(indexName, indexKey)
+}
+
 // ListIndexFuncValues returns the list of generated values of an Index func
 func (c *cache) ListIndexFuncValues(indexName string) []string {
 	return c.cacheStorage.ListIndexFuncValues(indexName)
@@ -206,7 +210,7 @@ func (c *cache) GetByKey(key string) (item interface{}, exists bool, err error) 
 // 'c' takes ownership of the list, you should not reference the list again
 // after calling this function.
 func (c *cache) Replace(list []interface{}, resourceVersion string) error {
-	items := map[string]interface{}{}
+	items := make(map[string]interface{}, len(list))
 	for _, item := range list {
 		key, err := c.keyFunc(item)
 		if err != nil {

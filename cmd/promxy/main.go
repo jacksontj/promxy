@@ -24,6 +24,7 @@ import (
 	flags "github.com/jessevdk/go-flags"
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/route"
@@ -42,6 +43,7 @@ import (
 
 	proxyconfig "github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/logging"
+	"github.com/jacksontj/promxy/noop"
 	"github.com/jacksontj/promxy/proxystorage"
 )
 
@@ -66,6 +68,7 @@ type cliOpts struct {
 
 	QueryTimeout        time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
 	QueryMaxConcurrency int           `long:"query.max-concurrency" description:"Maximum number of queries executed concurrently." default:"1000"`
+	QueryMaxSamples     int           `long:"query.max-samples" description:"Maximum number of samples a single query can load into memory. Note that queries will fail if they would load more samples than this into memory, so this also limits the number of samples a query can return." default:"50000000"`
 
 	NotificationQueueCapacity int    `long:"alertmanager.notification-queue-capacity" description:"The capacity of the queue for pending alert manager notifications." default:"10000"`
 	AccessLogDestination      string `long:"access-log-destination" description:"where to log access logs, options (none, stderr, stdout)" default:"stdout"`
@@ -162,7 +165,12 @@ func main() {
 	reloadables = append(reloadables, ps)
 	proxyStorage = ps
 
-	engine := promql.NewEngine(nil, prometheus.DefaultRegisterer, opts.QueryMaxConcurrency, opts.QueryTimeout)
+	engine := promql.NewEngine(promql.EngineOpts{
+		Reg:           prometheus.DefaultRegisterer,
+		MaxConcurrent: opts.QueryMaxConcurrency,
+		Timeout:       opts.QueryTimeout,
+		MaxSamples:    opts.QueryMaxSamples,
+	})
 	engine.NodeReplacer = ps.NodeReplacer
 
 	// TODO: rename
@@ -172,11 +180,15 @@ func main() {
 	}
 
 	// Alert notifier
-	lvl := promlog.AllowedLevel{}
-	if err := lvl.Set("info"); err != nil {
+	logCfg := &promlog.Config{
+		Level:  &promlog.AllowedLevel{},
+		Format: &promlog.AllowedFormat{},
+	}
+	if err := logCfg.Level.Set("info"); err != nil {
 		panic(err)
 	}
-	logger := promlog.New(lvl)
+
+	logger := promlog.New(logCfg)
 
 	notifierManager := notifier.NewManager(
 		&notifier.Options{
@@ -221,6 +233,7 @@ func main() {
 		ExternalURL: externalUrl, // URL listed as URL for "who fired this alert"
 		QueryFunc:   rules.EngineQueryFunc(engine, proxyStorage),
 		NotifyFunc:  sendAlerts(notifierManager, externalUrl.String()),
+		TSDB:        noop.NoopStorage(), // TODO: use remote_read?
 		Appendable:  proxyStorage,
 		Logger:      logger,
 	})
@@ -237,7 +250,7 @@ func main() {
 			}
 			files = append(files, fs...)
 		}
-		if err := ruleManager.Update(time.Duration(cfg.GlobalConfig.EvaluationInterval), files); err != nil {
+		if err := ruleManager.Update(time.Duration(cfg.GlobalConfig.EvaluationInterval), files, cfg.GlobalConfig.ExternalLabels); err != nil {
 			return err
 		}
 
@@ -309,7 +322,7 @@ func main() {
 	r := httprouter.New()
 
 	// TODO: configurable metrics path
-	r.HandlerFunc("GET", "/metrics", prometheus.Handler().ServeHTTP)
+	r.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
 
 	stopping := false
 	r.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -420,7 +433,7 @@ func main() {
 // sendAlerts implements the rules.NotifyFunc for a Notifier.
 // It filters any non-firing alerts from the input.
 func sendAlerts(n *notifier.Manager, externalURL string) rules.NotifyFunc {
-	return func(ctx context.Context, expr string, alerts ...*rules.Alert) error {
+	return func(ctx context.Context, expr string, alerts ...*rules.Alert) {
 		var res []*notifier.Alert
 
 		for _, alert := range alerts {
@@ -443,7 +456,6 @@ func sendAlerts(n *notifier.Manager, externalURL string) rules.NotifyFunc {
 		if len(alerts) > 0 {
 			n.Send(res...)
 		}
-		return nil
 	}
 }
 

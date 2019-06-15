@@ -18,13 +18,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-
-	"github.com/mailru/easyjson/jlexer"
-	"github.com/mailru/easyjson/jwriter"
 )
 
 var (
-	separator = []byte{0}
 	// MetricNameRE is a regular expression matching valid metric
 	// names. Note that the IsValidMetricName function performs the same
 	// check but faster than a match with this regular expression.
@@ -88,42 +84,6 @@ func (m Metric) Fingerprint() Fingerprint {
 // algorithm, which is, however, more susceptible to hash collisions.
 func (m Metric) FastFingerprint() Fingerprint {
 	return LabelSet(m).FastFingerprint()
-}
-
-func (m Metric) MarshalEasyJSON(w *jwriter.Writer) {
-	w.RawByte('{')
-	first := true
-	for k, v := range m {
-		if !first {
-			w.RawByte(',')
-		} else {
-			first = false
-		}
-		w.RawString(`"` + string(k) + `"`)
-		w.RawByte(':')
-		w.RawString(`"` + string(v) + `"`)
-	}
-	w.RawByte('}')
-}
-
-func (m *Metric) UnmarshalEasyJSON(in *jlexer.Lexer) {
-	in.Delim('{')
-	for !in.IsDelim('}') {
-		key := LabelName(in.String())
-		in.WantColon()
-		var v4 LabelValue
-		v4 = LabelValue(in.String())
-		(*m)[key] = v4
-		in.WantComma()
-	}
-	in.Delim('}')
-}
-
-// MarshalJSON implements the json.Marshaler interface.
-func (m Metric) MarshalJSON() ([]byte, error) {
-	w := jwriter.Writer{}
-	m.MarshalEasyJSON(&w)
-	return w.Buffer.BuildBytes(), w.Error
 }
 
 // IsValidMetricName returns true iff name matches the pattern of MetricNameRE.

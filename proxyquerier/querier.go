@@ -27,7 +27,7 @@ type ProxyQuerier struct {
 }
 
 // Select returns a set of series that matches the given label matchers.
-func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*labels.Matcher) (storage.SeriesSet, error) {
+func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*labels.Matcher) (storage.SeriesSet, storage.Warnings, error) {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
@@ -38,6 +38,8 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 	}()
 
 	var result model.Value
+	// TODO: get warnings from lower layers
+	var warnings storage.Warnings
 	var err error
 	// Select() is a combined API call for query/query_range/series.
 	// as of right now there is no great way of differentiating between a
@@ -47,11 +49,11 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 	if selectParams == nil {
 		matcherString, err := promhttputil.MatcherToString(matchers)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		labelsets, err := h.Client.Series(h.Ctx, []string{matcherString}, h.Start, h.End)
 		if err != nil {
-			return nil, errors.Cause(err)
+			return nil, nil, errors.Cause(err)
 		}
 		// Convert labelsets to vectors
 		// convert to vector (there aren't points, but this way we don't have to make more merging functions)
@@ -66,7 +68,7 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		result, err = h.Client.GetValue(h.Ctx, timestamp.Time(selectParams.Start), timestamp.Time(selectParams.End), matchers)
 	}
 	if err != nil {
-		return nil, errors.Cause(err)
+		return nil, warnings, errors.Cause(err)
 	}
 
 	iterators := promclient.IteratorsForValue(result)
@@ -76,7 +78,7 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		series[i] = &Series{iterator}
 	}
 
-	return NewSeriesSet(series), nil
+	return NewSeriesSet(series), warnings, nil
 }
 
 // LabelValues returns all potential values for a label name.
@@ -100,6 +102,18 @@ func (h *ProxyQuerier) LabelValues(name string) ([]string, error) {
 	}
 
 	return ret, nil
+}
+
+// LabelNames returns all the unique label names present in the block in sorted order.
+func (h *ProxyQuerier) LabelNames() ([]string, error) {
+	start := time.Now()
+	defer func() {
+		logrus.WithFields(logrus.Fields{
+			"took": time.Now().Sub(start),
+		}).Debug("LabelNames")
+	}()
+
+	return h.Client.LabelNames(h.Ctx)
 }
 
 // Close closes the querier. Behavior for subsequent calls to Querier methods

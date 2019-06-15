@@ -177,6 +177,81 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 	return result, nil
 }
 
+// LabelValues performs a query for the values of the given label.
+func (m *MultiAPI) LabelNames(ctx context.Context) ([]string, error) {
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+
+	type chanResult struct {
+		v   []string
+		err error
+		ls  model.Fingerprint
+	}
+
+	resultChans := make([]chan chanResult, len(m.apis))
+	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
+
+	for i, api := range m.apis {
+		resultChans[i] = make(chan chanResult, 1)
+		outstandingRequests[m.apiFingerprints[i]]++
+		go func(i int, retChan chan chanResult, api API) {
+			start := time.Now()
+			result, err := api.LabelNames(childContext)
+			took := time.Now().Sub(start)
+			if err != nil {
+				m.recordMetric(i, "label_names", "error", took.Seconds())
+			} else {
+				m.recordMetric(i, "label_names", "success", took.Seconds())
+			}
+			retChan <- chanResult{
+				v:   result,
+				err: NormalizePromError(err),
+				ls:  m.apiFingerprints[i],
+			}
+		}(i, resultChans[i], api)
+	}
+
+	// Wait for results as we get them
+	var result map[string]struct{}
+	var lastError error
+	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
+	for i := 0; i < len(m.apis); i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+
+		case ret := <-resultChans[i]:
+			outstandingRequests[ret.ls]--
+			if ret.err != nil {
+				// If there aren't enough outstanding requests to possibly succeed, no reason to wait
+				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
+					return nil, ret.err
+				}
+				lastError = ret.err
+			} else {
+				successMap[ret.ls]++
+				for _, v := range ret.v {
+					result[v] = struct{}{}
+				}
+			}
+		}
+	}
+
+	// Verify that we hit the requiredCount for all of the buckets
+	for k := range outstandingRequests {
+		if successMap[k] < m.requiredCount {
+			return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+		}
+	}
+
+	stringResult := make([]string, 0, len(result))
+	for k := range result {
+		stringResult = append(stringResult, k)
+	}
+
+	return stringResult, nil
+}
+
 // Query performs a query for the given time.
 func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
