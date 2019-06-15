@@ -177,7 +177,7 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 	return result, nil
 }
 
-// LabelValues performs a query for the values of the given label.
+// LabelNames returns all the unique label names present in the block in sorted order.
 func (m *MultiAPI) LabelNames(ctx context.Context) ([]string, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
