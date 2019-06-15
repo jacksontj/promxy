@@ -6,8 +6,8 @@ import (
 
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/config"
 	sd_config "github.com/prometheus/prometheus/discovery/config"
+	"github.com/prometheus/prometheus/pkg/relabel"
 )
 
 var (
@@ -77,7 +77,7 @@ type Config struct {
 	//
 	// So in reality its "the same", the difference is in prometheus these apply to the labels/targets of a scrape job,
 	// in promxy they apply to the prometheus hosts in the servergroup - but the behavior is the same.
-	RelabelConfigs []*config.RelabelConfig `yaml:"relabel_configs,omitempty"`
+	RelabelConfigs []*relabel.Config `yaml:"relabel_configs,omitempty"`
 	// Hosts is a set of ServiceDiscoveryConfig options that allow promxy to discover
 	// all hosts in the server_group
 	Hosts sd_config.ServiceDiscoveryConfig `yaml:",inline"`

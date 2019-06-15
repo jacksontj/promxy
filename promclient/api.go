@@ -27,17 +27,20 @@ func (p *PromAPIV1) LabelValues(ctx context.Context, label string) (model.LabelV
 
 // Query performs a query for the given time.
 func (p *PromAPIV1) Query(ctx context.Context, query string, ts time.Time) (model.Value, error) {
-	return p.API.Query(ctx, query, ts)
+	v, _, err := p.API.Query(ctx, query, ts)
+	return v, err
 }
 
 // QueryRange performs a query for the given range.
 func (p *PromAPIV1) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, error) {
-	return p.API.QueryRange(ctx, query, r)
+	v, _, err := p.API.QueryRange(ctx, query, r)
+	return v, err
 }
 
 // Series finds series by label matchers.
 func (p *PromAPIV1) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, error) {
-	return p.API.Series(ctx, matches, startTime, endTime)
+	v, _, err := p.API.Series(ctx, matches, startTime, endTime)
+	return v, err
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
@@ -53,7 +56,8 @@ func (p *PromAPIV1) GetValue(ctx context.Context, start, end time.Time, matchers
 	// with any rounding error etc since the duration is a floating point and we are casting
 	// to an int64
 	query := pql + fmt.Sprintf("[%ds]", int64(end.Sub(start).Seconds())+1)
-	return p.API.Query(ctx, query, end)
+	v, _, err := p.API.Query(ctx, query, end)
+	return v, err
 }
 
 // PromAPIRemoteRead implements our internal API interface using a combination of

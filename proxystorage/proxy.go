@@ -13,8 +13,9 @@ import (
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
-	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/sirupsen/logrus"
+
+	"github.com/jacksontj/promxy/remote"
 
 	proxyconfig "github.com/jacksontj/promxy/config"
 	"github.com/jacksontj/promxy/promclient"
@@ -26,6 +27,7 @@ type proxyStorageState struct {
 	sgs            []*servergroup.ServerGroup
 	client         promclient.API
 	cfg            *proxyconfig.PromxyConfig
+	remoteStorage  *remote.Storage
 	appender       storage.Appender
 	appenderCloser func() error
 }
@@ -100,21 +102,23 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 
 	// Check for remote_write (for appender)
 	if c.PromConfig.RemoteWriteConfigs != nil {
-		switch oldAppender := oldState.appender.(type) {
-		// If the old one was a remote storage, we just need to apply config
-		case *remote.Storage:
-			if err := oldAppender.ApplyConfig(&c.PromConfig); err != nil {
+		if oldState.remoteStorage != nil {
+			if err := oldState.remoteStorage.ApplyConfig(&c.PromConfig); err != nil {
 				return err
 			}
-			newState.appender = oldState.appender
-			newState.appenderCloser = oldState.appenderCloser
-		// if it was an appenderstub we just need to replace
-		default:
+			// if it was an appenderstub we just need to replace
+		} else {
+			// TODO: configure path?
 			remote := remote.NewStorage(nil, func() (int64, error) { return 0, nil }, 1*time.Second)
 			if err := remote.ApplyConfig(&c.PromConfig); err != nil {
 				return err
 			}
-			newState.appender = remote
+			newState.remoteStorage = remote
+			var err error
+			newState.appender, err = remote.Appender()
+			if err != nil {
+				return errors.Wrap(err, "unable to create remote_write appender")
+			}
 			newState.appenderCloser = remote.Close
 		}
 	} else {
@@ -123,7 +127,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 
 	newState.Ready()        // Wait for the newstate to be ready
 	p.state.Store(newState) // Store the new state
-	if oldState != nil {
+	if oldState != nil && oldState.appender != newState.appender {
 		oldState.Cancel(newState) // Cancel the old one
 	}
 
@@ -221,9 +225,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		var err error
 
 		// Not all Aggregation functions are composable, so we'll do what we can
-		switch n.Op.String() {
+		switch n.Op {
 		// All "reentrant" cases (meaning they can be done repeatedly and the outcome doesn't change)
-		case "sum", "min", "max", "topk", "bottomk":
+		case promql.ItemSum, promql.ItemMin, promql.ItemMax, promql.ItemTopK, promql.ItemBottomK:
 			removeOffset()
 
 			if s.Interval > 0 {
@@ -241,12 +245,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			}
 
 		// Convert avg into sum() / count()
-		case "avg":
+		case promql.ItemAvg:
 			// Replace with sum() / count()
 			return &promql.BinaryExpr{
-				Op: 24, // Divide  TODO
+				Op: promql.ItemDIV,
 				LHS: &promql.AggregateExpr{
-					Op:       41, // sum() TODO
+					Op:       promql.ItemSum,
 					Expr:     n.Expr,
 					Param:    n.Param,
 					Grouping: n.Grouping,
@@ -254,7 +258,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 				},
 
 				RHS: &promql.AggregateExpr{
-					Op:       40, // count() TODO
+					Op:       promql.ItemCount,
 					Expr:     n.Expr,
 					Param:    n.Param,
 					Grouping: n.Grouping,
@@ -264,7 +268,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			}, nil
 
 		// For count we simply need to change this to a sum over the data we get back
-		case "count":
+		case promql.ItemCount:
 			removeOffset()
 
 			if s.Interval > 0 {
@@ -280,18 +284,17 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			if err != nil {
 				return nil, errors.Cause(err)
 			}
-			// TODO: have a reverse method in promql/lex.go
-			n.Op = 41 // SUM
+			n.Op = promql.ItemSum
 
-		case "stddev": // TODO: something?
-		case "stdvar": // TODO: something?
+		case promql.ItemStddev: // TODO: something?
+		case promql.ItemStdvar: // TODO: something?
 
 			// Do nothing, we want to allow the VectorSelector to fall through to do a query_range.
 			// Unless we find another way to decompose the query, this is all we can do
-		case "count_values":
+		case promql.ItemCountValues:
 			// DO NOTHING
 
-		case "quantile": // TODO: something?
+		case promql.ItemQuantile: // TODO: something?
 
 		}
 

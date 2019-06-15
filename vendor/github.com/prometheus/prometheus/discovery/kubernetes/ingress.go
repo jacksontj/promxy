@@ -15,16 +15,17 @@ package kubernetes
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/discovery/targetgroup"
-	"github.com/prometheus/prometheus/util/strutil"
-	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+
+	"github.com/prometheus/prometheus/discovery/targetgroup"
+	"github.com/prometheus/prometheus/util/strutil"
 )
 
 // Ingress implements discovery of Kubernetes ingresss.
@@ -55,26 +56,26 @@ func NewIngress(l log.Logger, inf cache.SharedInformer) *Ingress {
 	return s
 }
 
-func (e *Ingress) enqueue(obj interface{}) {
+func (i *Ingress) enqueue(obj interface{}) {
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		return
 	}
 
-	e.queue.Add(key)
+	i.queue.Add(key)
 }
 
 // Run implements the Discoverer interface.
-func (s *Ingress) Run(ctx context.Context, ch chan<- []*targetgroup.Group) {
-	defer s.queue.ShutDown()
+func (i *Ingress) Run(ctx context.Context, ch chan<- []*targetgroup.Group) {
+	defer i.queue.ShutDown()
 
-	if !cache.WaitForCacheSync(ctx.Done(), s.informer.HasSynced) {
-		level.Error(s.logger).Log("msg", "ingress informer unable to sync cache")
+	if !cache.WaitForCacheSync(ctx.Done(), i.informer.HasSynced) {
+		level.Error(i.logger).Log("msg", "ingress informer unable to sync cache")
 		return
 	}
 
 	go func() {
-		for s.process(ctx, ch) {
+		for i.process(ctx, ch) {
 		}
 	}()
 
@@ -82,12 +83,12 @@ func (s *Ingress) Run(ctx context.Context, ch chan<- []*targetgroup.Group) {
 	<-ctx.Done()
 }
 
-func (s *Ingress) process(ctx context.Context, ch chan<- []*targetgroup.Group) bool {
-	keyObj, quit := s.queue.Get()
+func (i *Ingress) process(ctx context.Context, ch chan<- []*targetgroup.Group) bool {
+	keyObj, quit := i.queue.Get()
 	if quit {
 		return false
 	}
-	defer s.queue.Done(keyObj)
+	defer i.queue.Done(keyObj)
 	key := keyObj.(string)
 
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -95,20 +96,20 @@ func (s *Ingress) process(ctx context.Context, ch chan<- []*targetgroup.Group) b
 		return true
 	}
 
-	o, exists, err := s.store.GetByKey(key)
+	o, exists, err := i.store.GetByKey(key)
 	if err != nil {
 		return true
 	}
 	if !exists {
-		send(ctx, s.logger, RoleIngress, ch, &targetgroup.Group{Source: ingressSourceFromNamespaceAndName(namespace, name)})
+		send(ctx, i.logger, RoleIngress, ch, &targetgroup.Group{Source: ingressSourceFromNamespaceAndName(namespace, name)})
 		return true
 	}
 	eps, err := convertToIngress(o)
 	if err != nil {
-		level.Error(s.logger).Log("msg", "converting to Ingress object failed", "err", err)
+		level.Error(i.logger).Log("msg", "converting to Ingress object failed", "err", err)
 		return true
 	}
-	send(ctx, s.logger, RoleIngress, ch, s.buildIngress(eps))
+	send(ctx, i.logger, RoleIngress, ch, i.buildIngress(eps))
 	return true
 }
 
@@ -118,7 +119,7 @@ func convertToIngress(o interface{}) (*v1beta1.Ingress, error) {
 		return ingress, nil
 	}
 
-	return nil, fmt.Errorf("Received unexpected object: %v", o)
+	return nil, errors.Errorf("received unexpected object: %v", o)
 }
 
 func ingressSource(s *v1beta1.Ingress) string {
@@ -130,12 +131,14 @@ func ingressSourceFromNamespaceAndName(namespace, name string) string {
 }
 
 const (
-	ingressNameLabel        = metaLabelPrefix + "ingress_name"
-	ingressLabelPrefix      = metaLabelPrefix + "ingress_label_"
-	ingressAnnotationPrefix = metaLabelPrefix + "ingress_annotation_"
-	ingressSchemeLabel      = metaLabelPrefix + "ingress_scheme"
-	ingressHostLabel        = metaLabelPrefix + "ingress_host"
-	ingressPathLabel        = metaLabelPrefix + "ingress_path"
+	ingressNameLabel               = metaLabelPrefix + "ingress_name"
+	ingressLabelPrefix             = metaLabelPrefix + "ingress_label_"
+	ingressLabelPresentPrefix      = metaLabelPrefix + "ingress_labelpresent_"
+	ingressAnnotationPrefix        = metaLabelPrefix + "ingress_annotation_"
+	ingressAnnotationPresentPrefix = metaLabelPrefix + "ingress_annotationpresent_"
+	ingressSchemeLabel             = metaLabelPrefix + "ingress_scheme"
+	ingressHostLabel               = metaLabelPrefix + "ingress_host"
+	ingressPathLabel               = metaLabelPrefix + "ingress_path"
 )
 
 func ingressLabels(ingress *v1beta1.Ingress) model.LabelSet {
@@ -144,13 +147,15 @@ func ingressLabels(ingress *v1beta1.Ingress) model.LabelSet {
 	ls[namespaceLabel] = lv(ingress.Namespace)
 
 	for k, v := range ingress.Labels {
-		ln := strutil.SanitizeLabelName(ingressLabelPrefix + k)
-		ls[model.LabelName(ln)] = lv(v)
+		ln := strutil.SanitizeLabelName(k)
+		ls[model.LabelName(ingressLabelPrefix+ln)] = lv(v)
+		ls[model.LabelName(ingressLabelPresentPrefix+ln)] = presentValue
 	}
 
 	for k, v := range ingress.Annotations {
-		ln := strutil.SanitizeLabelName(ingressAnnotationPrefix + k)
-		ls[model.LabelName(ln)] = lv(v)
+		ln := strutil.SanitizeLabelName(k)
+		ls[model.LabelName(ingressAnnotationPrefix+ln)] = lv(v)
+		ls[model.LabelName(ingressAnnotationPresentPrefix+ln)] = presentValue
 	}
 	return ls
 }
@@ -170,7 +175,7 @@ func pathsFromIngressRule(rv *v1beta1.IngressRuleValue) []string {
 	return paths
 }
 
-func (s *Ingress) buildIngress(ingress *v1beta1.Ingress) *targetgroup.Group {
+func (i *Ingress) buildIngress(ingress *v1beta1.Ingress) *targetgroup.Group {
 	tg := &targetgroup.Group{
 		Source: ingressSource(ingress),
 	}

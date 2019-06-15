@@ -11,6 +11,8 @@ import (
 
 // API Subset of the interface defined in the prometheus client
 type API interface {
+	// LabelNames returns all the unique label names present in the block in sorted order.
+	LabelNames(ctx context.Context) ([]string, error)
 	// LabelValues performs a query for the values of the given label.
 	LabelValues(ctx context.Context, label string) (model.LabelValues, error)
 	// Query performs a query for the given time.

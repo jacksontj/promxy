@@ -51,11 +51,14 @@ func New() *ServerGroup {
 		Ready:     make(chan struct{}),
 	}
 
-	lvl := promlog.AllowedLevel{}
-	if err := lvl.Set("info"); err != nil {
+	logCfg := &promlog.Config{
+		Level:  &promlog.AllowedLevel{},
+		Format: &promlog.AllowedFormat{},
+	}
+	if err := logCfg.Level.Set("info"); err != nil {
 		panic(err)
 	}
-	sg.targetManager = discovery.NewManager(ctx, promlog.New(lvl))
+	sg.targetManager = discovery.NewManager(ctx, promlog.New(logCfg))
 	// Background the updating
 	go sg.targetManager.Run()
 	go sg.Sync()
@@ -105,16 +108,22 @@ func (s *ServerGroup) Sync() {
 		for _, targetGroupList := range targetGroupMap {
 			for _, targetGroup := range targetGroupList {
 				for _, target := range targetGroup.Targets {
+					lbls := make([]labels.Label, 0, len(target))
 
-					target = relabel.Process(target, s.Cfg.RelabelConfigs...)
+					for ln, lv := range target {
+						lbls = append(lbls, labels.Label{Name: string(ln), Value: string(lv)})
+					}
+					lset := labels.New(lbls...)
+
+					lset = relabel.Process(lset, s.Cfg.RelabelConfigs...)
 					// Check if the target was dropped, if so we skip it
-					if target == nil {
+					if len(lset) == 0 {
 						continue
 					}
 
 					u := &url.URL{
 						Scheme: string(s.Cfg.GetScheme()),
-						Host:   string(target[model.AddressLabel]),
+						Host:   string(lset.Get(model.AddressLabel)),
 						Path:   s.Cfg.PathPrefix,
 					}
 					targets = append(targets, u.Host)
@@ -277,6 +286,11 @@ func (s *ServerGroup) QueryRange(ctx context.Context, query string, r v1.Range) 
 // LabelValues performs a query for the values of the given label.
 func (s *ServerGroup) LabelValues(ctx context.Context, label string) (model.LabelValues, error) {
 	return s.State().apiClient.LabelValues(ctx, label)
+}
+
+// LabelNames returns all the unique label names present in the block in sorted order.
+func (s *ServerGroup) LabelNames(ctx context.Context) ([]string, error) {
+	return s.State().apiClient.LabelNames(ctx)
 }
 
 // Series finds series by label matchers.

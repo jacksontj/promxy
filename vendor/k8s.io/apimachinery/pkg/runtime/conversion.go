@@ -14,17 +14,32 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Defines conversions between generic types and structs to map query strings
+// Package runtime defines conversions between generic types and structs to map query strings
 // to struct objects.
 package runtime
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/conversion"
 )
+
+// DefaultMetaV1FieldSelectorConversion auto-accepts metav1 values for name and namespace.
+// A cluster scoped resource specifying namespace empty works fine and specifying a particular
+// namespace will return no results, as expected.
+func DefaultMetaV1FieldSelectorConversion(label, value string) (string, string, error) {
+	switch label {
+	case "metadata.name":
+		return label, value, nil
+	case "metadata.namespace":
+		return label, value, nil
+	default:
+		return "", "", fmt.Errorf("%q is not a known field selector: only %q, %q", label, "metadata.name", "metadata.namespace")
+	}
+}
 
 // JSONKeyMapper uses the struct tags on a conversion to determine the key value for
 // the other side. Use when mapping from a map[string]* to a struct or vice versa.
@@ -67,7 +82,7 @@ func Convert_Slice_string_To_int(input *[]string, out *int, s conversion.Scope) 
 	return nil
 }
 
-// Conver_Slice_string_To_bool will convert a string parameter to boolean.
+// Convert_Slice_string_To_bool will convert a string parameter to boolean.
 // Only the absence of a value, a value of "false", or a value of "0" resolve to false.
 // Any other value (including empty string) resolves to true.
 func Convert_Slice_string_To_bool(input *[]string, out *bool, s conversion.Scope) error {
