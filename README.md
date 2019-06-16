@@ -16,7 +16,7 @@ custom-builds, or other changes to your prometheus infrastructure.
 Prometheus itself provides no real HA/clustering support. As such the best-practice
 is to run multiple (e.g N) hosts with the same config. Similarly prometheus has no real
 built-in query federation, which means that you end up with N sources in grafana
-that is (1) confusing grafana users and (2) no support for aggregation across the sources.
+which is (1) confusing to grafana users and (2) has no support for aggregation across the sources.
 Promxy enables an HA prometheus setup by "merging" the data from the duplicate
 hosts (so if there is a gap in one, promxy will fill with the other). In addition
 Promxy provides a single datasource for all promql queries -- meaning your grafana
