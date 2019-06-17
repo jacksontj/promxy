@@ -20,9 +20,16 @@ type PromAPIV1 struct {
 	v1.API
 }
 
+// LabelNames returns all the unique label names present in the block in sorted order.
+func (p *PromAPIV1) LabelNames(ctx context.Context) ([]string, error) {
+	v, _, err := p.API.LabelNames(ctx)
+	return v, err
+}
+
 // LabelValues performs a query for the values of the given label.
 func (p *PromAPIV1) LabelValues(ctx context.Context, label string) (model.LabelValues, error) {
-	return p.API.LabelValues(ctx, label)
+	v, _, err := p.API.LabelValues(ctx, label)
+	return v, err
 }
 
 // Query performs a query for the given time.
