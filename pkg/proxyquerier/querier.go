@@ -82,7 +82,7 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 }
 
 // LabelValues returns all potential values for a label name.
-func (h *ProxyQuerier) LabelValues(name string) ([]string, error) {
+func (h *ProxyQuerier) LabelValues(name string) ([]string, storage.Warnings, error) {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
@@ -93,7 +93,7 @@ func (h *ProxyQuerier) LabelValues(name string) ([]string, error) {
 
 	result, err := h.Client.LabelValues(h.Ctx, name)
 	if err != nil {
-		return nil, errors.Cause(err)
+		return nil, nil, errors.Cause(err)
 	}
 
 	ret := make([]string, len(result))
@@ -101,11 +101,11 @@ func (h *ProxyQuerier) LabelValues(name string) ([]string, error) {
 		ret[i] = string(r)
 	}
 
-	return ret, nil
+	return ret, nil, nil
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (h *ProxyQuerier) LabelNames() ([]string, error) {
+func (h *ProxyQuerier) LabelNames() ([]string, storage.Warnings, error) {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
@@ -113,7 +113,8 @@ func (h *ProxyQuerier) LabelNames() ([]string, error) {
 		}).Debug("LabelNames")
 	}()
 
-	return h.Client.LabelNames(h.Ctx)
+	v, err := h.Client.LabelNames(h.Ctx)
+	return v, nil, err
 }
 
 // Close closes the querier. Behavior for subsequent calls to Querier methods
