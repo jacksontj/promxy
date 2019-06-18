@@ -21,7 +21,7 @@ func timefilterTest(t *testing.T, api API, testCase timeFilterTestCase) {
 	for i, validTime := range testCase.validTimes {
 		t.Run(fmt.Sprintf("validTime_%d", i), func(t *testing.T) {
 			t.Run("query", func(t *testing.T) {
-				if _, err := api.Query(context.TODO(), "", validTime); err == nil {
+				if _, _, err := api.Query(context.TODO(), "", validTime); err == nil {
 					t.Fatalf("Missing call to API")
 				}
 			})
@@ -30,7 +30,7 @@ func timefilterTest(t *testing.T, api API, testCase timeFilterTestCase) {
 	for i, invalidTime := range testCase.invalidTimes {
 		t.Run(fmt.Sprintf("invalidTime_%d", i), func(t *testing.T) {
 			t.Run("query", func(t *testing.T) {
-				if _, err := api.Query(context.TODO(), "", invalidTime); err != nil {
+				if _, _, err := api.Query(context.TODO(), "", invalidTime); err != nil {
 					t.Fatalf("Unexpected call to API")
 				}
 			})
@@ -40,17 +40,17 @@ func timefilterTest(t *testing.T, api API, testCase timeFilterTestCase) {
 	for i, r := range testCase.validRanges {
 		t.Run(fmt.Sprintf("validRange_%d", i), func(t *testing.T) {
 			t.Run("query_range", func(t *testing.T) {
-				if _, err := api.QueryRange(context.TODO(), "", v1.Range{Start: r.Start, End: r.End}); err == nil {
+				if _, _, err := api.QueryRange(context.TODO(), "", v1.Range{Start: r.Start, End: r.End}); err == nil {
 					t.Fatalf("Missing call to API")
 				}
 			})
 			t.Run("series", func(t *testing.T) {
-				if _, err := api.Series(context.TODO(), nil, r.Start, r.End); err == nil {
+				if _, _, err := api.Series(context.TODO(), nil, r.Start, r.End); err == nil {
 					t.Fatalf("Missing call to API")
 				}
 			})
 			t.Run("getvalue", func(t *testing.T) {
-				if _, err := api.GetValue(context.TODO(), r.Start, r.End, nil); err == nil {
+				if _, _, err := api.GetValue(context.TODO(), r.Start, r.End, nil); err == nil {
 					t.Fatalf("Missing call to API")
 				}
 			})
@@ -59,17 +59,17 @@ func timefilterTest(t *testing.T, api API, testCase timeFilterTestCase) {
 	for i, r := range testCase.invalidRanges {
 		t.Run(fmt.Sprintf("invalidRange_%d", i), func(t *testing.T) {
 			t.Run("query_range", func(t *testing.T) {
-				if _, err := api.QueryRange(context.TODO(), "", v1.Range{Start: r.Start, End: r.End}); err != nil {
+				if _, _, err := api.QueryRange(context.TODO(), "", v1.Range{Start: r.Start, End: r.End}); err != nil {
 					t.Fatalf("Unexpected call to API")
 				}
 			})
 			t.Run("series", func(t *testing.T) {
-				if _, err := api.Series(context.TODO(), nil, r.Start, r.End); err != nil {
+				if _, _, err := api.Series(context.TODO(), nil, r.Start, r.End); err != nil {
 					t.Fatalf("Unexpected call to API")
 				}
 			})
 			t.Run("getvalue", func(t *testing.T) {
-				if _, err := api.GetValue(context.TODO(), r.Start, r.End, nil); err != nil {
+				if _, _, err := api.GetValue(context.TODO(), r.Start, r.End, nil); err != nil {
 					t.Fatalf("Unexpected call to API")
 				}
 			})

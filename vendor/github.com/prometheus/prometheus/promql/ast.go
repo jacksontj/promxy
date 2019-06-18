@@ -116,10 +116,12 @@ type MatrixSelector struct {
 	// The unexpanded seriesSet populated at query preparation time.
 	unexpandedSeriesSet storage.SeriesSet
 	series              []storage.Series
+	warnings            storage.Warnings
 }
 
-func (m *MatrixSelector) SetSeries(series []storage.Series) {
+func (m *MatrixSelector) SetSeries(series []storage.Series, w storage.Warnings) {
 	m.series = series
+	m.warnings = w
 }
 
 func (m *MatrixSelector) HasSeries() bool {
@@ -166,10 +168,12 @@ type VectorSelector struct {
 	// The unexpanded seriesSet populated at query preparation time.
 	unexpandedSeriesSet storage.SeriesSet
 	series              []storage.Series
+	warnings            storage.Warnings
 }
 
-func (m *VectorSelector) SetSeries(series []storage.Series) {
+func (m *VectorSelector) SetSeries(series []storage.Series, w storage.Warnings) {
 	m.series = series
+	m.warnings = w
 }
 
 func (m *VectorSelector) HasSeries() bool {

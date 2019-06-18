@@ -582,6 +582,8 @@ func (ng *Engine) populateSeries(ctx context.Context, q storage.Queryable, s *Ev
 					return err
 				}
 				n.unexpandedSeriesSet = set
+			} else {
+				warnings = append(warnings, n.warnings...)
 			}
 
 		case *MatrixSelector:
@@ -603,6 +605,8 @@ func (ng *Engine) populateSeries(ctx context.Context, q storage.Queryable, s *Ev
 					return err
 				}
 				n.unexpandedSeriesSet = set
+			} else {
+				warnings = append(warnings, n.warnings...)
 			}
 		}
 		return nil

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/api"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/timestamp"
@@ -51,9 +52,10 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		if err != nil {
 			return nil, nil, err
 		}
-		labelsets, err := h.Client.Series(h.Ctx, []string{matcherString}, h.Start, h.End)
+		labelsets, w, err := h.Client.Series(h.Ctx, []string{matcherString}, h.Start, h.End)
+		warnings = promhttputil.WarningsConvert(w)
 		if err != nil {
-			return nil, nil, errors.Cause(err)
+			return nil, warnings, errors.Cause(err)
 		}
 		// Convert labelsets to vectors
 		// convert to vector (there aren't points, but this way we don't have to make more merging functions)
@@ -65,7 +67,9 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		}
 		result = retVector
 	} else {
-		result, err = h.Client.GetValue(h.Ctx, timestamp.Time(selectParams.Start), timestamp.Time(selectParams.End), matchers)
+		var w api.Warnings
+		result, w, err = h.Client.GetValue(h.Ctx, timestamp.Time(selectParams.Start), timestamp.Time(selectParams.End), matchers)
+		warnings = promhttputil.WarningsConvert(w)
 	}
 	if err != nil {
 		return nil, warnings, errors.Cause(err)
@@ -91,9 +95,10 @@ func (h *ProxyQuerier) LabelValues(name string) ([]string, storage.Warnings, err
 		}).Debug("LabelValues")
 	}()
 
-	result, err := h.Client.LabelValues(h.Ctx, name)
+	result, w, err := h.Client.LabelValues(h.Ctx, name)
+	warnings := promhttputil.WarningsConvert(w)
 	if err != nil {
-		return nil, nil, errors.Cause(err)
+		return nil, warnings, errors.Cause(err)
 	}
 
 	ret := make([]string, len(result))
@@ -101,7 +106,7 @@ func (h *ProxyQuerier) LabelValues(name string) ([]string, storage.Warnings, err
 		ret[i] = string(r)
 	}
 
-	return ret, nil, nil
+	return ret, warnings, nil
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
@@ -113,8 +118,8 @@ func (h *ProxyQuerier) LabelNames() ([]string, storage.Warnings, error) {
 		}).Debug("LabelNames")
 	}()
 
-	v, err := h.Client.LabelNames(h.Ctx)
-	return v, nil, err
+	v, w, err := h.Client.LabelNames(h.Ctx)
+	return v, promhttputil.WarningsConvert(w), err
 }
 
 // Close closes the querier. Behavior for subsequent calls to Querier methods
