@@ -111,7 +111,10 @@ func main() {
 			}
 
 			l.Lock()
-			m[metric.String()] = sample
+			// If it doesn't exist, or the sample is newer
+			if currentSample, ok := m[metric.String()]; !ok || sample.Timestamp > currentSample.Timestamp {
+				m[metric.String()] = sample
+			}
 			l.Unlock()
 		}
 	})
@@ -136,9 +139,12 @@ func main() {
 
 			for _, vecSample := range vec {
 				l.Lock()
-				m[vecSample.Metric.String()] = &prompb.Sample{
-					Value:     float64(vecSample.Value),
-					Timestamp: int64(vecSample.Timestamp),
+				// If it doesn't exist, or the sample is newer
+				if currentSample, ok := m[vecSample.Metric.String()]; !ok || int64(vecSample.Timestamp) > currentSample.Timestamp {
+					m[vecSample.Metric.String()] = &prompb.Sample{
+						Value:     float64(vecSample.Value),
+						Timestamp: int64(vecSample.Timestamp),
+					}
 				}
 				l.Unlock()
 			}
