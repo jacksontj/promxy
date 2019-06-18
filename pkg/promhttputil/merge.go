@@ -1,11 +1,47 @@
 package promhttputil
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
+	"github.com/prometheus/client_golang/api"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/storage"
 )
+
+// WarningsConvert simply converts api.Warnings to storage.Warnings
+func WarningsConvert(ws api.Warnings) storage.Warnings {
+	w := make(storage.Warnings, len(ws))
+	for i, item := range ws {
+		w[i] = errors.New(item)
+	}
+	return w
+}
+
+// WarningSet simply contains a set of warnings
+type WarningSet map[string]struct{}
+
+// AddWarnings will add all warnings to the set
+func (s WarningSet) AddWarnings(ws api.Warnings) {
+	for _, w := range ws {
+		s.AddWarning(w)
+	}
+}
+
+// AddWarning will add a given warning to the set
+func (s WarningSet) AddWarning(w string) {
+	s[w] = struct{}{}
+}
+
+// Warnings returns all of the warnings contained in the set
+func (s WarningSet) Warnings() api.Warnings {
+	w := make(api.Warnings, 0, len(s))
+	for k := range s {
+		w = append(w, k)
+	}
+	return w
+}
 
 // ValueAddLabelSet adds the labelset `l` to the value `a`
 func ValueAddLabelSet(a model.Value, l model.LabelSet) error {

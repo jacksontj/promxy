@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -22,33 +23,33 @@ type stubAPI struct {
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (s *stubAPI) LabelNames(ctx context.Context) ([]string, error) {
-	return s.labelNames(), nil
+func (s *stubAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, error) {
+	return s.labelNames(), nil, nil
 }
 
 // LabelValues performs a query for the values of the given label.
-func (s *stubAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, error) {
-	return s.labelValues(), nil
+func (s *stubAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, api.Warnings, error) {
+	return s.labelValues(), nil, nil
 }
 
 // Query performs a query for the given time.
-func (s *stubAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, error) {
-	return s.query(), nil
+func (s *stubAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, api.Warnings, error) {
+	return s.query(), nil, nil
 }
 
 // QueryRange performs a query for the given range.
-func (s *stubAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, error) {
-	return s.queryRange(), nil
+func (s *stubAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, api.Warnings, error) {
+	return s.queryRange(), nil, nil
 }
 
 // Series finds series by label matchers.
-func (s *stubAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, error) {
-	return s.series(), nil
+func (s *stubAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, api.Warnings, error) {
+	return s.series(), nil, nil
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (s *stubAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
-	return s.getValue(), nil
+func (s *stubAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, api.Warnings, error) {
+	return s.getValue(), nil, nil
 }
 
 type errorAPI struct {
@@ -64,41 +65,41 @@ func (s *errorAPI) Key() model.LabelSet {
 }
 
 // LabelValues performs a query for the values of the given label.
-func (s *errorAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, error) {
+func (s *errorAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, api.Warnings, error) {
 	if s.err != nil {
-		return nil, s.err
+		return nil, nil, s.err
 	}
 	return s.LabelValues(ctx, label)
 }
 
 // Query performs a query for the given time.
-func (s *errorAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, error) {
+func (s *errorAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, api.Warnings, error) {
 	if s.err != nil {
-		return nil, s.err
+		return nil, nil, s.err
 	}
 	return s.Query(ctx, query, ts)
 }
 
 // QueryRange performs a query for the given range.
-func (s *errorAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, error) {
+func (s *errorAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, api.Warnings, error) {
 	if s.err != nil {
-		return nil, s.err
+		return nil, nil, s.err
 	}
 	return s.QueryRange(ctx, query, r)
 }
 
 // Series finds series by label matchers.
-func (s *errorAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, error) {
+func (s *errorAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, api.Warnings, error) {
 	if s.err != nil {
-		return nil, s.err
+		return nil, nil, s.err
 	}
 	return s.Series(ctx, matches, startTime, endTime)
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (s *errorAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, error) {
+func (s *errorAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, api.Warnings, error) {
 	if s.err != nil {
-		return nil, s.err
+		return nil, nil, s.err
 	}
 	return s.GetValue(ctx, start, end, matchers)
 }
@@ -334,7 +335,7 @@ func TestMultiAPIMerging(t *testing.T) {
 	for i, test := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Run("LabelValues", func(t *testing.T) {
-				v, err := test.a.LabelValues(context.TODO(), "a")
+				v, _, err := test.a.LabelValues(context.TODO(), "a")
 				if err != nil != test.err {
 					if test.err {
 						t.Fatalf("missing expected err")
@@ -360,7 +361,7 @@ func TestMultiAPIMerging(t *testing.T) {
 			})
 
 			t.Run("Query", func(t *testing.T) {
-				v, err := test.a.Query(context.TODO(), "testmetric", time.Now())
+				v, _, err := test.a.Query(context.TODO(), "testmetric", time.Now())
 				if err != nil != test.err {
 					if test.err {
 						t.Fatalf("missing expected err")
@@ -380,7 +381,7 @@ func TestMultiAPIMerging(t *testing.T) {
 			})
 
 			t.Run("QueryRange", func(t *testing.T) {
-				v, err := test.a.QueryRange(context.TODO(), "testmetric", v1.Range{})
+				v, _, err := test.a.QueryRange(context.TODO(), "testmetric", v1.Range{})
 				if err != nil != test.err {
 					if test.err {
 						t.Fatalf("missing expected err")
@@ -400,7 +401,7 @@ func TestMultiAPIMerging(t *testing.T) {
 			})
 
 			t.Run("Series", func(t *testing.T) {
-				v, err := test.a.Series(context.TODO(), []string{"testmetric"}, time.Now(), time.Now())
+				v, _, err := test.a.Series(context.TODO(), []string{"testmetric"}, time.Now(), time.Now())
 				if err != nil != test.err {
 					if test.err {
 						t.Fatalf("missing expected err")
@@ -426,7 +427,7 @@ func TestMultiAPIMerging(t *testing.T) {
 			})
 
 			t.Run("GetValue", func(t *testing.T) {
-				v, err := test.a.GetValue(context.TODO(), time.Now(), time.Now(), []*labels.Matcher{{
+				v, _, err := test.a.GetValue(context.TODO(), time.Now(), time.Now(), []*labels.Matcher{{
 					Type:  labels.MatchEqual,
 					Name:  "__name__",
 					Value: "testmetric",

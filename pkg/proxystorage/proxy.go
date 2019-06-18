@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/timestamp"
@@ -15,6 +16,7 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 
+	"github.com/jacksontj/promxy/pkg/promhttputil"
 	"github.com/jacksontj/promxy/pkg/remote"
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
@@ -222,6 +224,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		logrus.Debugf("AggregateExpr %v", n)
 
 		var result model.Value
+		var warnings api.Warnings
 		var err error
 
 		// Not all Aggregation functions are composable, so we'll do what we can
@@ -231,13 +234,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			removeOffset()
 
 			if s.Interval > 0 {
-				result, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
 					Start: s.Start.Add(-offset - promql.LookbackDelta),
 					End:   s.End.Add(-offset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
 			}
 
 			if err != nil {
@@ -272,13 +275,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			removeOffset()
 
 			if s.Interval > 0 {
-				result, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
 					Start: s.Start.Add(-offset - promql.LookbackDelta),
 					End:   s.End.Add(-offset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
 			}
 
 			if err != nil {
@@ -294,13 +297,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 			// First we must fetch the data into a vectorselector
 			if s.Interval > 0 {
-				result, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
 					Start: s.Start.Add(-offset - promql.LookbackDelta),
 					End:   s.End.Add(-offset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
 			}
 
 			if err != nil {
@@ -315,7 +318,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			}
 
 			ret := &promql.VectorSelector{Offset: offset}
-			ret.SetSeries(series)
+			ret.SetSeries(series, promhttputil.WarningsConvert(warnings))
 
 			// Replace with sum(count_values()) BY (label)
 			return &promql.AggregateExpr{
@@ -337,7 +340,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			}
 
 			ret := &promql.VectorSelector{Offset: offset}
-			ret.SetSeries(series)
+			ret.SetSeries(series, promhttputil.WarningsConvert(warnings))
 			n.Expr = ret
 			return n, nil
 		}
@@ -349,15 +352,16 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		removeOffset()
 
 		var result model.Value
+		var warnings api.Warnings
 		var err error
 		if s.Interval > 0 {
-			result, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
 				Start: s.Start.Add(-offset - promql.LookbackDelta),
 				End:   s.End.Add(-offset),
 				Step:  s.Interval,
 			})
 		} else {
-			result, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+			result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
 		}
 
 		if err != nil {
@@ -370,7 +374,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		}
 
 		ret := &promql.VectorSelector{Offset: offset}
-		ret.SetSeries(series)
+		ret.SetSeries(series, promhttputil.WarningsConvert(warnings))
 		return ret, nil
 
 	// If we are simply fetching a Vector then we can fetch the data using the same step that
@@ -391,5 +395,4 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 	}
 	return nil, nil
-
 }
