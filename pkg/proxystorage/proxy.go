@@ -289,10 +289,40 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		case promql.ItemStddev: // TODO: something?
 		case promql.ItemStdvar: // TODO: something?
 
-			// Do nothing, we want to allow the VectorSelector to fall through to do a query_range.
-			// Unless we find another way to decompose the query, this is all we can do
+			// To aggregate count_values we simply sum(count_values(key, metric)) by (key)
 		case promql.ItemCountValues:
-			// DO NOTHING
+
+			// First we must fetch the data into a vectorselector
+			if s.Interval > 0 {
+				result, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+					Start: s.Start.Add(-offset - promql.LookbackDelta),
+					End:   s.End.Add(-offset),
+					Step:  s.Interval,
+				})
+			} else {
+				result, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+			}
+
+			if err != nil {
+				return nil, errors.Cause(err)
+			}
+
+			iterators := promclient.IteratorsForValue(result)
+
+			series := make([]storage.Series, len(iterators))
+			for i, iterator := range iterators {
+				series[i] = &proxyquerier.Series{iterator}
+			}
+
+			ret := &promql.VectorSelector{Offset: offset}
+			ret.SetSeries(series)
+
+			// Replace with sum(count_values()) BY (label)
+			return &promql.AggregateExpr{
+				Op:       promql.ItemSum,
+				Expr:     ret,
+				Grouping: []string{n.Param.(*promql.StringLiteral).Val},
+			}, nil
 
 		case promql.ItemQuantile: // TODO: something?
 
