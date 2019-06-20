@@ -41,6 +41,7 @@ import (
 	"github.com/prometheus/prometheus/web"
 	"github.com/sirupsen/logrus"
 
+	"github.com/jacksontj/promxy/pkg/caching"
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/logging"
 	"github.com/jacksontj/promxy/pkg/noop"
@@ -371,7 +372,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:    opts.BindAddr,
-		Handler: handler,
+		Handler: caching.CachingMiddleware(handler, ps.GetConfigState),
 	}
 
 	go func() {

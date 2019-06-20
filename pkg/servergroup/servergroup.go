@@ -3,6 +3,7 @@ package servergroup
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"net"
 	"net/http"
 	"net/url"
@@ -23,7 +24,9 @@ import (
 	"github.com/prometheus/prometheus/pkg/relabel"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 
+	"github.com/jacksontj/promxy/pkg/caching"
 	"github.com/jacksontj/promxy/pkg/promclient"
 
 	sd_config "github.com/prometheus/prometheus/discovery/config"
@@ -42,10 +45,11 @@ func init() {
 }
 
 // New creates a new servergroup
-func New() *ServerGroup {
+func New(i int) *ServerGroup {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	// Create the targetSet (which will maintain all of the updating etc. in the background)
 	sg := &ServerGroup{
+		i:         i,
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
 		Ready:     make(chan struct{}),
@@ -72,10 +76,12 @@ type ServerGroupState struct {
 	// Targets is the list of target URLs for this discovery round
 	Targets   []string
 	apiClient promclient.API
+	Hash      uint64
 }
 
 // ServerGroup encapsulates a set of prometheus downstreams to query/aggregate
 type ServerGroup struct {
+	i         int // which servergroup ordinal this is
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
@@ -187,6 +193,9 @@ func (s *ServerGroup) Sync() {
 						apiClient = &promclient.DebugAPI{apiClient, u.String()}
 					}
 
+					// wrap all clients with an API to report failures so we can calculate etags
+					apiClient = &caching.FailureReportingAPI{apiClient, s.i, u.Host}
+
 					apiClients = append(apiClients, apiClient)
 				}
 			}
@@ -196,9 +205,18 @@ func (s *ServerGroup) Sync() {
 			serverGroupSummary.WithLabelValues(targets[i], api, status).Observe(took)
 		}
 
+		h := fnv.New64()
+		// write config
+		b, _ := yaml.Marshal(s.Cfg)
+		h.Write(b)
+		h.Write([]byte("|"))
+		// Write all the targets
+		h.Write([]byte(strings.Join(targets, ",")))
+
 		newState := &ServerGroupState{
 			Targets:   targets,
 			apiClient: promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc, 1),
+			Hash:      h.Sum64(),
 		}
 
 		if s.Cfg.IgnoreError {
@@ -270,12 +288,18 @@ func (s *ServerGroup) State() *ServerGroupState {
 
 // GetValue loads the raw data for a given set of matchers in the time range
 func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, api.Warnings, error) {
-	return s.State().apiClient.GetValue(ctx, start, end, matchers)
+	state := s.State()
+	fmt.Println("setting", s.i, state.Hash)
+	caching.GetRequestContext(ctx).SetServerHash(s.i, state.Hash)
+	return state.apiClient.GetValue(ctx, start, end, matchers)
 }
 
 // Query performs a query for the given time.
 func (s *ServerGroup) Query(ctx context.Context, query string, ts time.Time) (model.Value, api.Warnings, error) {
-	return s.State().apiClient.Query(ctx, query, ts)
+	state := s.State()
+	fmt.Println("setting", s.i, state.Hash)
+	caching.GetRequestContext(ctx).SetServerHash(s.i, state.Hash)
+	return state.apiClient.Query(ctx, query, ts)
 }
 
 // QueryRange performs a query for the given range.

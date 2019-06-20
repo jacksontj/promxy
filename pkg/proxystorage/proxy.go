@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 
+	"github.com/jacksontj/promxy/pkg/caching"
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 	"github.com/jacksontj/promxy/pkg/remote"
 
@@ -75,6 +76,15 @@ func (p *ProxyStorage) GetState() *proxyStorageState {
 	return &proxyStorageState{}
 }
 
+func (p *ProxyStorage) GetConfigState() []caching.ServergroupState {
+	state := p.GetState()
+	r := make([]caching.ServergroupState, len(state.sgs))
+	for i, sg := range state.sgs {
+		r[i] = caching.ServergroupState{H: sg.State().Hash}
+	}
+	return r
+}
+
 // ApplyConfig updates the current state of this ProxyStorage
 func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	oldState := p.GetState() // Fetch the old state
@@ -87,7 +97,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		cfg: &c.PromxyConfig,
 	}
 	for i, sgCfg := range c.ServerGroups {
-		tmp := servergroup.New()
+		tmp := servergroup.New(i)
 		if err := tmp.ApplyConfig(sgCfg); err != nil {
 			failed = true
 			logrus.Errorf("Error applying config to server group: %s", err)
