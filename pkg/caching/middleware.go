@@ -28,7 +28,7 @@ func CachingMiddleware(next http.Handler, currentState func() []ServergroupState
 		fmt.Println("doing handler")
 
 		// Our middleware logic goes here...
-		next.ServeHTTP(w, r.WithContext(WithRequestContext(r.Context(), rCtx)))
+		next.ServeHTTP(&ResponseWriter{ResponseWriter: w, rCtx: rCtx}, r.WithContext(WithRequestContext(r.Context(), rCtx)))
 
 		fmt.Println(rCtx)
 		fmt.Println(rCtx.GetEtag())
