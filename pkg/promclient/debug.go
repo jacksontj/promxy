@@ -2,7 +2,6 @@ package promclient
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/prometheus/client_golang/api"
@@ -62,7 +61,6 @@ func (d *DebugAPI) Query(ctx context.Context, query string, ts time.Time) (model
 
 // QueryRange performs a query for the given range.
 func (d *DebugAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, api.Warnings, error) {
-	fmt.Println("what")
 	logrus.WithFields(logrus.Fields{
 		"api":   "QueryRange",
 		"query": query,
