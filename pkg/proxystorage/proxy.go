@@ -289,9 +289,6 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			}
 			n.Op = promql.ItemSum
 
-		case promql.ItemStddev: // TODO: something?
-		case promql.ItemStdvar: // TODO: something?
-
 			// To aggregate count_values we simply sum(count_values(key, metric)) by (key)
 		case promql.ItemCountValues:
 
@@ -327,7 +324,19 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 				Grouping: []string{n.Param.(*promql.StringLiteral).Val},
 			}, nil
 
-		case promql.ItemQuantile: // TODO: something?
+		case promql.ItemQuantile:
+			// DO NOTHING
+			// this caltulates an actual quantile over the resulting data
+			// as such there is no way to reduce the load necessary here. If
+			// the query is something like quantile(sum(foo)) then the inner aggregation
+			// will reduce the required data
+
+		// Both of these cases require some mechanism of knowing what labels to do the aggregation on.
+		// WIthout that knowledge we require pulling all of the data in, so we do nothing
+		case promql.ItemStddev:
+			// DO NOTHING
+		case promql.ItemStdvar:
+			// DO NOTHING
 
 		}
 
