@@ -63,6 +63,8 @@ type cliOpts struct {
 	ConfigFile string `long:"config" description:"path to the config file" default:"config.yaml"`
 	LogLevel   string `long:"log-level" description:"Log level" default:"info"`
 
+	WebReadTimeout time.Duration `long:"web.read-timeout" description:"Maximum duration before timing out read of the request, and closing idle connections." default:"5m"`
+
 	ExternalURL     string `long:"web.external-url" description:"The URL under which Prometheus is externally reachable (for example, if Prometheus is served via a reverse proxy). Used for generating relative and absolute links back to Prometheus itself. If the URL has a path portion, it will be used to prefix all HTTP endpoints served by Prometheus. If omitted, relevant URL components will be derived automatically."`
 	EnableLifecycle bool   `long:"web.enable-lifecycle" description:"Enable shutdown and reload via HTTP request."`
 
@@ -290,7 +292,6 @@ func main() {
 		ExternalURL: externalUrl,
 		// TODO: use these?
 		/*
-			ListenAddress        string
 			ReadTimeout          time.Duration
 			MaxConnections       int
 			MetricsPath          string
@@ -298,7 +299,6 @@ func main() {
 			UserAssetsPath       string
 			ConsoleTemplatesPath string
 			ConsoleLibrariesPath string
-			EnableLifecycle      bool
 			EnableAdminAPI       bool
 		*/
 		Version: &web.PrometheusVersion{
@@ -370,8 +370,9 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Addr:    opts.BindAddr,
-		Handler: handler,
+		Addr:        opts.BindAddr,
+		Handler:     handler,
+		ReadTimeout: opts.WebReadTimeout,
 	}
 
 	go func() {
