@@ -37,6 +37,7 @@ func CachingMiddleware(next http.Handler, currentState func() []ServergroupState
 		for _, path := range paths {
 			if r.URL.Path == path {
 				useMiddleware = true
+				break
 			}
 		}
 
