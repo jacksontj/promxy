@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/sirupsen/logrus"
 )
 
 type ResponseWriter struct {
@@ -116,7 +118,7 @@ func (r *RequestContext) SetServerHash(i int, v uint64) {
 }
 
 func (r *RequestContext) AddFailedTarget(i int, t string) {
-	fmt.Println("set failure", i, t)
+	logrus.Debugf("AddFailedTarget i=%d t=%s", i, t)
 	r.l.Lock()
 	defer r.l.Unlock()
 	if i >= len(r.ServergroupsStates) {
@@ -125,7 +127,6 @@ func (r *RequestContext) AddFailedTarget(i int, t string) {
 	r.ServergroupsStates[i].FailedTargets = append(r.ServergroupsStates[i].FailedTargets, t)
 }
 
-// TODO: this needs to include something about the query we are doing
 func (r *RequestContext) GetEtag() string {
 	r.l.Lock()
 	defer r.l.Unlock()
