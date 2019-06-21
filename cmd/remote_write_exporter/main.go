@@ -57,7 +57,7 @@ func main() {
 	l := sync.Mutex{}
 	m := make(map[string]*prompb.Sample)
 
-	// TODO: ttl things
+	// ttl things
 	go func() {
 		for {
 			time.Sleep(opts.TTL)
