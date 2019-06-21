@@ -290,17 +290,6 @@ func main() {
 		Flags:       opts.ToFlags(),
 		RoutePrefix: "/", // TODO: options for this?
 		ExternalURL: externalUrl,
-		// TODO: use these?
-		/*
-			ReadTimeout          time.Duration
-			MaxConnections       int
-			MetricsPath          string
-			UseLocalAssets       bool
-			UserAssetsPath       string
-			ConsoleTemplatesPath string
-			ConsoleLibrariesPath string
-			EnableAdminAPI       bool
-		*/
 		Version: &web.PrometheusVersion{
 			Version:   version.Version,
 			Revision:  version.Revision,
