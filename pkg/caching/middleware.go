@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -26,6 +27,30 @@ func (r *ResponseWriter) WriteHeader(statusCode int) {
 
 func CachingMiddleware(next http.Handler, currentState func() []ServergroupState) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		useMiddleware := false
+		paths := []string{
+			"/api/v1/query",
+			"/api/v1/query_range",
+			"/api/v1/labels",
+			"/api/v1/series",
+		}
+		for _, path := range paths {
+			if r.URL.Path == path {
+				useMiddleware = true
+			}
+		}
+
+		if !useMiddleware {
+			if strings.HasPrefix(r.URL.Path, "/api/v1/label/") {
+				useMiddleware = true
+			}
+		}
+
+		if !useMiddleware {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		base := RequestContext{ServergroupsStates: currentState()}
 		rCtx := NewRequestContext()
 
