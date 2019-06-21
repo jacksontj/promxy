@@ -1,10 +1,12 @@
 package caching
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"sync"
 )
@@ -24,11 +26,20 @@ func (r *ResponseWriter) WriteHeader(statusCode int) {
 
 func CachingMiddleware(next http.Handler, currentState func() []ServergroupState) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		base := RequestContext{servergroupsStates: currentState()}
-
+		base := RequestContext{ServergroupsStates: currentState()}
 		rCtx := NewRequestContext()
 
-		fmt.Println("middleware inline!")
+		// Set url
+		base.URL = r.URL.RawPath
+		rCtx.URL = r.URL.RawPath
+
+		// Set Body
+		if r.Body != nil {
+			bodyBytes, _ := ioutil.ReadAll(r.Body)
+			base.Body = bodyBytes
+			rCtx.Body = bodyBytes
+			r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+		}
 
 		// Check for If-None-Match header
 		if oldEtag := r.Header.Get("If-None-Match"); oldEtag != "" {
@@ -38,13 +49,9 @@ func CachingMiddleware(next http.Handler, currentState func() []ServergroupState
 				return
 			}
 		}
-		fmt.Println("doing handler")
 
 		// Our middleware logic goes here...
 		next.ServeHTTP(&ResponseWriter{ResponseWriter: w, rCtx: rCtx}, r.WithContext(WithRequestContext(r.Context(), rCtx)))
-
-		fmt.Println(rCtx)
-		fmt.Println(rCtx.GetEtag())
 	})
 }
 
@@ -66,42 +73,45 @@ type RequestContext struct {
 	l sync.Mutex
 
 	// ordinal -> hash
-	servergroupsStates []ServergroupState
+	URL                string
+	Body               []byte
+	ServergroupsStates []ServergroupState
 }
 
 func (r *RequestContext) SetServerHash(i int, v uint64) {
 	r.l.Lock()
 	defer r.l.Unlock()
-	if len(r.servergroupsStates) < i+1 {
-		for x := 0; x <= i+1-len(r.servergroupsStates); x++ {
-			r.servergroupsStates = append(r.servergroupsStates, ServergroupState{})
+	if len(r.ServergroupsStates) < i+1 {
+		for x := 0; x <= i+1-len(r.ServergroupsStates); x++ {
+			r.ServergroupsStates = append(r.ServergroupsStates, ServergroupState{})
 		}
 	}
-	r.servergroupsStates[i].H = v
+	r.ServergroupsStates[i].H = v
 }
 
 func (r *RequestContext) AddFailedTarget(i int, t string) {
 	fmt.Println("set failure", i, t)
 	r.l.Lock()
 	defer r.l.Unlock()
-	if i >= len(r.servergroupsStates) {
+	if i >= len(r.ServergroupsStates) {
 		panic("what")
 	}
-	r.servergroupsStates[i].FailedTargets = append(r.servergroupsStates[i].FailedTargets, t)
+	r.ServergroupsStates[i].FailedTargets = append(r.ServergroupsStates[i].FailedTargets, t)
 }
 
+// TODO: this needs to include something about the query we are doing
 func (r *RequestContext) GetEtag() string {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	b, _ := json.Marshal(r.servergroupsStates)
+	b, _ := json.Marshal(r)
 
 	return fmt.Sprintf("%d-%x", len(b), sha1.Sum(b))
 }
 
 func NewRequestContext() *RequestContext {
 	return &RequestContext{
-		servergroupsStates: make([]ServergroupState, 0, 10),
+		ServergroupsStates: make([]ServergroupState, 0, 10),
 	}
 }
 
