@@ -219,7 +219,7 @@ func (m *MultiAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, erro
 	}
 
 	// Wait for results as we get them
-	var result map[string]struct{}
+	result := make(map[string]struct{})
 	warnings := make(promhttputil.WarningSet)
 	var lastError error
 	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
