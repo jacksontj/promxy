@@ -64,6 +64,13 @@ func (s *errorAPI) Key() model.LabelSet {
 	return nil
 }
 
+func (s *errorAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, error) {
+	if s.err != nil {
+		return nil, nil, s.err
+	}
+	return s.LabelNames(ctx)
+}
+
 // LabelValues performs a query for the values of the given label.
 func (s *errorAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, api.Warnings, error) {
 	if s.err != nil {
@@ -143,6 +150,7 @@ func TestMultiAPIMerging(t *testing.T) {
 
 	tests := []struct {
 		a           API
+		labelNames  []string
 		labelValues model.LabelValues
 		v           model.Value
 		series      []model.LabelSet
@@ -150,8 +158,9 @@ func TestMultiAPIMerging(t *testing.T) {
 	}{
 		// simple passthrough
 		{
-			a: stub,
-			v: stub.query(),
+			a:          stub,
+			labelNames: []string{"a"},
+			v:          stub.query(),
 			series: []model.LabelSet{
 				{model.MetricNameLabel: "testmetric"},
 			},
@@ -159,6 +168,7 @@ func TestMultiAPIMerging(t *testing.T) {
 		// Ensure that simple label addition works
 		{
 			a:           &AddLabelClient{stub, model.LabelSet{"a": "b"}},
+			labelNames:  []string{"a"},
 			labelValues: []model.LabelValue{"b"},
 			v: model.Vector{
 				getSample(model.LabelSet{model.MetricNameLabel: "testmetric", "a": "b"}),
@@ -173,6 +183,7 @@ func TestMultiAPIMerging(t *testing.T) {
 				&AddLabelClient{stub, model.LabelSet{"a": "1"}},
 				&AddLabelClient{stub, model.LabelSet{"a": "2"}},
 			}, model.Time(0), nil, 1),
+			labelNames:  []string{"a"},
 			labelValues: []model.LabelValue{"1", "2"},
 			v: model.Vector{
 				getSample(model.LabelSet{model.MetricNameLabel: "testmetric", "a": "1"}),
@@ -195,6 +206,7 @@ func TestMultiAPIMerging(t *testing.T) {
 					&AddLabelClient{stub, model.LabelSet{"a": "2"}},
 				}, model.Time(0), nil, 1),
 			}, model.Time(0), nil, 2),
+			labelNames:  []string{"a"},
 			labelValues: []model.LabelValue{"1", "2"},
 			v: model.Vector{
 				getSample(model.LabelSet{model.MetricNameLabel: "testmetric", "a": "1"}),
@@ -229,6 +241,7 @@ func TestMultiAPIMerging(t *testing.T) {
 					}, model.Time(0), nil, 1),
 				}, model.Time(0), nil, 2),
 			}, model.Time(0), nil, 2),
+			labelNames:  []string{"a", "b"},
 			labelValues: []model.LabelValue{"1", "2"},
 			v: model.Vector{
 				getSample(model.LabelSet{model.MetricNameLabel: "testmetric", "a": "1"}),
@@ -262,6 +275,7 @@ func TestMultiAPIMerging(t *testing.T) {
 					&AddLabelClient{stub, model.LabelSet{"a": "2"}},
 				}, model.Time(0), nil, 1),
 			}, model.Time(0), nil, 2),
+			labelNames:  []string{"a"},
 			labelValues: []model.LabelValue{"1", "2"},
 			v: model.Vector{
 				getSample(model.LabelSet{model.MetricNameLabel: "testmetric", "a": "1"}),
@@ -301,6 +315,7 @@ func TestMultiAPIMerging(t *testing.T) {
 				&errorAPI{&AddLabelClient{stub, model.LabelSet{"a": "1"}}, fmt.Errorf("")},
 				&AddLabelClient{stub, model.LabelSet{"a": "2"}},
 			}, model.Time(0), nil, 1),
+			labelNames:  []string{"a"},
 			labelValues: []model.LabelValue{"1", "2"},
 			v: model.Vector{
 				getSample(model.LabelSet{model.MetricNameLabel: "testmetric", "a": "1"}),
@@ -318,6 +333,7 @@ func TestMultiAPIMerging(t *testing.T) {
 				&AddLabelClient{stub, model.LabelSet{"a": "1"}},
 				&AddLabelClient{stub, model.LabelSet{"a": "2"}},
 			}, model.Time(0), nil, 1),
+			labelNames:  []string{"a"},
 			labelValues: []model.LabelValue{"1", "2"},
 			v: model.Vector{
 				getSample(model.LabelSet{model.MetricNameLabel: "testmetric"}),
@@ -334,6 +350,32 @@ func TestMultiAPIMerging(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			t.Run("LabelNames", func(t *testing.T) {
+				v, _, err := test.a.LabelNames(context.TODO())
+				if err != nil != test.err {
+					if test.err {
+						t.Fatalf("missing expected err")
+					} else {
+						t.Fatalf("Unexpected Err: %v", err)
+					}
+				}
+				if err == nil {
+					if len(v) != len(test.labelNames) {
+						t.Fatalf("mismatch in len: \nexpected=%v\nactual=%v", test.labelNames, v)
+					}
+
+					for i, actualV := range v {
+						if actualV != test.labelNames[i] {
+							t.Fatalf("mismatch in value: \nexpected=%v\nactual=%v", test.labelNames, v)
+						}
+					}
+				} else {
+					if test.v != nil {
+						panic("tests that expect errors shouldn't have value set")
+					}
+				}
+			})
+
 			t.Run("LabelValues", func(t *testing.T) {
 				v, _, err := test.a.LabelValues(context.TODO(), "a")
 				if err != nil != test.err {

@@ -58,6 +58,27 @@ func (c *AddLabelClient) Key() model.LabelSet {
 	return c.Labels
 }
 
+func (c *AddLabelClient) LabelNames(ctx context.Context) ([]string, api.Warnings, error) {
+	l, w, err := c.API.LabelNames(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for k := range c.Labels {
+		found := false
+		for _, labelName := range l {
+			if labelName == string(k) {
+				found = true
+			}
+		}
+		if !found {
+			l = append(l, string(k))
+		}
+	}
+
+	return l, w, err
+}
+
 // LabelValues performs a query for the values of the given label.
 func (c *AddLabelClient) LabelValues(ctx context.Context, label string) (model.LabelValues, api.Warnings, error) {
 	val, w, err := c.API.LabelValues(ctx, label)
