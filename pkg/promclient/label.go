@@ -58,6 +58,7 @@ func (c *AddLabelClient) Key() model.LabelSet {
 	return c.Labels
 }
 
+// LabelNames returns all the unique label names present in the block in sorted order.
 func (c *AddLabelClient) LabelNames(ctx context.Context) ([]string, api.Warnings, error) {
 	l, w, err := c.API.LabelNames(ctx)
 	if err != nil {
