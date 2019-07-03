@@ -388,11 +388,35 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 	// If we are simply fetching a Vector then we can fetch the data using the same step that
 	// the query came in as (reducing the amount of data we need to fetch)
-	// If we are simply fetching data, we skip here to let it fall through to the normal
-	// storage API
 	case *promql.VectorSelector:
-		// Do Nothing
-		return nil, nil
+		// If the vector selector already has the data we can skip
+		if n.HasSeries() {
+			return nil, nil
+		}
+
+		var result model.Value
+		var warnings api.Warnings
+		var err error
+		if s.Interval > 0 {
+			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+				Start: s.Start.Add(-offset - promql.LookbackDelta),
+				End:   s.End.Add(-offset),
+				Step:  s.Interval,
+			})
+		} else {
+			result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+		}
+
+		if err != nil {
+			return nil, errors.Cause(err)
+		}
+
+		iterators := promclient.IteratorsForValue(result)
+		series := make([]storage.Series, len(iterators))
+		for i, iterator := range iterators {
+			series[i] = &proxyquerier.Series{iterator}
+		}
+		n.SetSeries(series, promhttputil.WarningsConvert(warnings))
 
 	// If we hit this someone is asking for a matrix directly, if so then we don't
 	// have anyway to ask for less-- since this is exactly what they are asking for
