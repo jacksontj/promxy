@@ -550,6 +550,7 @@ func (ng *Engine) populateSeries(ctx context.Context, q storage.Queryable, s *Ev
 	n, err := Inspect(ctx, s, func(node Node, path []Node) error {
 		var set storage.SeriesSet
 		var wrn storage.Warnings
+		var err error
 		params := &storage.SelectParams{
 			Start: timestamp.FromTime(s.Start),
 			End:   timestamp.FromTime(s.End),
@@ -576,6 +577,8 @@ func (ng *Engine) populateSeries(ctx context.Context, q storage.Queryable, s *Ev
 				}
 
 				set, wrn, err = querier.Select(params, n.LabelMatchers...)
+				l.Lock()
+				defer l.Unlock()
 				warnings = append(warnings, wrn...)
 				if err != nil {
 					level.Error(ng.logger).Log("msg", "error selecting series set", "err", err)
@@ -583,6 +586,8 @@ func (ng *Engine) populateSeries(ctx context.Context, q storage.Queryable, s *Ev
 				}
 				n.unexpandedSeriesSet = set
 			} else {
+				l.Lock()
+				defer l.Unlock()
 				warnings = append(warnings, n.warnings...)
 			}
 
@@ -599,6 +604,8 @@ func (ng *Engine) populateSeries(ctx context.Context, q storage.Queryable, s *Ev
 				}
 
 				set, wrn, err = querier.Select(params, n.LabelMatchers...)
+				l.Lock()
+				defer l.Unlock()
 				warnings = append(warnings, wrn...)
 				if err != nil {
 					level.Error(ng.logger).Log("msg", "error selecting series set", "err", err)
@@ -606,6 +613,8 @@ func (ng *Engine) populateSeries(ctx context.Context, q storage.Queryable, s *Ev
 				}
 				n.unexpandedSeriesSet = set
 			} else {
+				l.Lock()
+				defer l.Unlock()
 				warnings = append(warnings, n.warnings...)
 			}
 		}
@@ -1541,13 +1550,17 @@ func (ev *evaluator) VectorBinop(op ItemType, lhs, rhs Vector, matching *VectorM
 // signatureFunc returns a function that calculates the signature for a metric
 // ignoring the provided labels. If on, then the given labels are only used instead.
 func signatureFunc(on bool, names ...string) func(labels.Labels) uint64 {
-	// TODO(fabxc): ensure names are sorted and then use that and sortedness
-	// of labels by names to speed up the operations below.
-	// Alternatively, inline the hashing and don't build new label sets.
+	sort.Strings(names)
 	if on {
-		return func(lset labels.Labels) uint64 { return lset.HashForLabels(names...) }
+		return func(lset labels.Labels) uint64 {
+			h, _ := lset.HashForLabels(make([]byte, 0, 1024), names...)
+			return h
+		}
 	}
-	return func(lset labels.Labels) uint64 { return lset.HashWithoutLabels(names...) }
+	return func(lset labels.Labels) uint64 {
+		h, _ := lset.HashWithoutLabels(make([]byte, 0, 1024), names...)
+		return h
+	}
 }
 
 // resultMetric returns the metric for the given sample(s) based on the Vector
@@ -1740,8 +1753,9 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 		}
 	}
 
+	sort.Strings(grouping)
 	lb := labels.NewBuilder(nil)
-
+	buf := make([]byte, 0, 1024)
 	for _, s := range vec {
 		metric := s.Metric
 
@@ -1755,9 +1769,9 @@ func (ev *evaluator) aggregation(op ItemType, grouping []string, without bool, p
 			groupingKey uint64
 		)
 		if without {
-			groupingKey = metric.HashWithoutLabels(grouping...)
+			groupingKey, buf = metric.HashWithoutLabels(buf, grouping...)
 		} else {
-			groupingKey = metric.HashForLabels(grouping...)
+			groupingKey, buf = metric.HashForLabels(buf, grouping...)
 		}
 
 		group, ok := result[groupingKey]
