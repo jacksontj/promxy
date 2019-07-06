@@ -11,11 +11,16 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
+var DefaultPromxyConfig = PromxyConfig{
+	BoundaryTimeWorkaround: true,
+}
+
 // ConfigFromFile loads a config file at path
 func ConfigFromFile(path string) (*Config, error) {
 	// load the config file
 	cfg := &Config{
-		PromConfig: config.DefaultConfig,
+		PromConfig:   config.DefaultConfig,
+		PromxyConfig: DefaultPromxyConfig,
 	}
 	configBytes, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -45,4 +50,9 @@ type Config struct {
 type PromxyConfig struct {
 	// Config for each of the server groups promxy is configured to aggregate
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
+
+	// BoundaryTimeWorkaround enables a workaround to prometheus' internal boundary
+	// times being un-supported serverside. Newer versions of prometheus (2.11+)
+	// don't need this workaround enabled as it was worked around server-side.
+	BoundaryTimeWorkaround bool `yaml:"boundary_time_workaround"`
 }
