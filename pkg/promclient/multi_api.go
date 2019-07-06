@@ -3,6 +3,7 @@ package promclient
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
 	"time"
 
@@ -257,6 +258,8 @@ func (m *MultiAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, erro
 	for k := range result {
 		stringResult = append(stringResult, k)
 	}
+
+	sort.Strings(stringResult)
 
 	return stringResult, warnings.Warnings(), nil
 }
