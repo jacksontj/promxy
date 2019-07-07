@@ -11,6 +11,8 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
+// DefaultPromxyConfig is the default promxy config that the config file
+// is loaded into
 var DefaultPromxyConfig = PromxyConfig{
 	BoundaryTimeWorkaround: true,
 }
