@@ -166,8 +166,8 @@ func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Q
 
 	return &proxyquerier.ProxyQuerier{
 		ctx,
-		timestamp.Time(mint),
-		timestamp.Time(maxt),
+		timestamp.Time(mint).UTC(),
+		timestamp.Time(maxt).UTC(),
 		state.client,
 
 		state.cfg,
