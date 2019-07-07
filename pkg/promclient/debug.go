@@ -17,6 +17,29 @@ type DebugAPI struct {
 	PrefixMessage string
 }
 
+// LabelNames returns all the unique label names present in the block in sorted order.
+func (d *DebugAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, error) {
+	fields := logrus.Fields{
+		"api": "LabelNames",
+	}
+	logrus.WithFields(fields).Debug(d.PrefixMessage)
+
+	s := time.Now()
+	v, w, err := d.API.LabelNames(ctx)
+	fields["took"] = time.Now().Sub(s)
+
+	if logrus.GetLevel() > logrus.DebugLevel {
+		fields["value"] = v
+		fields["warnings"] = w
+		fields["error"] = err
+		logrus.WithFields(fields).Trace(d.PrefixMessage)
+	} else {
+		logrus.WithFields(fields).Debug(d.PrefixMessage)
+	}
+
+	return v, w, err
+}
+
 // LabelValues performs a query for the values of the given label.
 func (d *DebugAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, api.Warnings, error) {
 	fields := logrus.Fields{
