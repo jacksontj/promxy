@@ -3,7 +3,6 @@ package proxystorage
 import (
 	"context"
 	"fmt"
-	"math"
 	"reflect"
 	"sync/atomic"
 	"time"
@@ -137,33 +136,9 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	return nil
 }
 
-// Stdlib's time parser can only handle 4 digit years. As a workaround until
-// that is fixed we want to at least support our own boundary times.
-// Context: https://github.com/prometheus/client_golang/issues/614
-// Upstream issue: https://github.com/golang/go/issues/20555
-// Promxy issue for context: https://github.com/jacksontj/promxy/issues/186
-var (
-	minTime = timestamp.FromTime(time.Unix(math.MinInt64/1000+62135596801, 0))
-	maxTime = timestamp.FromTime(time.Unix(math.MaxInt64/1000-62135596801, 999999999))
-
-	workaroundMinTime = timestamp.FromTime(time.Unix(0, 0))            // "1970-01-01T00:00:00.0Z"
-	workaroundMaxTime = timestamp.FromTime(time.Unix(253402300799, 0)) // "9999-12-31T23:59:59.999999999Z"
-)
-
 // Querier returns a new Querier on the storage.
 func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
 	state := p.GetState()
-
-	if state.cfg.BoundaryTimeWorkaround {
-		if mint == minTime {
-			mint = workaroundMinTime
-		}
-
-		if maxt == maxTime {
-			maxt = workaroundMaxTime
-		}
-	}
-
 	return &proxyquerier.ProxyQuerier{
 		ctx,
 		timestamp.Time(mint).UTC(),
