@@ -13,9 +13,7 @@ import (
 
 // DefaultPromxyConfig is the default promxy config that the config file
 // is loaded into
-var DefaultPromxyConfig = PromxyConfig{
-	BoundaryTimeWorkaround: true,
-}
+var DefaultPromxyConfig = PromxyConfig{}
 
 // ConfigFromFile loads a config file at path
 func ConfigFromFile(path string) (*Config, error) {
@@ -52,9 +50,4 @@ type Config struct {
 type PromxyConfig struct {
 	// Config for each of the server groups promxy is configured to aggregate
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
-
-	// BoundaryTimeWorkaround enables a workaround to prometheus' internal boundary
-	// times being un-supported serverside. Newer versions of prometheus (2.11+)
-	// don't need this workaround enabled as it was worked around server-side.
-	BoundaryTimeWorkaround bool `yaml:"boundary_time_workaround"`
 }
