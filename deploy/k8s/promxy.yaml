@@ -22,18 +22,9 @@ data:
     ##
     promxy:
       server_groups:
-        - static_configs:
-            - targets:
-              - localhost:9090
-          labels:
-            sg: localhost_9090
-          anti_affinity: 10s
-        - static_configs:
-            - targets:
-              - localhost:9091
-          labels:
-            sg: localhost_9091
-          anti_affinity: 10s
+      - kubernetes_sd_configs:
+        - role: pod
+
 kind: ConfigMap
 metadata:
   name: promxy-config
@@ -61,23 +52,17 @@ spec:
       - args:
         - "--config=/etc/promxy/config.yaml"
         - "--web.enable-lifecycle"
+        - "--log-level=trace"
+        env:
+          - name: ROLE
+            value: "1"
         command:
         - "/bin/promxy"
-        image: quay.io/jacksontj/promxy:latest
+        image: 127.0.0.1:32000/promxy:latest
         imagePullPolicy: Always
-        livenessProbe:
-          httpGet:
-            path: "/-/healthy"
-            port: 8082
-          initialDelaySeconds: 3
         name: promxy
         ports:
         - containerPort: 8082
-        readinessProbe:
-          httpGet:
-            path: "/-/ready"
-            port: 8082
-          initialDelaySeconds: 3
         volumeMounts:
         - mountPath: "/etc/promxy/"
           name: promxy-config

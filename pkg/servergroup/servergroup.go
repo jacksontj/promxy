@@ -101,6 +101,7 @@ func (s *ServerGroup) Sync() {
 	syncCh := s.targetManager.SyncCh()
 
 	for targetGroupMap := range syncCh {
+		logrus.Debug("Updating targets from discovery manager")
 		targets := make([]string, 0)
 		apiClients := make([]promclient.API, 0)
 
@@ -120,8 +121,9 @@ func (s *ServerGroup) Sync() {
 					}
 
 					lset := labels.New(lbls...)
-
+					logrus.Tracef("Potential target pre-relabel: %v", lset)
 					lset = relabel.Process(lset, s.Cfg.RelabelConfigs...)
+					logrus.Tracef("Potential target post-relabel: %v", lset)
 					// Check if the target was dropped, if so we skip it
 					if len(lset) == 0 {
 						continue
@@ -200,6 +202,7 @@ func (s *ServerGroup) Sync() {
 			serverGroupSummary.WithLabelValues(targets[i], api, status).Observe(took)
 		}
 
+		logrus.Debugf("Updating targets from discovery manager: %v", targets)
 		newState := &ServerGroupState{
 			Targets:   targets,
 			apiClient: promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc, 1),
