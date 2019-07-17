@@ -100,6 +100,7 @@ func (s *ServerGroup) Cancel() {
 func (s *ServerGroup) Sync() {
 	syncCh := s.targetManager.SyncCh()
 
+SYNC_LOOP:
 	for targetGroupMap := range syncCh {
 		logrus.Debug("Updating targets from discovery manager")
 		targets := make([]string, 0)
@@ -127,6 +128,12 @@ func (s *ServerGroup) Sync() {
 					// Check if the target was dropped, if so we skip it
 					if len(lset) == 0 {
 						continue
+					}
+
+					// If there is no address, then we can't use this set of targets
+					if v := lset.Get(model.AddressLabel); v == "" {
+						logrus.Errorf("Discovery target is missing address label: %v", lset)
+						continue SYNC_LOOP
 					}
 
 					u := &url.URL{
