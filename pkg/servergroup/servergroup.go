@@ -184,14 +184,15 @@ SYNC_LOOP:
 					}
 
 					// We remove all private labels after we set the target entry
-					for name := range target {
-						if strings.HasPrefix(string(name), model.ReservedLabelPrefix) {
-							delete(target, name)
+					modelLabelSet := make(model.LabelSet, len(lset))
+					for _, lbl := range lset {
+						if !strings.HasPrefix(string(lbl.Name), model.ReservedLabelPrefix) {
+							modelLabelSet[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
 						}
 					}
 
 					// Add labels
-					apiClient = &promclient.AddLabelClient{apiClient, target.Merge(s.Cfg.Labels)}
+					apiClient = &promclient.AddLabelClient{apiClient, modelLabelSet.Merge(s.Cfg.Labels)}
 
 					// If debug logging is enabled, wrap the client with a debugAPI client
 					// Since these are called in the reverse order of what we add, we want
