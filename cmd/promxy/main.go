@@ -71,6 +71,7 @@ type cliOpts struct {
 	QueryTimeout        time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
 	QueryMaxConcurrency int           `long:"query.max-concurrency" description:"Maximum number of queries executed concurrently." default:"1000"`
 	QueryMaxSamples     int           `long:"query.max-samples" description:"Maximum number of samples a single query can load into memory. Note that queries will fail if they would load more samples than this into memory, so this also limits the number of samples a query can return." default:"50000000"`
+	QueryLookbackDelta  time.Duration `long:"query.lookback-delta" description:"The maximum lookback duration for retrieving metrics during expression evaluations." default:"5m"`
 
 	NotificationQueueCapacity int    `long:"alertmanager.notification-queue-capacity" description:"The capacity of the queue for pending alert manager notifications." default:"10000"`
 	AccessLogDestination      string `long:"access-log-destination" description:"where to log access logs, options (none, stderr, stdout)" default:"stdout"`
@@ -157,7 +158,7 @@ func main() {
 	// Reload ready -- channel to close once we are ready to start reloaders
 	reloadReady := make(chan struct{}, 0)
 
-	// Create the proxy storag
+	// Create the proxy storage
 	var proxyStorage storage.Storage
 
 	ps, err := proxystorage.NewProxyStorage()
@@ -174,6 +175,8 @@ func main() {
 		MaxSamples:    opts.QueryMaxSamples,
 	})
 	engine.NodeReplacer = ps.NodeReplacer
+
+	promql.LookbackDelta = opts.QueryLookbackDelta
 
 	// TODO: rename
 	externalUrl, err := computeExternalURL(opts.ExternalURL, opts.BindAddr)
