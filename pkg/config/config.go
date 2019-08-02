@@ -11,9 +11,14 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
+//DefaultMemory defines the maximum memory consumption
+const DefaultMemory = 25000
+
 // DefaultPromxyConfig is the default promxy config that the config file
 // is loaded into
-var DefaultPromxyConfig = PromxyConfig{}
+var DefaultPromxyConfig = PromxyConfig{
+	MaxMemory: DefaultMemory,
+}
 
 // ConfigFromFile loads a config file at path
 func ConfigFromFile(path string) (*Config, error) {
@@ -50,4 +55,5 @@ type Config struct {
 type PromxyConfig struct {
 	// Config for each of the server groups promxy is configured to aggregate
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
+	MaxMemory    int                   `yaml:"max_memory"`
 }

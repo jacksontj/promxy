@@ -82,3 +82,4 @@ promxy:
       # meaning if this servergroup returns and error and others don't the overall
       # query can still succeed
       ignore_error: true
+  max_memory: 15000

@@ -32,7 +32,6 @@ func NormalizePromError(err error) error {
 		ErrorType promhttputil.ErrorType `json:"errorType,omitempty"`
 		Error     string                 `json:"error,omitempty"`
 	}
-
 	if typedErr, ok := err.(*v1.Error); ok {
 		res := &result{}
 		// The prometheus client does a terrible job of handling and returning errors
@@ -120,6 +119,7 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 	}
 
 	resultChans := make([]chan chanResult, len(m.apis))
+
 	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
@@ -151,7 +151,8 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 	for i := 0; i < len(m.apis); i++ {
 		select {
 		case <-ctx.Done():
-			return nil, warnings.Warnings(), ctx.Err()
+			err := ctx.Err()
+			return nil, warnings.Warnings(), err
 
 		case ret := <-resultChans[i]:
 			warnings.AddWarnings(ret.warnings)
@@ -181,7 +182,6 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 	}
 
 	sort.Sort(model.LabelValues(result))
-
 	return result, warnings.Warnings(), nil
 }
 
@@ -198,6 +198,7 @@ func (m *MultiAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, erro
 	}
 
 	resultChans := make([]chan chanResult, len(m.apis))
+
 	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
@@ -229,7 +230,8 @@ func (m *MultiAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, erro
 	for i := 0; i < len(m.apis); i++ {
 		select {
 		case <-ctx.Done():
-			return nil, warnings.Warnings(), ctx.Err()
+			err := ctx.Err()
+			return nil, warnings.Warnings(), err
 
 		case ret := <-resultChans[i]:
 			warnings.AddWarnings(ret.warnings)
@@ -279,6 +281,7 @@ func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model
 	}
 
 	resultChans := make([]chan chanResult, len(m.apis))
+
 	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
@@ -310,7 +313,8 @@ func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model
 	for i := 0; i < len(m.apis); i++ {
 		select {
 		case <-ctx.Done():
-			return nil, warnings.Warnings(), ctx.Err()
+			err := ctx.Err()
+			return nil, warnings.Warnings(), err
 
 		case ret := <-resultChans[i]:
 			warnings.AddWarnings(ret.warnings)
@@ -359,6 +363,7 @@ func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 	}
 
 	resultChans := make([]chan chanResult, len(m.apis))
+
 	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
@@ -390,7 +395,8 @@ func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 	for i := 0; i < len(m.apis); i++ {
 		select {
 		case <-ctx.Done():
-			return nil, warnings.Warnings(), ctx.Err()
+			err := ctx.Err()
+			return nil, warnings.Warnings(), err
 
 		case ret := <-resultChans[i]:
 			warnings.AddWarnings(ret.warnings)
@@ -439,6 +445,7 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 	}
 
 	resultChans := make([]chan chanResult, len(m.apis))
+
 	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
@@ -470,7 +477,8 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 	for i := 0; i < len(m.apis); i++ {
 		select {
 		case <-ctx.Done():
-			return nil, warnings.Warnings(), ctx.Err()
+			err := ctx.Err()
+			return nil, warnings.Warnings(), err
 
 		case ret := <-resultChans[i]:
 			warnings.AddWarnings(ret.warnings)
@@ -515,6 +523,7 @@ func (m *MultiAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 	}
 
 	resultChans := make([]chan chanResult, len(m.apis))
+
 	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	// Scatter out all the queries
@@ -547,7 +556,8 @@ func (m *MultiAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 	for i := 0; i < len(m.apis); i++ {
 		select {
 		case <-ctx.Done():
-			return nil, warnings.Warnings(), ctx.Err()
+			err := ctx.Err()
+			return nil, warnings.Warnings(), err
 
 		case ret := <-resultChans[i]:
 			warnings.AddWarnings(ret.warnings)

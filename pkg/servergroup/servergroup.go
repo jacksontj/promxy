@@ -41,13 +41,14 @@ func init() {
 }
 
 // New creates a new servergroup
-func New() *ServerGroup {
+func New(MaxMemory int) *ServerGroup {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	// Create the targetSet (which will maintain all of the updating etc. in the background)
 	sg := &ServerGroup{
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
 		Ready:     make(chan struct{}),
+		Memory:    MaxMemory,
 	}
 
 	logCfg := &promlog.Config{
@@ -89,6 +90,8 @@ type ServerGroup struct {
 	OriginalURLs []string
 
 	state atomic.Value
+
+	Memory int
 }
 
 // Cancel stops backround processes (e.g. discovery manager)
@@ -200,7 +203,7 @@ SYNC_LOOP:
 					if logrus.GetLevel() >= logrus.DebugLevel {
 						apiClient = &promclient.DebugAPI{apiClient, u.String()}
 					}
-
+					apiClient = &promclient.MemMonitorAPI{apiClient, s.Memory}
 					apiClients = append(apiClients, apiClient)
 				}
 			}

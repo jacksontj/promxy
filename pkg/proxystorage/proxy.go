@@ -58,7 +58,8 @@ func (p *proxyStorageState) Cancel(n *proxyStorageState) {
 
 // NewProxyStorage creates a new ProxyStorage
 func NewProxyStorage() (*ProxyStorage, error) {
-	return &ProxyStorage{}, nil
+	ps := ProxyStorage{}
+	return &ps, nil
 }
 
 // ProxyStorage implements prometheus' Storage interface
@@ -87,7 +88,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		cfg: &c.PromxyConfig,
 	}
 	for i, sgCfg := range c.ServerGroups {
-		tmp := servergroup.New()
+		tmp := servergroup.New(c.MaxMemory)
 		if err := tmp.ApplyConfig(sgCfg); err != nil {
 			failed = true
 			logrus.Errorf("Error applying config to server group: %s", err)
