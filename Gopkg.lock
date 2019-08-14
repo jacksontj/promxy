@@ -146,17 +146,6 @@
   version = "v2.0.0"
 
 [[projects]]
-  digest = "1:f4213ca28f2b222f4ea1ab1d309d6bcc00cec3cedb9b648040d93488c9b166b7"
-  name = "github.com/cockroachdb/cockroach"
-  packages = [
-    "pkg/util/httputil",
-    "pkg/util/protoutil",
-    "pkg/util/syncutil",
-  ]
-  pruneopts = "NUT"
-  revision = "84bc9597164f671c0130543778228928d6865c5c"
-
-[[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
@@ -192,11 +181,10 @@
   version = "v0.4.0"
 
 [[projects]]
-  digest = "1:895d2773c9e78e595dd5f946a25383d579d3094a9d8d9306dba27359f190f275"
+  digest = "1:9de28de6b4453a6a96cdbb16b86d48f2640397e6739ed2d3d7ee5fd55b93d193"
   name = "github.com/gogo/protobuf"
   packages = [
     "gogoproto",
-    "jsonpb",
     "proto",
     "protoc-gen-gogo/descriptor",
     "sortkeys",
@@ -471,14 +459,6 @@
   version = "v1.1.0"
 
 [[projects]]
-  branch = "master"
-  digest = "1:ef6f545f048a0e64f3ec7a0709149e6c01af28f99b4b1e518e9f9db5e8036579"
-  name = "github.com/petermattis/goid"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "b0b1615b78e5ee59739545bb38426383b2cda4c9"
-
-[[projects]]
   digest = "1:14715f705ff5dfe0ffd6571d7d201dd8e921030f8070321a79380d8ca4ec1a24"
   name = "github.com/pkg/errors"
   packages = ["."]
@@ -548,7 +528,7 @@
 
 [[projects]]
   branch = "release-2.10_fork_promxy"
-  digest = "1:af616e485ce6fadbf64233a7bd4f2012801b1cda27316ef74657f591bcbdcc8f"
+  digest = "1:25f481c8d37eeb821e6565a5943cf0443db5dd186e7c5f6e092df385f60169e2"
   name = "github.com/prometheus/prometheus"
   packages = [
     "config",
@@ -597,7 +577,7 @@
     "web/ui",
   ]
   pruneopts = "NUT"
-  revision = "a1adb11ceba7fa0c55008e6dbd33559bd55d4e41"
+  revision = "8291a73c3f83a63171b4b1452f091d0bb671f5c2"
   source = "github.com/jacksontj/prometheus"
 
 [[projects]]
@@ -626,14 +606,6 @@
   packages = ["zk"]
   pruneopts = "NUT"
   revision = "c4fab1ac1bec58281ad0667dc3f0907a9476ac47"
-
-[[projects]]
-  digest = "1:b4172dc5c988d904d5806acc6a010d9c988b547b06ce068b3a48d9ccb965c361"
-  name = "github.com/sasha-s/go-deadlock"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "03d40e5dbd5488667a13b3c2600b2f7c2886f02f"
-  version = "v0.2.0"
 
 [[projects]]
   branch = "master"
