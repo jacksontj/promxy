@@ -31,9 +31,10 @@ type MemMonitorAPI struct {
 	MaxMem int
 }
 
-// Starts a memory monitoring goroutine that oversees the memory usage of the process during a query
+// Monitor starts a memory monitoring goroutine that oversees the memory usage of the process during a query
 // Cancels all queries when the memory threshold is exceeded
 // Takes in the parent's context cancel function used for stopping the query
+// TODO: Figure out a way to determine which query is eating up most of the memory and only cancel that
 func (m *MemMonitorAPI) Monitor(ctx context.Context, parentContextCancel func(), memExceeded *bool) {
 	var memAlloc uint64
 	d := 5 * time.Second
