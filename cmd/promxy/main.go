@@ -107,6 +107,7 @@ func reloadConfig(rls ...proxyconfig.Reloadable) error {
 	if failed {
 		return fmt.Errorf("One or more errors occurred while applying new configuration")
 	}
+	promql.SetDefaultEvaluationInterval(time.Duration(cfg.PromConfig.GlobalConfig.EvaluationInterval))
 	reloadTime.Set(float64(time.Now().Unix()))
 	return nil
 }
