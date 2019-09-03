@@ -21,10 +21,6 @@
   source = "github.com/jacksontj/prometheus"
 
 [[constraint]]
-  name = "github.com/sirupsen/logrus"
-  branch = "master"
-
-[[constraint]]
   branch = "v2"
   name = "gopkg.in/yaml.v2"
 
