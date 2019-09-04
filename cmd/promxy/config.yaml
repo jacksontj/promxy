@@ -46,7 +46,7 @@ promxy:
       path_prefix: /example/prefix
       # query_params adds the following map of query parameters to downstream requests.
       # The initial use-case for this is to add `nocache=1` to VictoriaMetrics downstreams
-	    # (see https://github.com/jacksontj/promxy/issues/202)
+      # (see https://github.com/jacksontj/promxy/issues/202)
       query_params:
         nocache: 1
       # options for promxy's HTTP client when talking to hosts in server_groups
