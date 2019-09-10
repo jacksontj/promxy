@@ -83,6 +83,10 @@ type Config struct {
 	Hosts sd_config.ServiceDiscoveryConfig `yaml:",inline"`
 	// PathPrefix to prepend to all queries to hosts in this servergroup
 	PathPrefix string `yaml:"path_prefix"`
+	// QueryParams are a map of query params to add to all HTTP calls made to this downstream
+	// the main use-case for this is to add `nocache=1` to VictoriaMetrics downstreams
+	// (see https://github.com/jacksontj/promxy/issues/202)
+	QueryParams map[string]string `yaml:"query_params"`
 	// TODO cache this as a model.Time after unmarshal
 	// AntiAffinity defines how large of a gap in the timeseries will cause promxy
 	// to merge series from 2 hosts in a server_group. This required for a couple reasons

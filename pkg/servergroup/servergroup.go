@@ -151,6 +151,10 @@ SYNC_LOOP:
 						panic(err) // TODO: shouldn't be possible? If this happens I guess we log and skip?
 					}
 
+					if len(s.Cfg.QueryParams) > 0 {
+						client = promclient.NewClientArgsWrap(client, s.Cfg.QueryParams)
+					}
+
 					var apiClient promclient.API
 					apiClient = &promclient.PromAPIV1{v1.NewAPI(client)}
 
