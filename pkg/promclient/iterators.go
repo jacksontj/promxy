@@ -52,8 +52,6 @@ type SeriesIterator struct {
 // the given timestamp.
 func (s *SeriesIterator) Seek(t int64) bool {
 	switch valueTyped := s.V.(type) {
-	case *model.Scalar: // From a vector
-		return int64(valueTyped.Timestamp) >= t
 	case *model.Sample: // From a vector
 		return int64(valueTyped.Timestamp) >= t
 	case *model.SampleStream: // from a Matrix
@@ -77,8 +75,6 @@ func (s *SeriesIterator) Seek(t int64) bool {
 // At returns the current timestamp/value pair.
 func (s *SeriesIterator) At() (t int64, v float64) {
 	switch valueTyped := s.V.(type) {
-	case *model.Scalar:
-		return int64(valueTyped.Timestamp), float64(valueTyped.Value)
 	case *model.Sample: // From a vector
 		return int64(valueTyped.Timestamp), float64(valueTyped.Value)
 	case *model.SampleStream: // from a Matrix
@@ -93,12 +89,6 @@ func (s *SeriesIterator) At() (t int64, v float64) {
 // Next advances the iterator by one.
 func (s *SeriesIterator) Next() bool {
 	switch valueTyped := s.V.(type) {
-	case *model.Scalar:
-		if s.offset < 0 {
-			s.offset = 0
-			return true
-		}
-		return false
 	case *model.Sample: // From a vector
 		if s.offset < 0 {
 			s.offset = 0
@@ -113,7 +103,6 @@ func (s *SeriesIterator) Next() bool {
 		return false
 	default:
 		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
-		fmt.Println(msg)
 		panic(msg)
 	}
 }
@@ -127,7 +116,7 @@ func (s *SeriesIterator) Err() error {
 func (s *SeriesIterator) Labels() labels.Labels {
 	switch valueTyped := s.V.(type) {
 	case *model.Scalar:
-		return nil
+		panic("Unknown metric() scalar?")
 	case *model.Sample: // From a vector
 		ret := make(labels.Labels, 0, len(valueTyped.Metric))
 		for k, v := range valueTyped.Metric {
