@@ -376,6 +376,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		if err != nil {
 			return nil, errors.Cause(err)
 		}
+
+		// the "scalar()" function can return a scalar, if so we need to make sure we return
+		// the correct type
+		if scalarResult, ok := result.(*model.Scalar); ok {
+			return &promql.NumberLiteral{float64(scalarResult.Value)}, nil
+		}
+
 		iterators := promclient.IteratorsForValue(result)
 		series := make([]storage.Series, len(iterators))
 		for i, iterator := range iterators {
