@@ -161,9 +161,10 @@ type UnaryExpr struct {
 
 // VectorSelector represents a Vector selection.
 type VectorSelector struct {
-	Name          string
-	Offset        time.Duration
-	LabelMatchers []*labels.Matcher
+	Name            string
+	Offset          time.Duration
+	LabelMatchers   []*labels.Matcher
+	DisableLookback bool
 
 	// The unexpanded seriesSet populated at query preparation time.
 	unexpandedSeriesSet storage.SeriesSet

@@ -1256,7 +1256,7 @@ func (ev *evaluator) vectorSelectorSingle(it *storage.BufferedSeriesIterator, no
 
 	if !ok || t > refTime {
 		t, v, ok = it.PeekBack(1)
-		if !ok || t < refTime-durationMilliseconds(LookbackDelta) {
+		if !ok || t < refTime-durationMilliseconds(LookbackDelta) || node.DisableLookback {
 			return 0, 0, false
 		}
 	}
