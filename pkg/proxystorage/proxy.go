@@ -235,7 +235,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 			if s.Interval > 0 {
 				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-offset - promql.LookbackDelta),
+					Start: s.Start.Add(-offset),
 					End:   s.End.Add(-offset),
 					Step:  s.Interval,
 				})
@@ -276,7 +276,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 			if s.Interval > 0 {
 				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-offset - promql.LookbackDelta),
+					Start: s.Start.Add(-offset),
 					End:   s.End.Add(-offset),
 					Step:  s.Interval,
 				})
@@ -295,7 +295,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			// First we must fetch the data into a vectorselector
 			if s.Interval > 0 {
 				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-offset - promql.LookbackDelta),
+					Start: s.Start.Add(-offset),
 					End:   s.End.Add(-offset),
 					Step:  s.Interval,
 				})
@@ -365,7 +365,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		var err error
 		if s.Interval > 0 {
 			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
-				Start: s.Start.Add(-offset - promql.LookbackDelta),
+				Start: s.Start.Add(-offset),
 				End:   s.End.Add(-offset),
 				Step:  s.Interval,
 			})
@@ -406,7 +406,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		var err error
 		if s.Interval > 0 {
 			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
-				Start: s.Start.Add(-offset - promql.LookbackDelta),
+				Start: s.Start.Add(-offset),
 				End:   s.End.Add(-offset),
 				Step:  s.Interval,
 			})
