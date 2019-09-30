@@ -400,6 +400,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		if n.HasSeries() {
 			return nil, nil
 		}
+		removeOffset()
 
 		var result model.Value
 		var warnings api.Warnings
@@ -423,6 +424,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		for i, iterator := range iterators {
 			series[i] = &proxyquerier.Series{iterator}
 		}
+		n.Offset = offset
 		n.SetSeries(series, promhttputil.WarningsConvert(warnings))
 		n.DisableLookback = true
 
