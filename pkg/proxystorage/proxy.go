@@ -314,7 +314,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 				series[i] = &proxyquerier.Series{iterator}
 			}
 
-			ret := &promql.VectorSelector{Offset: offset}
+			ret := &promql.VectorSelector{Offset: offset, DisableLookback: true}
 			ret.SetSeries(series, promhttputil.WarningsConvert(warnings))
 
 			// Replace with sum(count_values()) BY (label)
@@ -348,7 +348,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 				series[i] = &proxyquerier.Series{iterator}
 			}
 
-			ret := &promql.VectorSelector{Offset: offset}
+			ret := &promql.VectorSelector{Offset: offset, DisableLookback: true}
 			ret.SetSeries(series, promhttputil.WarningsConvert(warnings))
 			n.Expr = ret
 			return n, nil
@@ -389,7 +389,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			series[i] = &proxyquerier.Series{iterator}
 		}
 
-		ret := &promql.VectorSelector{Offset: offset}
+		ret := &promql.VectorSelector{Offset: offset, DisableLookback: true}
 		ret.SetSeries(series, promhttputil.WarningsConvert(warnings))
 		return ret, nil
 
@@ -424,6 +424,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			series[i] = &proxyquerier.Series{iterator}
 		}
 		n.SetSeries(series, promhttputil.WarningsConvert(warnings))
+		n.DisableLookback = true
 
 	// If we hit this someone is asking for a matrix directly, if so then we don't
 	// have anyway to ask for less-- since this is exactly what they are asking for
