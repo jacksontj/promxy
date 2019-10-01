@@ -3,6 +3,11 @@
   unused-packages = true
   non-go = true
 
+  [[prune.project]]
+    name = "github.com/prometheus/prometheus"
+    unused-packages = false
+    non-go = false
+
 [[constraint]]
   name = "github.com/jessevdk/go-flags"
   version = "1.3.0"

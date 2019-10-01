@@ -528,7 +528,7 @@
 
 [[projects]]
   branch = "release-2.10_fork_promxy"
-  digest = "1:f7c9a940ce6e6ce179416c766b8f0e37942f87bc23432ea438fa6cc836972911"
+  digest = "1:35ea0e42799fc0f48de03614f81549681f1d93ee686c50f7898cbb6bc8549411"
   name = "github.com/prometheus/prometheus"
   packages = [
     "config",
@@ -576,7 +576,7 @@
     "web/api/v2",
     "web/ui",
   ]
-  pruneopts = "NUT"
+  pruneopts = "T"
   revision = "7ba2818c13c88799dc2b4e7f53a6f9ca17e390b3"
   source = "github.com/jacksontj/prometheus"
 
