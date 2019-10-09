@@ -58,6 +58,11 @@ API please open up an issue.
 None. Promxy is simply an aggregating proxy that sends requests to prometheus-- meaning
 it requires no changes to your existing prometheus install.
 
+### Can I have promxy as a downstream of promxy?
+Yes! Promxy simply aggregates other prometheus API endpoints together so you can definitely layer promxy.
+Similarly you can mix prometheus API endpoints, for example you could have prometheus, promxy, and 
+VictoriaMetrics all as downstreams of a promxy host -- since they all have prometheus compatible APIs.
+
 ### What is query performance like with promxy?
 Promxy's goal is to be the same performance as the slowest prometheus server it
 has to talk to. If you have a query that is significantly slower through promxy
