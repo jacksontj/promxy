@@ -108,7 +108,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 			if err := oldState.remoteStorage.ApplyConfig(&c.PromConfig); err != nil {
 				return err
 			}
-			// if it was an appenderstub we just need to replace
+			newState.remoteStorage = oldState.remoteStorage
 		} else {
 			// TODO: configure path?
 			remote := remote.NewStorage(nil, func() (int64, error) { return 0, nil }, 1*time.Second)
@@ -116,13 +116,16 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 				return err
 			}
 			newState.remoteStorage = remote
-			var err error
-			newState.appender, err = remote.Appender()
-			if err != nil {
-				return errors.Wrap(err, "unable to create remote_write appender")
-			}
 			newState.appenderCloser = remote.Close
 		}
+
+		// Whether old or new, update the appender
+		var err error
+		newState.appender, err = newState.remoteStorage.Appender()
+		if err != nil {
+			return errors.Wrap(err, "unable to create remote_write appender")
+		}
+
 	} else {
 		newState.appender = &appenderStub{}
 	}
