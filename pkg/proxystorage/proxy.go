@@ -380,12 +380,6 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			return nil, errors.Cause(err)
 		}
 
-		// the "scalar()" function can return a scalar, if so we need to make sure we return
-		// the correct type
-		if scalarResult, ok := result.(*model.Scalar); ok {
-			return &promql.NumberLiteral{float64(scalarResult.Value)}, nil
-		}
-
 		iterators := promclient.IteratorsForValue(result)
 		series := make([]storage.Series, len(iterators))
 		for i, iterator := range iterators {
@@ -394,6 +388,15 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 		ret := &promql.VectorSelector{Offset: offset, DisableLookback: true}
 		ret.SetSeries(series, promhttputil.WarningsConvert(warnings))
+
+		// the "scalar()" function is a bit tricky. It can return a scalar or a vector.
+		// So to handle this instead of returning the vector directly (as its just the values selected)
+		// we can set it as the args (the vector of data) and the promql engine handles the types properly
+		if n.Func.Name == "scalar" {
+			fmt.Println(n.Args[0])
+			n.Args[0] = ret
+			return nil, nil
+		}
 		return ret, nil
 
 	// If we are simply fetching a Vector then we can fetch the data using the same step that
