@@ -18,7 +18,7 @@
 
 [[constraint]]
   name = "github.com/prometheus/common"
-  branch = "master"
+  version = "v0.5.0"
 
 [[constraint]]
   branch = "release-2.10_fork_promxy"
@@ -57,3 +57,8 @@
 [[override]]
   name = "k8s.io/client-go"
   version = "v11.0.0"
+
+[[override]]
+  name = "github.com/golang/glog"
+  source = "github.com/kubermatic/glog-gokit"
+  revision = "8ab7e4c2d35273d3a4b6ff9b3412d97cfe82bcc3"
