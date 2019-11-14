@@ -85,6 +85,14 @@ you wanted to know that the global error rate was <10% this would be impossible 
 to use recording rules (or see the metrics from alerting rules) a [remote_write](https://github.com/jacksontj/promxy/blob/master/cmd/promxy/config.yaml#L22)
 endpoint must be defined in the promxy config (which is where it will send those metrics).
 
+### What happens when an entire ServerGroup is unavailable?
+The default behavior in the event of a servergroup being down is to return an error. If all nodes in a servergroup
+are down the resulting data can be inaccurate (missing data, etc.) -- so we'd rather by default return an error rather
+than an inaccurate value (since alerting etc. might rely on it, we don't want to hide a problem).
+
+Now with that said if you'd like to make some or all servergroups "optional" (meaning the errors will
+be ignored and we'll serve the response anyways) you can do this using the [ignore_error option](https://github.com/jacksontj/promxy/blob/master/cmd/promxy/config.yaml#L86) on the servergroup.
+
 ## Questions/Bugs/etc.
 Feedback is **greatly** appreciated. If you find a bug, have a feature request, or just have a general question feel free to open up an issue!
 If you prefer a more real-time channel you can also reach out on [#promxy on Freenode](https://webchat.freenode.net/?channels=%23promxy).
