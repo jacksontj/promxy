@@ -162,11 +162,12 @@
   version = "v3.2.0"
 
 [[projects]]
-  digest = "1:f20fae798c9e630c3322d8403f0ff9b2d3d11aae22cd3562d1f8874af220c37d"
+  digest = "1:913125f0170b7a2bf851886be2215312d3521f8dc37e797a37668345730060f0"
   name = "github.com/go-kit/kit"
   packages = [
     "log",
     "log/level",
+    "log/logrus",
   ]
   pruneopts = "NUT"
   revision = "12210fb6ace19e0496167bb3e667dcd91fa9f69b"
@@ -1112,6 +1113,7 @@
   input-imports = [
     "github.com/go-kit/kit/log",
     "github.com/go-kit/kit/log/level",
+    "github.com/go-kit/kit/log/logrus",
     "github.com/gogo/protobuf/proto",
     "github.com/golang/glog",
     "github.com/golang/snappy",
