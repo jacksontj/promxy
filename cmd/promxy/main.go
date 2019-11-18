@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/golang/glog"
 	"io"
 
 	"fmt"
@@ -21,7 +22,8 @@ import (
 	"crypto/md5"
 
 	kitlog "github.com/go-kit/kit/log"
-	flags "github.com/jessevdk/go-flags"
+	kitloglogrus "github.com/go-kit/kit/log/logrus"
+	"github.com/jessevdk/go-flags"
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -154,6 +156,10 @@ func main() {
 		FullTimestamp: true,
 	}
 	logrus.SetFormatter(formatter)
+
+	// Above level 6, the k8s client would log bearer tokens in clear-text.
+	glog.ClampLevel(6)
+	glog.SetLogger(kitloglogrus.NewLogrusLogger(logrus.StandardLogger()))
 
 	// Create base context for this daemon
 	ctx, cancel := context.WithCancel(context.Background())
