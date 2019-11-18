@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/golang/glog"
 	"io"
+
+	"github.com/golang/glog"
 
 	"fmt"
 	"net"
