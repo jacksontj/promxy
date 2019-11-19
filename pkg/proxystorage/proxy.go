@@ -406,6 +406,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		if n.HasSeries() {
 			return nil, nil
 		}
+		logrus.Debugf("VectorSelector: %v", n)
 		removeOffset()
 
 		var result model.Value
