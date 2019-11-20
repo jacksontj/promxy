@@ -174,9 +174,13 @@ func (p *ProxyStorage) Close() error { return nil }
 //      - offsets within the subtree must match: if they don't then we'll get mismatched data, so we wait until we are far enough down the tree that they converge
 //      - Don't reduce accuracy/granularity: the intention of this is to get the correct data faster, meaning correctness overrules speed.
 func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, node promql.Node) (promql.Node, error) {
-
 	isAgg := func(node promql.Node) bool {
 		_, ok := node.(*promql.AggregateExpr)
+		return ok
+	}
+
+	isSubQuery := func(node promql.Node) bool {
+		_, ok := node.(*promql.SubqueryExpr)
 		return ok
 	}
 
@@ -193,7 +197,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 	if aggFinder.Found > 0 {
 		// If there was a single agg and that was us, then we're okay
-		if !(isAgg(node) && aggFinder.Found == 1) {
+		if !((isAgg(node) || isSubQuery(node)) && aggFinder.Found == 1) {
 			return nil, nil
 		}
 	}
@@ -221,10 +225,48 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 	state := p.GetState()
 	switch n := node.(type) {
+
+	// SubqueryExprs are special, since they are effectively a MatrixSelector that is treated
+	// very specially inside the promql engine. To handle this we
+	//    (1) create a new eval statement with the subquery times
+	//    (2) run NodeReplacer on that new statement
+	//    (3) replace the subnode with the replaced RawMatrix
+	case *promql.SubqueryExpr:
+		logrus.Debugf("SubqueryExpr %v", n)
+		subStmt := &promql.EvalStmt{
+			Expr:     n.Expr,
+			End:      s.End.Add(-n.Offset),
+			Interval: time.Duration(promql.GetDefaultEvaluationInterval()) * time.Millisecond,
+		}
+		if n.Step != 0 {
+			subStmt.Interval = n.Step
+		}
+
+		subStmt.Start = s.Start.Add(-n.Offset).Add(-n.Range).Truncate(subStmt.Interval)
+		if subStmt.Start.Before(s.Start.Add(-n.Offset).Add(-n.Range)) {
+			subStmt.Start = subStmt.Start.Add(subStmt.Interval)
+		}
+
+		subNode, err := p.NodeReplacer(ctx, subStmt, subStmt.Expr)
+		if err != nil {
+			return nil, err
+		}
+		switch subNodeTyped := subNode.(type) {
+		case *promql.AggregateExpr:
+			n.Expr = promql.NewRawMatrixFromVector(subNodeTyped.Expr.(*promql.VectorSelector))
+		case *promql.MatrixSelector:
+			n.Expr = promql.NewRawMatrixFromMatrix(subNodeTyped)
+		case *promql.VectorSelector:
+			n.Expr = promql.NewRawMatrixFromVector(subNodeTyped)
+		default:
+			panic(fmt.Sprintf("Unhandled SubqueryExpr return type: %T", subNode))
+		}
+		return n, nil
+
 	// Some AggregateExprs can be composed (meaning they are "reentrant". If the aggregation op
 	// is reentrant/composable then we'll do so, otherwise we let it fall through to normal query mechanisms
 	case *promql.AggregateExpr:
-		logrus.Debugf("AggregateExpr %v", n)
+		logrus.Debugf("AggregateExpr %v %s", n, n.Op)
 
 		var result model.Value
 		var warnings api.Warnings
@@ -354,6 +396,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			ret := &promql.VectorSelector{Offset: offset, DisableLookback: true}
 			ret.SetSeries(series, promhttputil.WarningsConvert(warnings))
 			n.Expr = ret
+
 			return n, nil
 		}
 
@@ -393,7 +436,6 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		// So to handle this instead of returning the vector directly (as its just the values selected)
 		// we can set it as the args (the vector of data) and the promql engine handles the types properly
 		if n.Func.Name == "scalar" {
-			fmt.Println(n.Args[0])
 			n.Args[0] = ret
 			return nil, nil
 		}
@@ -437,7 +479,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 	// If we hit this someone is asking for a matrix directly, if so then we don't
 	// have anyway to ask for less-- since this is exactly what they are asking for
-	case *promql.MatrixSelector:
+	case *promql.MatrixSelector, *promql.RawMatrix:
 		// DO NOTHING
 
 	default:
