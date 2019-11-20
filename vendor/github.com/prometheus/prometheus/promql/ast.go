@@ -379,7 +379,7 @@ func Walk(ctx context.Context, v Visitor, st *EvalStmt, node Node, path []Node, 
 			n.Expr = tmp.(Expr)
 		}
 
-	case *MatrixSelector, *NumberLiteral, *StringLiteral, *VectorSelector:
+	case *MatrixSelector, *NumberLiteral, *StringLiteral, *VectorSelector, *RawMatrix:
 		// nothing to do
 
 	default:
