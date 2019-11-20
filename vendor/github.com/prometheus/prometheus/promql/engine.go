@@ -1173,6 +1173,13 @@ func (ev *evaluator) eval(expr Expr) Value {
 		}
 		return ev.matrixSelector(e)
 
+	case *RawMatrix:
+		res, err := e.Value()
+		if err != nil {
+			ev.error(err)
+		}
+		return res
+
 	case *SubqueryExpr:
 		offsetMillis := durationToInt64Millis(e.Offset)
 		rangeMillis := durationToInt64Millis(e.Range)
