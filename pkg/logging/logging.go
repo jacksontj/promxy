@@ -143,6 +143,9 @@ func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request
 
 	startTime := time.Now()
 	if err := h.runHandler(record, r); err != nil {
+		// If we have an error we want to clear any Content-Encoding that may have been set
+		// as we are just going to write direct
+		rw.Header().Del("Content-Encoding")
 		http.Error(record, err.Error(), http.StatusInternalServerError)
 	}
 	finishTime := time.Now()
