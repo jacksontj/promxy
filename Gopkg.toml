@@ -62,3 +62,7 @@
   name = "github.com/golang/glog"
   source = "github.com/kubermatic/glog-gokit"
   revision = "8ab7e4c2d35273d3a4b6ff9b3412d97cfe82bcc3"
+[[override]]
+  name = "k8s.io/klog"
+  source = "github.com/simonpasquier/klog-gokit"
+  revision = "28685869d216cd214186132b7f6e0ca1e3d01d79"
