@@ -1080,12 +1080,12 @@
   version = "v11.0.0"
 
 [[projects]]
-  digest = "1:0c3d89917517870412417ab480735ff8023ae85583a99098682eec54501213df"
+  digest = "1:03a5236d01fde0ca22e2dd094e8a55653f033359addc550ac42dfa7182026d42"
   name = "k8s.io/klog"
   packages = ["."]
   pruneopts = "NUT"
-  revision = "78315d914a8af2453db4864e69230b647b1ff711"
-  version = "v0.3.2"
+  revision = "28685869d216cd214186132b7f6e0ca1e3d01d79"
+  source = "github.com/simonpasquier/klog-gokit"
 
 [[projects]]
   branch = "master"
@@ -1153,6 +1153,7 @@
     "github.com/stretchr/testify/require",
     "golang.org/x/time/rate",
     "gopkg.in/yaml.v2",
+    "k8s.io/klog",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
