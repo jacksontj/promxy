@@ -66,5 +66,17 @@ func FilterMatchers(ls model.LabelSet, matchers []*labels.Matcher) ([]*labels.Ma
 			filteredMatchers = append(filteredMatchers, matcher)
 		}
 	}
+
+	// Prometheus doesn't support empty matchers (https://github.com/prometheus/prometheus/issues/2162)
+	// so if we filter out all matchers we want to replace the empty matcher
+	// with a matcher that does the same
+	if len(filteredMatchers) == 0 {
+		filteredMatchers = append(filteredMatchers, &labels.Matcher{
+			Type:  labels.MatchRegexp,
+			Name:  labels.MetricName,
+			Value: ".+",
+		})
+	}
+
 	return filteredMatchers, true
 }
