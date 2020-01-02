@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"path"
 
 	"k8s.io/klog"
 
@@ -312,7 +313,7 @@ func main() {
 		EnableLifecycle: opts.EnableLifecycle,
 
 		Flags:       opts.ToFlags(),
-		RoutePrefix: "/", // TODO: options for this?
+		RoutePrefix: "/",
 		ExternalURL: externalUrl,
 		Version: &web.PrometheusVersion{
 			Version:   version.Version,
@@ -324,12 +325,17 @@ func main() {
 		},
 	}
 
+	if externalUrl != nil && externalUrl.Path != "" {
+		webOptions.RoutePrefix = externalUrl.Path
+	}
+
 	webHandler := web.New(logger, webOptions)
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(webHandler))
 	webHandler.Ready()
 
 	apiRouter := route.New()
-	webHandler.Getv1API().Register(apiRouter.WithPrefix("/api/v1"))
+
+	webHandler.Getv1API().Register(apiRouter.WithPrefix(path.Join(webOptions.RoutePrefix, "/api/v1")))
 
 	// Create our router
 	r := httprouter.New()
@@ -340,11 +346,11 @@ func main() {
 	stopping := false
 	r.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Have our fallback rules
-		if strings.HasPrefix(r.URL.Path, "/api/") {
+		if strings.HasPrefix(r.URL.Path, path.Join(webOptions.RoutePrefix, "/api")) {
 			apiRouter.ServeHTTP(w, r)
-		} else if strings.HasPrefix(r.URL.Path, "/debug") {
+		} else if strings.HasPrefix(r.URL.Path, path.Join(webOptions.RoutePrefix, "/debug")) {
 			http.DefaultServeMux.ServeHTTP(w, r)
-		} else if r.URL.Path == "/-/ready" {
+		} else if r.URL.Path == path.Join(webOptions.RoutePrefix, "/-/ready") {
 			if stopping {
 				w.WriteHeader(http.StatusServiceUnavailable)
 				fmt.Fprintf(w, "Promxy is Stopping.\n")
