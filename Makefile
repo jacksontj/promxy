@@ -3,11 +3,16 @@ GO ?= go
 GOFILES := $(shell find . -name "*.go" -type f ! -path "./vendor/*")
 GOFMT ?= gofmt
 GOIMPORTS ?= goimports -local=github.com/jacksontj/promxy
+STATICCHECK ?= staticcheck
 
 .PHONY: clean
 clean:
 	$(GO) clean -i ./...
 	rm -rf $(BUILD)
+
+.PHONY: static-check
+static-check:
+	$(STATICCHECK) ./...
 
 .PHONY: fmt
 fmt:
