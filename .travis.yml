@@ -24,8 +24,10 @@ branches:
 # have an empty install to avoid travis doing a go get
 install:
   - go get golang.org/x/tools/cmd/goimports
+  - go get honnef.co/go/tools/cmd/staticcheck
 
 script:
   - make fmt && git diff --exit-code
   - make imports && git diff --exit-code
   - make test
+  - make static-check
