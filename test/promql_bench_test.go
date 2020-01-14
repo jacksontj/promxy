@@ -129,37 +129,3 @@ func (p *SwappableStorage) Appender() (storage.Appender, error) {
 func (p *SwappableStorage) Close() error {
 	return p.s.Close()
 }
-
-type StubStorage struct{}
-
-func (p *StubStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
-	return nil, nil
-}
-func (p *StubStorage) StartTime() (int64, error) {
-	return 0, nil
-}
-func (p *StubStorage) Appender() (storage.Appender, error) {
-	return nil, nil
-}
-func (p *StubStorage) Close() error {
-	return nil
-}
-
-type RemoteStorage struct {
-	q           storage.Queryable
-	baseStorage storage.Storage
-}
-
-func (p *RemoteStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
-	return p.q.Querier(ctx, mint, maxt)
-}
-func (p *RemoteStorage) StartTime() (int64, error) {
-	return p.baseStorage.StartTime()
-}
-
-func (p *RemoteStorage) Appender() (storage.Appender, error) {
-	return p.baseStorage.Appender()
-}
-func (p *RemoteStorage) Close() error {
-	return p.baseStorage.Close()
-}

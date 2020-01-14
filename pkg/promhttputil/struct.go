@@ -6,16 +6,16 @@ type Status string
 
 const (
 	StatusSuccess Status = "success"
-	StatusError          = "error"
+	StatusError   Status = "error"
 )
 
 type ErrorType string
 
 const (
 	ErrorNone     ErrorType = ""
-	ErrorTimeout            = "timeout"
-	ErrorCanceled           = "canceled"
-	ErrorExec               = "execution"
-	ErrorBadData            = "bad_data"
-	ErrorInternal           = "internal"
+	ErrorTimeout  ErrorType = "timeout"
+	ErrorCanceled ErrorType = "canceled"
+	ErrorExec     ErrorType = "execution"
+	ErrorBadData  ErrorType = "bad_data"
+	ErrorInternal ErrorType = "internal"
 )

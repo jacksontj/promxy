@@ -102,19 +102,19 @@ var opts cliOpts
 func reloadConfig(rls ...proxyconfig.Reloadable) error {
 	cfg, err := proxyconfig.ConfigFromFile(opts.ConfigFile)
 	if err != nil {
-		return fmt.Errorf("Error loading cfg: %v", err)
+		return fmt.Errorf("error loading cfg: %v", err)
 	}
 
 	failed := false
 	for _, rl := range rls {
 		if err := rl.ApplyConfig(cfg); err != nil {
-			logrus.Errorf("Failed to apply configuration: %v", err)
+			logrus.Errorf("failed to apply configuration: %v", err)
 			failed = true
 		}
 	}
 
 	if failed {
-		return fmt.Errorf("One or more errors occurred while applying new configuration")
+		return fmt.Errorf("one or more errors occurred while applying new configuration")
 	}
 	promql.SetDefaultEvaluationInterval(time.Duration(cfg.PromConfig.GlobalConfig.EvaluationInterval))
 	reloadTime.Set(float64(time.Now().Unix()))
@@ -125,7 +125,7 @@ func main() {
 	// Wait for reload or termination signals. Start the handler for SIGHUP as
 	// early as possible, but ignore it until we are ready to handle reloading
 	// our config.
-	sigs := make(chan os.Signal)
+	sigs := make(chan os.Signal, 1)
 	defer close(sigs)
 	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 
@@ -140,7 +140,7 @@ func main() {
 		if _, ok := err.(*flags.Error); ok {
 			os.Exit(1)
 		}
-		logrus.Fatalf("Error parsing flags: %v", err)
+		logrus.Fatalf("error parsing flags: %v", err)
 	}
 
 	if opts.Version {
@@ -174,7 +174,7 @@ func main() {
 	defer cancel()
 
 	// Reload ready -- channel to close once we are ready to start reloaders
-	reloadReady := make(chan struct{}, 0)
+	reloadReady := make(chan struct{})
 
 	// Create the proxy storage
 	var proxyStorage storage.Storage
@@ -286,7 +286,7 @@ func main() {
 			// check for any recording rules, if we find any lets log a fatal and stop
 			for _, rule := range ruleList {
 				if _, ok := rule.(*rules.RecordingRule); ok {
-					return fmt.Errorf("Promxy doesn't support recording rules: %s", rule)
+					return fmt.Errorf("promxy doesn't support recording rules: %s", rule)
 				}
 			}
 

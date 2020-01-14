@@ -29,7 +29,6 @@ import (
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/relabel"
-	pkgrelabel "github.com/prometheus/prometheus/pkg/relabel"
 	"github.com/prometheus/prometheus/prompb"
 )
 
@@ -166,7 +165,7 @@ type QueueManager struct {
 	flushDeadline  time.Duration
 	cfg            config.QueueConfig
 	externalLabels labels.Labels
-	relabelConfigs []*pkgrelabel.Config
+	relabelConfigs []*relabel.Config
 	client         StorageClient
 	queueName      string
 	logLimiter     *rate.Limiter
@@ -183,7 +182,7 @@ type QueueManager struct {
 }
 
 // NewQueueManager builds a new QueueManager.
-func NewQueueManager(logger log.Logger, cfg config.QueueConfig, externalLabels labels.Labels, relabelConfigs []*pkgrelabel.Config, client StorageClient, flushDeadline time.Duration) *QueueManager {
+func NewQueueManager(logger log.Logger, cfg config.QueueConfig, externalLabels labels.Labels, relabelConfigs []*relabel.Config, client StorageClient, flushDeadline time.Duration) *QueueManager {
 	if logger == nil {
 		logger = log.NewNopLogger()
 	} else {

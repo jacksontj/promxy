@@ -201,9 +201,7 @@ func (q externalLabelsQuerier) addExternalLabels(ms []*labels.Matcher) ([]*label
 		el[k] = v
 	}
 	for _, m := range ms {
-		if _, ok := el[model.LabelName(m.Name)]; ok {
-			delete(el, model.LabelName(m.Name))
-		}
+		delete(el, model.LabelName(m.Name))
 	}
 	for k, v := range el {
 		m, err := labels.NewMatcher(labels.MatchEqual, string(k), string(v))

@@ -46,7 +46,7 @@ func (o *OffsetFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor,
 			o.Found = true
 		} else {
 			if n.Offset != o.Offset {
-				o.Error = fmt.Errorf("Mismatched offsets %v %v", n.Offset, o.Offset)
+				o.Error = fmt.Errorf("mismatched offsets %v %v", n.Offset, o.Offset)
 			}
 		}
 
@@ -56,7 +56,7 @@ func (o *OffsetFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor,
 			o.Found = true
 		} else {
 			if n.Offset != o.Offset {
-				o.Error = fmt.Errorf("Mismatched offsets %v %v", n.Offset, o.Offset)
+				o.Error = fmt.Errorf("mismatched offsets %v %v", n.Offset, o.Offset)
 			}
 		}
 	}

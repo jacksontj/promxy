@@ -79,7 +79,7 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, 
 		return a, nil
 	}
 	if a.Type() != b.Type() {
-		return nil, fmt.Errorf("Error!")
+		return nil, fmt.Errorf("mismatch type %v!=%v", a.Type(), b.Type())
 	}
 
 	switch aTyped := a.(type) {
@@ -164,7 +164,7 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, 
 		return newValue, nil
 	}
 
-	return nil, fmt.Errorf("Unknown type! %v", reflect.TypeOf(a))
+	return nil, fmt.Errorf("unknown type! %v", reflect.TypeOf(a))
 }
 
 // MergeSampleStream merges SampleStreams `a` and `b` with the given antiAffinityBuffer
@@ -178,7 +178,7 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, 
 // clock skew or from this scrape skew).
 func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream) (*model.SampleStream, error) {
 	if a.Metric.Fingerprint() != b.Metric.Fingerprint() {
-		return nil, fmt.Errorf("Cannot merge mismatch fingerprints")
+		return nil, fmt.Errorf("cannot merge mismatch fingerprints")
 	}
 
 	// TODO: really there should be a library method for this in prometheus IMO
