@@ -24,11 +24,11 @@ func ConfigFromFile(path string) (*Config, error) {
 	}
 	configBytes, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("Error loading config: %v", err)
+		return nil, fmt.Errorf("error loading config: %v", err)
 	}
 	err = yaml.Unmarshal([]byte(configBytes), &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("Error unmarshaling config: %v", err)
+		return nil, fmt.Errorf("error unmarshaling config: %v", err)
 	}
 
 	return cfg, nil

@@ -99,7 +99,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 
 	if failed {
 		newState.Cancel(nil)
-		return fmt.Errorf("Error Applying Config to one or more server group(s)")
+		return fmt.Errorf("error applying config to one or more server group(s)")
 	}
 
 	// Check for remote_write (for appender)

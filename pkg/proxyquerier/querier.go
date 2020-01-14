@@ -34,7 +34,7 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		logrus.WithFields(logrus.Fields{
 			"selectParams": selectParams,
 			"matchers":     matchers,
-			"took":         time.Now().Sub(start),
+			"took":         time.Since(start),
 		}).Debug("Select")
 	}()
 
@@ -91,7 +91,7 @@ func (h *ProxyQuerier) LabelValues(name string) ([]string, storage.Warnings, err
 	defer func() {
 		logrus.WithFields(logrus.Fields{
 			"name": name,
-			"took": time.Now().Sub(start),
+			"took": time.Since(start),
 		}).Debug("LabelValues")
 	}()
 
@@ -114,7 +114,7 @@ func (h *ProxyQuerier) LabelNames() ([]string, storage.Warnings, error) {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
-			"took": time.Now().Sub(start),
+			"took": time.Since(start),
 		}).Debug("LabelNames")
 	}()
 

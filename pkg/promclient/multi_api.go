@@ -128,7 +128,7 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 		go func(i int, retChan chan chanResult, api API, label string) {
 			start := time.Now()
 			result, w, err := api.LabelValues(childContext, label)
-			took := time.Now().Sub(start)
+			took := time.Since(start)
 			if err != nil {
 				m.recordMetric(i, "label_values", "error", took.Seconds())
 			} else {
@@ -206,7 +206,7 @@ func (m *MultiAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, erro
 		go func(i int, retChan chan chanResult, api API) {
 			start := time.Now()
 			result, w, err := api.LabelNames(childContext)
-			took := time.Now().Sub(start)
+			took := time.Since(start)
 			if err != nil {
 				m.recordMetric(i, "label_names", "error", took.Seconds())
 			} else {
@@ -287,7 +287,7 @@ func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model
 		go func(i int, retChan chan chanResult, api API, query string, ts time.Time) {
 			start := time.Now()
 			result, w, err := api.Query(childContext, query, ts)
-			took := time.Now().Sub(start)
+			took := time.Since(start)
 			if err != nil {
 				m.recordMetric(i, "query", "error", took.Seconds())
 			} else {
@@ -367,7 +367,7 @@ func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 		go func(i int, retChan chan chanResult, api API, query string, r v1.Range) {
 			start := time.Now()
 			result, w, err := api.QueryRange(childContext, query, r)
-			took := time.Now().Sub(start)
+			took := time.Since(start)
 			if err != nil {
 				m.recordMetric(i, "query_range", "error", took.Seconds())
 			} else {
@@ -447,7 +447,7 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 		go func(i int, retChan chan chanResult, api API) {
 			start := time.Now()
 			result, w, err := api.Series(childContext, matches, startTime, endTime)
-			took := time.Now().Sub(start)
+			took := time.Since(start)
 			if err != nil {
 				m.recordMetric(i, "series", "error", took.Seconds())
 			} else {
@@ -524,7 +524,7 @@ func (m *MultiAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 		go func(i int, retChan chan chanResult, api API) {
 			queryStart := time.Now()
 			result, w, err := api.GetValue(childContext, start, end, matchers)
-			took := time.Now().Sub(queryStart)
+			took := time.Since(queryStart)
 			if err != nil {
 				m.recordMetric(i, "get_value", "error", took.Seconds())
 			} else {

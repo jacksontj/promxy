@@ -26,7 +26,7 @@ func (d *DebugAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, erro
 
 	s := time.Now()
 	v, w, err := d.API.LabelNames(ctx)
-	fields["took"] = time.Now().Sub(s)
+	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {
 		fields["value"] = v
@@ -50,7 +50,7 @@ func (d *DebugAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 
 	s := time.Now()
 	v, w, err := d.API.LabelValues(ctx, label)
-	fields["took"] = time.Now().Sub(s)
+	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {
 		fields["value"] = v
@@ -75,7 +75,7 @@ func (d *DebugAPI) Query(ctx context.Context, query string, ts time.Time) (model
 
 	s := time.Now()
 	v, w, err := d.API.Query(ctx, query, ts)
-	fields["took"] = time.Now().Sub(s)
+	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {
 		fields["value"] = v
@@ -100,7 +100,7 @@ func (d *DebugAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 
 	s := time.Now()
 	v, w, err := d.API.QueryRange(ctx, query, r)
-	fields["took"] = time.Now().Sub(s)
+	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {
 		fields["value"] = v
@@ -126,7 +126,7 @@ func (d *DebugAPI) Series(ctx context.Context, matches []string, startTime time.
 
 	s := time.Now()
 	v, w, err := d.API.Series(ctx, matches, startTime, endTime)
-	fields["took"] = time.Now().Sub(s)
+	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {
 		fields["value"] = v
@@ -152,7 +152,7 @@ func (d *DebugAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 
 	s := time.Now()
 	v, w, err := d.API.GetValue(ctx, start, end, matchers)
-	fields["took"] = time.Now().Sub(s)
+	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {
 		fields["value"] = v
