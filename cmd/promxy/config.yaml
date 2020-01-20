@@ -42,6 +42,8 @@ promxy:
       anti_affinity: 10s
       # Controls whether to use remote_read or the prom HTTP API for fetching remote raw data
       remote_read: true
+      # configures the path to send remote read requests to. The default is "api/v1/read"
+      remote_read_path: api/v1/read
       # path_prefix defines a prefix to prepend to all queries to hosts in this servergroup
       path_prefix: /example/prefix
       # query_params adds the following map of query parameters to downstream requests.
@@ -56,10 +58,10 @@ promxy:
         dial_timeout: 1s
         tls_config:
           insecure_skip_verify: true
-      
+
       # relative_time_range defines a relative-to-now time range that this server group contains.
       # this is completely optional and start/end are both optional as well
-      # an example is if this servergroup only has the most recent 3h of data 
+      # an example is if this servergroup only has the most recent 3h of data
       # the "start" would be -3h and the end would be left out
       relative_time_range:
         start: -3h

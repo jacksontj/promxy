@@ -156,7 +156,7 @@ SYNC_LOOP:
 					apiClient = &promclient.PromAPIV1{v1.NewAPI(client)}
 
 					if s.Cfg.RemoteRead {
-						u.Path = path.Join(u.Path, "api/v1/read")
+						u.Path = path.Join(u.Path, s.Cfg.RemoteReadPath)
 						cfg := &remote.ClientConfig{
 							URL: &config_util.URL{u},
 							// TODO: from context?
