@@ -13,8 +13,9 @@ import (
 var (
 	// DefaultConfig is the Default base promxy configuration
 	DefaultConfig = Config{
-		AntiAffinity: time.Second * 10,
-		Scheme:       "http",
+		AntiAffinity:   time.Second * 10,
+		Scheme:         "http",
+		RemoteReadPath: "api/v1/read",
 		HTTPConfig: HTTPClientConfig{
 			DialTimeout: time.Millisecond * 2000, // Default dial timeout of 200ms
 		},
@@ -43,6 +44,8 @@ type Config struct {
 	// from the same memory-balooning problems that the HTTP+JSON API originally had.
 	// It has **less** of a problem (its 2x memory instead of 14x) so it is a viable option.
 	RemoteRead bool `yaml:"remote_read"`
+	// RemoteReadPath sets the remote read path for the hosts in this servergroup
+	RemoteReadPath string `yaml:"remote_read_path"`
 	// HTTP client config for promxy to use when connecting to the various server_groups
 	// this is the same config as prometheus
 	HTTPConfig HTTPClientConfig `yaml:"http_client"`
