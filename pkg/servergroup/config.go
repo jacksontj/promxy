@@ -25,8 +25,8 @@ var (
 // Config is the configuration for a ServerGroup that promxy will talk to.
 // This is where the vast majority of options exist.
 type Config struct {
-	// RemoteRead directs promxy to load data (from the storage API) through the
-	// remoteread API on prom.
+	// RemoteRead directs promxy to load RAW data (meaning matrix selectors such as `foo[1h]`)
+	// through the RemoteRead API on prom.
 	// Pros:
 	//  - StaleNaNs work
 	//  - ~2x faster (in my local testing, more so if you are using default JSON marshaler in prom)
