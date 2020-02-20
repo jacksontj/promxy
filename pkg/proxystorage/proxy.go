@@ -189,7 +189,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 	aggFinder := &BooleanFinder{Func: isAgg}
 	offsetFinder := &OffsetFinder{}
 
-	visitor := &MultiVisitor{[]promql.Visitor{aggFinder, offsetFinder}}
+	visitor := NewMultiVisitor([]promql.Visitor{aggFinder, offsetFinder})
 
 	if _, err := promql.Walk(ctx, visitor, s, node, nil, nil); err != nil {
 		return nil, err
