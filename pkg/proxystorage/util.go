@@ -2,19 +2,30 @@ package proxystorage
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/prometheus/prometheus/promql"
 )
 
+// NewMultiVisitor takes a set of visitors and returns a MultiVisitor
+func NewMultiVisitor(visitors []promql.Visitor) *MultiVisitor {
+	return &MultiVisitor{
+		visitors: visitors,
+	}
+}
+
 // MultiVisitor runs a set of visitors on the same pass over the node tree
 type MultiVisitor struct {
+	l        sync.Mutex
 	visitors []promql.Visitor
 }
 
 // Visit runs on each node in the tree
 func (v *MultiVisitor) Visit(node promql.Node, path []promql.Node) (promql.Visitor, error) {
 	var visitorErr error
+	v.l.Lock()
+	defer v.l.Unlock()
 	for i, visitor := range v.visitors {
 		if visitor == nil {
 			continue
@@ -32,6 +43,7 @@ func (v *MultiVisitor) Visit(node promql.Node, path []promql.Node) (promql.Visit
 
 // OffsetFinder finds the offset (if any) within the tree
 type OffsetFinder struct {
+	l      sync.Mutex
 	Found  bool
 	Offset time.Duration
 	Error  error
@@ -39,6 +51,8 @@ type OffsetFinder struct {
 
 // Visit runs on each node in the tree
 func (o *OffsetFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor, error) {
+	o.l.Lock()
+	defer o.l.Unlock()
 	switch n := node.(type) {
 	case *promql.VectorSelector:
 		if !o.Found {
