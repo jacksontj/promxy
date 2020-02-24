@@ -72,3 +72,5 @@ require (
 )
 
 replace k8s.io/klog => github.com/simonpasquier/klog-gokit v0.1.0
+
+go 1.13
