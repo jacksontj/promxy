@@ -110,3 +110,8 @@ func (f *BooleanFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor
 	}
 	return f, nil
 }
+
+func CloneExpr(expr promql.Expr) (newExpr promql.Expr) {
+	newExpr, _ = promql.ParseExpr(expr.String())
+	return
+}
