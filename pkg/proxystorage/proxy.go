@@ -258,6 +258,8 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			n.Expr = promql.NewRawMatrixFromMatrix(subNodeTyped)
 		case *promql.VectorSelector:
 			n.Expr = promql.NewRawMatrixFromVector(subNodeTyped)
+		case nil:
+			break
 		default:
 			panic(fmt.Sprintf("Unhandled SubqueryExpr return type: %T", subNode))
 		}
