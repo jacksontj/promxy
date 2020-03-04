@@ -299,7 +299,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 				Op: promql.ItemDIV,
 				LHS: &promql.AggregateExpr{
 					Op:       promql.ItemSum,
-					Expr:     n.Expr,
+					Expr:     CloneExpr(n.Expr),
 					Param:    n.Param,
 					Grouping: n.Grouping,
 					Without:  n.Without,
@@ -307,7 +307,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 				RHS: &promql.AggregateExpr{
 					Op:       promql.ItemCount,
-					Expr:     n.Expr,
+					Expr:     CloneExpr(n.Expr),
 					Param:    n.Param,
 					Grouping: n.Grouping,
 					Without:  n.Without,
