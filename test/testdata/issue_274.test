@@ -1,0 +1,18 @@
+# Test for https://github.com/jacksontj/promxy/issues/274
+load 5m
+    metric_1{a="1"} 1
+    metric_10{a="10"} 10
+    metric_1000{a="1000"} 1000
+    metric_10000{a="10000"} 10000
+
+eval instant at 5m avg({__name__=~"metric_.*"}) by (a)
+    {a="1"} 1
+    {a="10"} 10
+    {a="1000"} 1000
+    {a="10000"} 10000
+
+eval instant at 5m avg({__name__=~"metric_.*"}) by (__name__)
+    metric_1{} 1
+    metric_10{} 10
+    metric_1000{} 1000
+    metric_10000{} 10000
