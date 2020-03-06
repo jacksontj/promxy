@@ -115,3 +115,9 @@ func CloneExpr(expr promql.Expr) (newExpr promql.Expr) {
 	newExpr, _ = promql.ParseExpr(expr.String())
 	return
 }
+
+// PreserveLabel wraps the input expression with a label replace in order to preserve the metadata through binary expressions
+func PreserveLabel(expr promql.Expr, srcLabel string, dstLabel string) (relabelExpress promql.Expr) {
+	relabelExpress, _ = promql.ParseExpr(fmt.Sprintf("label_replace(%s,`%s`,`$1`,`%s`,`(.*)`)", expr.String(), dstLabel, srcLabel))
+	return relabelExpress
+}

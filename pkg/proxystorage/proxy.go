@@ -25,6 +25,8 @@ import (
 	"github.com/jacksontj/promxy/pkg/servergroup"
 )
 
+const MetricNameWorkaroundLabel = "__name"
+
 type proxyStorageState struct {
 	sgs            []*servergroup.ServerGroup
 	client         promclient.API
@@ -296,6 +298,51 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 
 		// Convert avg into sum() / count()
 		case promql.ItemAvg:
+
+			nameIncluded := false
+			for _, g := range n.Grouping {
+				if g == model.MetricNameLabel {
+					nameIncluded = true
+				}
+			}
+
+			if nameIncluded {
+				replacedGrouping := make([]string, len(n.Grouping))
+				for i, g := range n.Grouping {
+					if g == model.MetricNameLabel {
+						replacedGrouping[i] = MetricNameWorkaroundLabel
+					} else {
+						replacedGrouping[i] = g
+					}
+				}
+
+				return &promql.AggregateExpr{
+					Op: promql.ItemMax,
+					Expr: PreserveLabel(&promql.BinaryExpr{
+						Op: promql.ItemDIV,
+						LHS: &promql.AggregateExpr{
+							Op:       promql.ItemSum,
+							Expr:     PreserveLabel(CloneExpr(n.Expr), model.MetricNameLabel, MetricNameWorkaroundLabel),
+							Param:    n.Param,
+							Grouping: replacedGrouping,
+							Without:  n.Without,
+						},
+
+						RHS: &promql.AggregateExpr{
+							Op:       promql.ItemCount,
+							Expr:     PreserveLabel(CloneExpr(n.Expr), model.MetricNameLabel, MetricNameWorkaroundLabel),
+							Param:    n.Param,
+							Grouping: replacedGrouping,
+							Without:  n.Without,
+						},
+						VectorMatching: &promql.VectorMatching{Card: promql.CardOneToOne},
+					}, MetricNameWorkaroundLabel, model.MetricNameLabel),
+					Grouping: n.Grouping,
+					Without:  n.Without,
+				}, nil
+
+			}
+
 			// Replace with sum() / count()
 			return &promql.BinaryExpr{
 				Op: promql.ItemDIV,
