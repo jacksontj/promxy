@@ -297,25 +297,25 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		// Convert avg into sum() / count()
 		case promql.ItemAvg:
 			// Replace with sum() / count()
-			return &promql.BinaryExpr{
+			return PreserveNameLabel(&promql.BinaryExpr{
 				Op: promql.ItemDIV,
-				LHS: &promql.AggregateExpr{
+				LHS: PreserveNameLabel(&promql.AggregateExpr{
 					Op:       promql.ItemSum,
 					Expr:     CloneExpr(n.Expr),
 					Param:    n.Param,
 					Grouping: n.Grouping,
 					Without:  n.Without,
-				},
+				}, "__name__", "__name"),
 
-				RHS: &promql.AggregateExpr{
+				RHS: PreserveNameLabel(&promql.AggregateExpr{
 					Op:       promql.ItemCount,
 					Expr:     CloneExpr(n.Expr),
 					Param:    n.Param,
 					Grouping: n.Grouping,
 					Without:  n.Without,
-				},
+				}, "__name__", "__name"),
 				VectorMatching: &promql.VectorMatching{Card: promql.CardOneToOne},
-			}, nil
+			}, "__name", "__name__"), nil
 
 		// For count we simply need to change this to a sum over the data we get back
 		case promql.ItemCount:
