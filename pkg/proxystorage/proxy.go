@@ -255,7 +255,8 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		}
 		switch subNodeTyped := subNode.(type) {
 		case *promql.AggregateExpr:
-			n.Expr = promql.NewRawMatrixFromVector(subNodeTyped.Expr.(*promql.VectorSelector))
+			subNodeTyped.Expr = promql.NewRawMatrixFromVector(subNodeTyped.Expr.(*promql.VectorSelector))
+			n.Expr = subNodeTyped
 		case *promql.MatrixSelector:
 			n.Expr = promql.NewRawMatrixFromMatrix(subNodeTyped)
 		case *promql.VectorSelector:
