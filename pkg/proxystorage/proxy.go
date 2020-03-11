@@ -415,7 +415,8 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			return &promql.AggregateExpr{
 				Op:       promql.ItemSum,
 				Expr:     ret,
-				Grouping: []string{n.Param.(*promql.StringLiteral).Val},
+				Grouping: append(n.Grouping, n.Param.(*promql.StringLiteral).Val),
+				Without:  n.Without,
 			}, nil
 
 		case promql.ItemQuantile:
