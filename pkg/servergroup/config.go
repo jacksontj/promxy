@@ -17,7 +17,7 @@ var (
 		Scheme:         "http",
 		RemoteReadPath: "api/v1/read",
 		HTTPConfig: HTTPClientConfig{
-			DialTimeout: time.Millisecond * 2000, // Default dial timeout of 200ms
+			DialTimeout: time.Millisecond * 200, // Default dial timeout of 200ms
 		},
 	}
 )
