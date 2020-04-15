@@ -16,6 +16,8 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 
+	kitloglogrus "github.com/go-kit/kit/log/logrus"
+
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 	"github.com/jacksontj/promxy/pkg/remote"
 
@@ -113,7 +115,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 			newState.remoteStorage = oldState.remoteStorage
 		} else {
 			// TODO: configure path?
-			remote := remote.NewStorage(nil, func() (int64, error) { return 0, nil }, 1*time.Second)
+			remote := remote.NewStorage(kitloglogrus.NewLogrusLogger(logrus.WithField("component", "k8s_client_runtime").Logger), func() (int64, error) { return 0, nil }, 1*time.Second)
 			if err := remote.ApplyConfig(&c.PromConfig); err != nil {
 				return err
 			}
