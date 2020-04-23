@@ -51,6 +51,8 @@ promxy:
       # (see https://github.com/jacksontj/promxy/issues/202)
       query_params:
         nocache: 1
+      # configures the protocol scheme used for requests. Defaults to http
+      scheme: http
       # options for promxy's HTTP client when talking to hosts in server_groups
       http_client:
         # dial_timeout controls how long promxy will wait for a connection to the downstream
@@ -82,6 +84,7 @@ promxy:
       labels:
         sg: localhost_9091
       anti_affinity: 10s
+      scheme: http
       http_client:
         tls_config:
           insecure_skip_verify: true
