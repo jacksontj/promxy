@@ -161,15 +161,23 @@ type UnaryExpr struct {
 
 // VectorSelector represents a Vector selection.
 type VectorSelector struct {
-	Name            string
-	Offset          time.Duration
-	LabelMatchers   []*labels.Matcher
-	DisableLookback bool
+	Name          string
+	Offset        time.Duration
+	LabelMatchers []*labels.Matcher
+	LookbackDelta time.Duration
 
 	// The unexpanded seriesSet populated at query preparation time.
 	unexpandedSeriesSet storage.SeriesSet
 	series              []storage.Series
 	warnings            storage.Warnings
+}
+
+func (m *VectorSelector) GetLookbackDelta() time.Duration {
+	if m.LookbackDelta > 0 {
+		return m.LookbackDelta
+	}
+
+	return LookbackDelta
 }
 
 func (m *VectorSelector) SetSeries(series []storage.Series, w storage.Warnings) {
