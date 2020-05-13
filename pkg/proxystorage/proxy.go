@@ -507,6 +507,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		var warnings api.Warnings
 		var err error
 		if s.Interval > 0 {
+			n.LookbackDelta = s.Interval - time.Duration(1)
 			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
 				Start: s.Start.Add(-offset),
 				End:   s.End.Add(-offset),
