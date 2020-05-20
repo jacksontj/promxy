@@ -30,7 +30,10 @@ import (
 var (
 	// Transport is the default tracing RoundTripper. The custom options setter will control
 	// if traces are being emitted or not.
-	Transport = NewTransport()
+	Transport = &ochttp.Transport{
+		Propagation:     &tracecontext.HTTPFormat{},
+		GetStartOptions: getStartOptions,
+	}
 
 	// enabled is the flag for marking if tracing is enabled.
 	enabled = false
@@ -61,14 +64,6 @@ func enableFromEnv() {
 		} else {
 			Enable()
 		}
-	}
-}
-
-// NewTransport returns a new instance of a tracing-aware RoundTripper.
-func NewTransport() *ochttp.Transport {
-	return &ochttp.Transport{
-		Propagation:     &tracecontext.HTTPFormat{},
-		GetStartOptions: getStartOptions,
 	}
 }
 
