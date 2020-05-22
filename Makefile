@@ -24,7 +24,7 @@ imports:
 
 .PHONY: test
 test:
-	$(GO) test -v ./...
+	$(GO) test -mod=vendor -v ./...
 
 .PHONY: release
 release:
