@@ -30,3 +30,4 @@ do
     fi
 done
 
+sha256sum $destination/*$VERSION* > $destination/SHA256SUMS

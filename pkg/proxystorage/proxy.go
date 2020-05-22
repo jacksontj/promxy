@@ -16,6 +16,8 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 
+	kitloglogrus "github.com/go-kit/kit/log/logrus"
+
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 	"github.com/jacksontj/promxy/pkg/remote"
 
@@ -113,7 +115,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 			newState.remoteStorage = oldState.remoteStorage
 		} else {
 			// TODO: configure path?
-			remote := remote.NewStorage(nil, func() (int64, error) { return 0, nil }, 1*time.Second)
+			remote := remote.NewStorage(kitloglogrus.NewLogrusLogger(logrus.WithField("component", "k8s_client_runtime").Logger), func() (int64, error) { return 0, nil }, 1*time.Second)
 			if err := remote.ApplyConfig(&c.PromConfig); err != nil {
 				return err
 			}
@@ -408,7 +410,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 				series[i] = &proxyquerier.Series{iterator}
 			}
 
-			ret := &promql.VectorSelector{Offset: offset, DisableLookback: true}
+			ret := &promql.VectorSelector{Offset: offset}
 			ret.SetSeries(series, promhttputil.WarningsConvert(warnings))
 
 			// Replace with sum(count_values()) BY (label)
@@ -443,7 +445,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 				series[i] = &proxyquerier.Series{iterator}
 			}
 
-			ret := &promql.VectorSelector{Offset: offset, DisableLookback: true}
+			ret := &promql.VectorSelector{Offset: offset}
 			ret.SetSeries(series, promhttputil.WarningsConvert(warnings))
 			n.Expr = ret
 
@@ -479,7 +481,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 			series[i] = &proxyquerier.Series{iterator}
 		}
 
-		ret := &promql.VectorSelector{Offset: offset, DisableLookback: true}
+		ret := &promql.VectorSelector{Offset: offset}
 		ret.SetSeries(series, promhttputil.WarningsConvert(warnings))
 
 		// the "scalar()" function is a bit tricky. It can return a scalar or a vector.
@@ -505,6 +507,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		var warnings api.Warnings
 		var err error
 		if s.Interval > 0 {
+			n.LookbackDelta = s.Interval - time.Duration(1)
 			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
 				Start: s.Start.Add(-offset),
 				End:   s.End.Add(-offset),
@@ -525,7 +528,6 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		}
 		n.Offset = offset
 		n.SetSeries(series, promhttputil.WarningsConvert(warnings))
-		n.DisableLookback = true
 
 	// If we hit this someone is asking for a matrix directly, if so then we don't
 	// have anyway to ask for less-- since this is exactly what they are asking for
