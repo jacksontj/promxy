@@ -23,7 +23,10 @@ do
         output_name+='.exe'
     fi  
 
-    env GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 go build -mod=vendor -x -ldflags="-X main.Version=$VERSION" -o $destination/$output_name $package
+    env GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 GO111MODULE=on \
+        go build -mod=vendor -x \
+                -ldflags="-X main.Version=$VERSION" \
+                -o $destination/$output_name $package
     if [ $? -ne 0 ]; then
         echo 'An error has occurred! Aborting the script execution...'
         exit 1
