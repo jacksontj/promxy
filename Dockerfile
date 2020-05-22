@@ -4,7 +4,7 @@ COPY . /go/src/github.com/jacksontj/promxy
 RUN cd /go/src/github.com/jacksontj/promxy/cmd/promxy && CGO_ENABLED=0 go build
 RUN cd /go/src/github.com/jacksontj/promxy/cmd/remote_write_exporter && CGO_ENABLED=0 go build
 
-FROM scratch
+FROM alpine:3.11.6
 MAINTAINER Thomas Jackson <jacksontj.89@gmail.com>
 EXPOSE     8082
 
