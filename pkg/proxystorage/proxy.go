@@ -457,6 +457,46 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *promql.EvalStmt, nod
 		logrus.Debugf("call %v %v", n, n.Type())
 		removeOffset()
 
+		switch n.Func.Name {
+		case "max_over_time":
+			fmt.Println("max_over_time!!!")
+			for i, arg := range n.Args {
+				switch argTyped := arg.(type) {
+				case *promql.MatrixSelector:
+					fmt.Println("art name", argTyped.Name)
+					aggExpr := &promql.AggregateExpr{
+						Op: promql.ItemMax,
+						Expr: &promql.VectorSelector{
+							Name:          argTyped.Name,
+							Offset:        argTyped.Offset,
+							LabelMatchers: argTyped.LabelMatchers,
+						},
+					}
+
+					result, warnings, err := state.client.QueryRange(ctx, aggExpr.String(), v1.Range{
+						Start: s.Start.Add(-argTyped.Offset),
+						End:   s.End.Add(-argTyped.Offset),
+						Step:  argTyped.Range / 10,
+					})
+
+					if err != nil {
+						panic(err)
+					}
+
+					iterators := promclient.IteratorsForValue(result)
+
+					series := make([]storage.Series, len(iterators))
+					for i, iterator := range iterators {
+						series[i] = &proxyquerier.Series{iterator}
+					}
+
+					argTyped.SetSeries(series, promhttputil.WarningsConvert(warnings))
+					n.Args[i] = argTyped
+				}
+			}
+			return n, nil
+		}
+
 		var result model.Value
 		var warnings api.Warnings
 		var err error
