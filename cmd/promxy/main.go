@@ -26,7 +26,6 @@ import (
 	"crypto/md5"
 
 	kitlog "github.com/go-kit/kit/log"
-	kitloglogrus "github.com/go-kit/kit/log/logrus"
 	"github.com/jessevdk/go-flags"
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus"
@@ -163,11 +162,11 @@ func main() {
 
 	// Above level 6, the k8s client would log bearer tokens in clear-text.
 	glog.ClampLevel(6)
-	glog.SetLogger(kitloglogrus.NewLogrusLogger(logrus.WithField("component", "k8s_client_runtime").Logger))
+	glog.SetLogger(logging.NewLogger(logrus.WithField("component", "k8s_client_runtime").Logger))
 
 	// Above level 6, the k8s client would log bearer tokens in clear-text.
 	klog.ClampLevel(6)
-	klog.SetLogger(kitloglogrus.NewLogrusLogger(logrus.WithField("component", "k8s_client_runtime").Logger))
+	klog.SetLogger(logging.NewLogger(logrus.WithField("component", "k8s_client_runtime").Logger))
 
 	// Create base context for this daemon
 	ctx, cancel := context.WithCancel(context.Background())
