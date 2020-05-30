@@ -39,8 +39,15 @@ type proxyStorageState struct {
 
 // Ready blocks until all servergroups are ready
 func (p *proxyStorageState) Ready() {
-	for _, sg := range p.sgs {
-		<-sg.Ready
+	for i, sg := range p.sgs {
+		select {
+		case <-time.After(time.Second * 5):
+			logrus.Debugf("Servergroup %d taking a long time to be Ready (still waiting)", i)
+			<-sg.Ready
+		case <-sg.Ready:
+			continue
+		}
+
 	}
 }
 
