@@ -251,7 +251,6 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 		MaxIdleConnsPerHost: 1000, // see https://github.com/golang/go/issues/13801
 		DisableKeepAlives:   false,
 		TLSClientConfig:     tlsConfig,
-		DisableCompression:  true,
 		// 5 minutes is typically above the maximum sane scrape interval. So we can
 		// use keepalive for all configurations.
 		IdleConnTimeout: 5 * time.Minute,
