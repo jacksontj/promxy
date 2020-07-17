@@ -67,6 +67,7 @@ type cliOpts struct {
 	BindAddr   string `long:"bind-addr" description:"address for promxy to listen on" default:":8082"`
 	ConfigFile string `long:"config" description:"path to the config file" default:"config.yaml"`
 	LogLevel   string `long:"log-level" description:"Log level" default:"info"`
+	LogFormat   string `long:"log-format" description:"Log format(text|json)" default:"text"`
 
 	WebReadTimeout time.Duration `long:"web.read-timeout" description:"Maximum duration before timing out read of the request, and closing idle connections." default:"5m"`
 
@@ -154,10 +155,16 @@ func main() {
 	}
 	logrus.SetLevel(level)
 
-	// Set the log format to have a reasonable timestamp
-	formatter := &logrus.TextFormatter{
-		FullTimestamp: true,
+	var formatter logrus.Formatter
+	if opts.LogFormat == "json" {
+		formatter = &logrus.JSONFormatter{}
+	} else {
+		// Set the log format to have a reasonable timestamp
+		formatter = &logrus.TextFormatter{
+			FullTimestamp: true,
+		}
 	}
+
 	logrus.SetFormatter(formatter)
 
 	// Above level 6, the k8s client would log bearer tokens in clear-text.
