@@ -67,7 +67,7 @@ type cliOpts struct {
 	BindAddr   string `long:"bind-addr" description:"address for promxy to listen on" default:":8082"`
 	ConfigFile string `long:"config" description:"path to the config file" default:"config.yaml"`
 	LogLevel   string `long:"log-level" description:"Log level" default:"info"`
-	LogFormat   string `long:"log-format" description:"Log format(text|json)" default:"text"`
+	LogFormat  string `long:"log-format" description:"Log format(text|json)" default:"text"`
 
 	WebReadTimeout time.Duration `long:"web.read-timeout" description:"Maximum duration before timing out read of the request, and closing idle connections." default:"5m"`
 
