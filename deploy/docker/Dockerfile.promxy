@@ -1,0 +1,1 @@
+FROM quay.io/jacksontj/promxy
