@@ -156,9 +156,10 @@ func main() {
 	logrus.SetLevel(level)
 
 	var formatter logrus.Formatter
-	if opts.LogFormat == "json" {
+	switch opts.LogFormat {
+	case "json":
 		formatter = &logrus.JSONFormatter{}
-	} else {
+	default:
 		// Set the log format to have a reasonable timestamp
 		formatter = &logrus.TextFormatter{
 			FullTimestamp: true,
