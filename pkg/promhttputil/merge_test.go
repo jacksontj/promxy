@@ -509,6 +509,64 @@ func TestMergeValues(t *testing.T) {
 			}),
 			antiAffinity: model.Time(2),
 		},
+
+		{
+			name: "Matrix merge empty A",
+			a: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{},
+				},
+			}),
+			b: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{{
+						model.Time(100),
+						model.SampleValue(10),
+					}},
+				},
+			}),
+			r: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{{
+						model.Time(100),
+						model.SampleValue(10),
+					}},
+				},
+			}),
+			antiAffinity: model.Time(2),
+		},
+
+		{
+			name: "Matrix merge empty A",
+			a: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{{
+						model.Time(100),
+						model.SampleValue(10),
+					}},
+				},
+			}),
+			b: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{},
+				},
+			}),
+			r: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{{
+						model.Time(100),
+						model.SampleValue(10),
+					}},
+				},
+			}),
+			antiAffinity: model.Time(2),
+		},
 	}
 
 	for _, test := range tests {

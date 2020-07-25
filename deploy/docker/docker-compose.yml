@@ -1,0 +1,55 @@
+version: '2.0'
+services:
+  promxy:
+    container_name: promxy
+    image: quay.io/jacksontj/promxy
+    hostname: promxy
+    build:
+      context: .
+      dockerfile: Dockerfile.promxy
+    ports:
+    - "8082:8082"
+    volumes:
+    - ./../../cmd:/cmd
+    - logvolume01:/var/log
+    command:
+      - --config=/cmd/promxy/config.yaml
+      - --log-level=info
+      - --web.enable-lifecycle
+    networks:
+      - vm_net
+  victoriametrics:
+    container_name: victoriametrics
+    image: victoriametrics/victoria-metrics
+    ports:
+      - 8428:8428
+      - 2003:2003
+      - 4242:4242
+    volumes:
+      - vmdata:/storage
+    command:
+      - '--storageDataPath=/storage'
+      - '--graphiteListenAddr=:2003'
+      - '--opentsdbListenAddr=:4242'
+      - '--httpListenAddr=:8428'
+    networks:
+      - vm_net
+    restart: always
+  alertmanager:
+    container_name: alertmanager
+    image: prom/alertmanager
+    volumes:
+      - ./../../cmd:/cmd
+      - ./data/alertmanager:/data
+    command:
+      - '--config.file=/cmd/promxy/alertmanager.yml'
+      - '--storage.path=/data'
+    ports:
+      - 9093:9093
+    networks:
+      - vm_net
+volumes:
+  logvolume01: {}
+  vmdata: {}
+networks:
+  vm_net:

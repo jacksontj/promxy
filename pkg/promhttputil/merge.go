@@ -181,6 +181,13 @@ func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream) 
 		return nil, fmt.Errorf("cannot merge mismatch fingerprints")
 	}
 
+	// if either set of values are empty, return the one with data
+	if len(a.Values) == 0 {
+		return b, nil
+	} else if len(b.Values) == 0 {
+		return a, nil
+	}
+
 	// TODO: really there should be a library method for this in prometheus IMO
 	// At this point we have 2 sorted lists of datapoints which we need to merge
 	newValues := make([]model.SamplePair, 0, len(a.Values))
