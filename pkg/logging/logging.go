@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -63,22 +64,31 @@ func FormPrefix(form url.Values) string {
 const ApacheFormatPattern = "%s - - [%s] \"%s %d %d\" %f %s\n"
 
 type ApacheLogRecord struct {
-	http.ResponseWriter
+	http.ResponseWriter `json:"-"`
 
-	IP                    string
-	Time                  time.Time
-	Method, URI, Protocol string
-	Status                int
-	ResponseBytes         int64
-	ElapsedTime           time.Duration
-	FormPrefix            string
+	IP            string    `json:"remoteAddr,omitempty"`
+	Time          time.Time `json:"time,omitempty"`
+	Method        string    `json:"method,omitempty"`
+	URI           string    `json:"path,omitempty"`
+	Protocol      string    `json:"protocol,omitempty"`
+	Status        int       `json:"status,omitempty"`
+	ResponseBytes int64     `json:"responseBytes,omitempty"`
+	ElapsedTime   float64   `json:"duration,omitempty"`
+	FormPrefix    string    `json:"query,omitempty"`
 }
 
 func (r *ApacheLogRecord) Log(out io.Writer) {
 	timeFormatted := r.Time.Format("02/Jan/2006 15:04:05")
 	requestLine := fmt.Sprintf("%s %s %s", r.Method, r.URI, r.Protocol)
 	fmt.Fprintf(out, ApacheFormatPattern, r.IP, timeFormatted, requestLine, r.Status, r.ResponseBytes,
-		r.ElapsedTime.Seconds(), r.FormPrefix)
+		r.ElapsedTime, r.FormPrefix)
+}
+
+func (r *ApacheLogRecord) LogJson(out io.Writer) {
+	data, err := json.Marshal(r)
+	if err == nil {
+		out.Write(append(data, byte(10)))
+	}
 }
 
 func (r *ApacheLogRecord) Write(p []byte) (int, error) {
@@ -97,6 +107,12 @@ type LogRecordHandler func(*ApacheLogRecord)
 func LogToWriter(out io.Writer) LogRecordHandler {
 	return func(l *ApacheLogRecord) {
 		l.Log(out)
+	}
+}
+
+func LogJsonToWriter(out io.Writer) LogRecordHandler {
+	return func(l *ApacheLogRecord) {
+		l.LogJson(out)
 	}
 }
 
@@ -151,7 +167,7 @@ func (h *ApacheLoggingHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request
 	finishTime := time.Now()
 
 	record.Time = finishTime.UTC()
-	record.ElapsedTime = finishTime.Sub(startTime)
+	record.ElapsedTime = finishTime.Sub(startTime).Seconds()
 
 	for _, logHandler := range h.logHandlers {
 		logHandler(record)

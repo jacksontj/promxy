@@ -392,7 +392,12 @@ func main() {
 	if accessLogOut == nil {
 		handler = r
 	} else {
-		handler = logging.NewApacheLoggingHandler(r, logging.LogToWriter(accessLogOut))
+		switch opts.LogFormat {
+		case "json":
+			handler = logging.NewApacheLoggingHandler(r, logging.LogJsonToWriter(accessLogOut))
+		default:
+			handler = logging.NewApacheLoggingHandler(r, logging.LogToWriter(accessLogOut))
+		}
 	}
 
 	srv := &http.Server{
