@@ -33,4 +33,5 @@ do
     fi
 done
 
-sha256sum $destination/*$VERSION* > $destination/SHA256SUMS
+cd $destination
+sha256sum *$VERSION* > SHA256SUMS
