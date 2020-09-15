@@ -568,7 +568,7 @@ func TestMergeValues(t *testing.T) {
 			antiAffinity: model.Time(2),
 		},
 
-        // Matrix A has hole which B can fill
+		// Matrix A has hole which B can fill
 		{
 			name: "Matrix A has hole which B can fill",
 			a: model.Matrix([]*model.SampleStream{
@@ -653,13 +653,15 @@ func TestMergeValues(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result, err := MergeValues(test.antiAffinity, test.a, test.b)
-		if err != test.err {
-			t.Fatalf("mismatch err in %s expected=%v actual=%v", test.name, test.err, err)
-		}
-		if !reflect.DeepEqual(result, test.r) {
-			t.Fatalf("mismatch in %s \nexpected=%v\nactual=%v", test.name, test.r, result)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			result, err := MergeValues(test.antiAffinity, test.a, test.b)
+			if err != test.err {
+				t.Fatalf("mismatch err in %s expected=%v actual=%v", test.name, test.err, err)
+			}
+			if !reflect.DeepEqual(result, test.r) {
+				t.Fatalf("mismatch in %s \nexpected=%v\nactual=%v", test.name, test.r, result)
+			}
+		})
 	}
 
 }
