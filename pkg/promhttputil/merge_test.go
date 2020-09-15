@@ -540,7 +540,7 @@ func TestMergeValues(t *testing.T) {
 		},
 
 		{
-			name: "Matrix merge empty A",
+			name: "Matrix merge empty B",
 			a: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
@@ -563,6 +563,89 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+				},
+			}),
+			antiAffinity: model.Time(2),
+		},
+
+        // Matrix A has hole which B can fill
+		{
+			name: "Matrix A has hole which B can fill",
+			a: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(1),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(6),
+							model.SampleValue(10),
+						},
+					},
+				},
+			}),
+			b: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(1),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(2),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(3),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(4),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(5),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(6),
+							model.SampleValue(10),
+						},
+					},
+				},
+			}),
+			r: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(1),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(2),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(3),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(4),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(5),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(6),
+							model.SampleValue(10),
+						},
+					},
 				},
 			}),
 			antiAffinity: model.Time(2),
