@@ -188,6 +188,21 @@ func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream) 
 		return a, nil
 	}
 
+	// If B has more points then we want to use that as the base for merging. This is important as
+	// the majority of time there are holes in the data a single downstream
+	// has a hole but the other has the data; in that case since we have the
+	// data in memory there is no reason to chose the "worse" data and merge
+	// from there.
+	// Note: This has the caveat that this is done on a per-merge basis; so if there
+	// are N servers and the first 2 return with holes they will be merged; but
+	// due to anti-affinity if there is any server with no hole it will always
+	// have more points than a merged series.
+	if len(b.Values) > len(a.Values) {
+		tmp := a
+		a = b
+		b = tmp
+	}
+
 	// TODO: really there should be a library method for this in prometheus IMO
 	// At this point we have 2 sorted lists of datapoints which we need to merge
 	newValues := make([]model.SamplePair, 0, len(a.Values))
