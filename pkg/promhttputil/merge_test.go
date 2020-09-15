@@ -416,10 +416,6 @@ func TestMergeValues(t *testing.T) {
 							model.Time(300),
 							model.SampleValue(10),
 						},
-						{
-							model.Time(500),
-							model.SampleValue(10),
-						},
 					},
 				},
 			}),
