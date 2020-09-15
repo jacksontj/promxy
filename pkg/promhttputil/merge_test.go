@@ -646,6 +646,84 @@ func TestMergeValues(t *testing.T) {
 			}),
 			antiAffinity: model.Time(2),
 		},
+
+		// TODO: better way to manage this.
+		// We have to leave the hole empty right now because we are leaving the anti-affinity
+		// gap between any points we'd merge in -- to avoid any clock drift issues.
+		// 1 hole in each series
+		{
+			name: "1 hole in each series",
+			a: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(10),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(20),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(50),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(60),
+							model.SampleValue(10),
+						},
+					},
+				},
+			}),
+			b: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(30),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(40),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(50),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(60),
+							model.SampleValue(10),
+						},
+					},
+				},
+			}),
+			r: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(10),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(20),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(50),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(60),
+							model.SampleValue(10),
+						},
+					},
+				},
+			}),
+			antiAffinity: model.Time(10),
+		},
 	}
 
 	for _, test := range tests {
