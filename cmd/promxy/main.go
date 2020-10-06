@@ -79,6 +79,8 @@ type cliOpts struct {
 	QueryMaxSamples     int           `long:"query.max-samples" description:"Maximum number of samples a single query can load into memory. Note that queries will fail if they would load more samples than this into memory, so this also limits the number of samples a query can return." default:"50000000"`
 	QueryLookbackDelta  time.Duration `long:"query.lookback-delta" description:"The maximum lookback duration for retrieving metrics during expression evaluations." default:"5m"`
 
+	RemoteReadMaxConcurrency int `long:"remote-read.max-concurrency" description:"Maximum number of concurrent remote read calls." default:"10"`
+
 	NotificationQueueCapacity int           `long:"alertmanager.notification-queue-capacity" description:"The capacity of the queue for pending alert manager notifications." default:"10000"`
 	AccessLogDestination      string        `long:"access-log-destination" description:"where to log access logs, options (none, stderr, stdout)" default:"stdout"`
 	ForOutageTolerance        time.Duration `long:"rules.alert.for-outage-tolerance" description:"Max time to tolerate prometheus outage for restoring for state of alert." default:"1h"`
@@ -316,6 +318,8 @@ func main() {
 		ScrapeManager: scrapeManager,
 		RuleManager:   ruleManager,
 		Notifier:      notifierManager,
+
+		RemoteReadConcurrencyLimit: opts.RemoteReadMaxConcurrency,
 
 		EnableLifecycle: opts.EnableLifecycle,
 
