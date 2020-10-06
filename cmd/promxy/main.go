@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"path"
+	"regexp"
 
 	"k8s.io/klog"
 
@@ -38,6 +39,7 @@ import (
 	"github.com/prometheus/prometheus/discovery"
 	sd_config "github.com/prometheus/prometheus/discovery/config"
 	"github.com/prometheus/prometheus/notifier"
+	"github.com/prometheus/prometheus/pkg/relabel"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/scrape"
@@ -69,7 +71,8 @@ type cliOpts struct {
 	LogLevel   string `long:"log-level" description:"Log level" default:"info"`
 	LogFormat  string `long:"log-format" description:"Log format(text|json)" default:"text"`
 
-	WebReadTimeout time.Duration `long:"web.read-timeout" description:"Maximum duration before timing out read of the request, and closing idle connections." default:"5m"`
+	WebCORSOriginRegex string        `long:"web.cors.origin" description:"Regex for CORS origin. It is fully anchored." default:".*"`
+	WebReadTimeout     time.Duration `long:"web.read-timeout" description:"Maximum duration before timing out read of the request, and closing idle connections." default:"5m"`
 
 	ExternalURL     string `long:"web.external-url" description:"The URL under which Prometheus is externally reachable (for example, if Prometheus is served via a reverse proxy). Used for generating relative and absolute links back to Prometheus itself. If the URL has a path portion, it will be used to prefix all HTTP endpoints served by Prometheus. If omitted, relevant URL components will be derived automatically."`
 	EnableLifecycle bool   `long:"web.enable-lifecycle" description:"Enable shutdown and reload via HTTP request."`
@@ -336,6 +339,11 @@ func main() {
 		},
 	}
 
+	webOptions.CORSOrigin, err = compileCORSRegexString(opts.WebCORSOriginRegex)
+	if err != nil {
+		logrus.Fatalf("Erorr parsing CORS regex: %v", err)
+	}
+
 	if externalUrl != nil && externalUrl.Path != "" {
 		webOptions.RoutePrefix = externalUrl.Path
 	}
@@ -531,4 +539,13 @@ func computeExternalURL(u, listenAddr string) (*url.URL, error) {
 	eu.Path = ppref
 
 	return eu, nil
+}
+
+// compileCORSRegexString compiles given string and adds anchors
+func compileCORSRegexString(s string) (*regexp.Regexp, error) {
+	r, err := relabel.NewRegexp(s)
+	if err != nil {
+		return nil, err
+	}
+	return r.Regexp, nil
 }
