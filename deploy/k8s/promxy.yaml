@@ -61,6 +61,24 @@ spec:
         image: 127.0.0.1:32000/promxy:latest
         imagePullPolicy: Always
         name: promxy
+        livenessProbe:
+          failureThreshold: 6
+          httpGet:
+            path: /-/healthy
+            port: web
+            scheme: HTTP
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+        readinessProbe:
+          failureThreshold: 120
+          httpGet:
+            path: /-/ready
+            port: web
+            scheme: HTTP
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
         ports:
         - containerPort: 8082
         volumeMounts:
