@@ -16,6 +16,7 @@ var (
 		AntiAffinity:   time.Second * 10,
 		Scheme:         "http",
 		RemoteReadPath: "api/v1/read",
+		Timeout:        0,
 		HTTPConfig: HTTPClientConfig{
 			DialTimeout: time.Millisecond * 200, // Default dial timeout of 200ms
 		},
@@ -101,6 +102,12 @@ type Config struct {
 	// any one of these can cause the resulting data in prometheus to have the same time but in reality
 	// come from different points in time. Best practice for this value is to set it to your scrape interval
 	AntiAffinity time.Duration `yaml:"anti_affinity,omitempty"`
+
+	// Timeout, if non-zero, specifies the amount of
+	// time to wait for a server's response headers after fully
+	// writing the request (including its body, if any). This
+	// time does not include the time to read the response body.
+	Timeout time.Duration `yaml:"timeout,omitempty"`
 
 	// IgnoreError will hide all errors from this given servergroup effectively making
 	// the responses from this servergroup "not required" for the result.

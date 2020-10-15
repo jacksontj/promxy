@@ -83,7 +83,7 @@ type ServerGroup struct {
 
 	// TODO: lock/atomics on cfg and client
 	Cfg           *Config
-	Client        *http.Client
+	client        *http.Client
 	targetManager *discovery.Manager
 
 	OriginalURLs []string
@@ -143,7 +143,7 @@ SYNC_LOOP:
 					}
 					targets = append(targets, u.Host)
 
-					client, err := api.NewClient(api.Config{Address: u.String(), RoundTripper: s.Client.Transport})
+					client, err := api.NewClient(api.Config{Address: u.String(), RoundTripper: s.client.Transport})
 					if err != nil {
 						panic(err) // TODO: shouldn't be possible? If this happens I guess we log and skip?
 					}
@@ -253,8 +253,9 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 		TLSClientConfig:     tlsConfig,
 		// 5 minutes is typically above the maximum sane scrape interval. So we can
 		// use keepalive for all configurations.
-		IdleConnTimeout: 5 * time.Minute,
-		DialContext:     (&net.Dialer{Timeout: cfg.HTTPConfig.DialTimeout}).DialContext,
+		IdleConnTimeout:       5 * time.Minute,
+		DialContext:           (&net.Dialer{Timeout: cfg.HTTPConfig.DialTimeout}).DialContext,
+		ResponseHeaderTimeout: cfg.Timeout,
 	}
 
 	// If a bearer token is provided, create a round tripper that will set the
@@ -269,7 +270,7 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 		rt = config_util.NewBasicAuthRoundTripper(cfg.HTTPConfig.HTTPConfig.BasicAuth.Username, cfg.HTTPConfig.HTTPConfig.BasicAuth.Password, cfg.HTTPConfig.HTTPConfig.BasicAuth.PasswordFile, rt)
 	}
 
-	s.Client = &http.Client{Transport: rt}
+	s.client = &http.Client{Transport: rt}
 
 	if err := s.targetManager.ApplyConfig(map[string]sd_config.ServiceDiscoveryConfig{"foo": cfg.Hosts}); err != nil {
 		return err
