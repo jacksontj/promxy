@@ -13,7 +13,7 @@ cache:
     - $HOME/gopath/pkg/mod
 
 go:
-  - "1.12.x"
+  - "1.15.x"
 
 # only build commits/PRs targeted to the master branch
 # this avoids duplicate builds for push + PR
@@ -21,10 +21,9 @@ branches:
   only:
     - master
 
-# have an empty install to avoid travis doing a go get
 install:
-  - go get golang.org/x/tools/cmd/goimports
-  - go get honnef.co/go/tools/cmd/staticcheck
+  - GO111MODULE=off go get golang.org/x/tools/cmd/goimports
+  - GO111MODULE=off go get honnef.co/go/tools/cmd/staticcheck
 
 script:
   - make fmt && git diff --exit-code
