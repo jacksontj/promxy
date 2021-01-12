@@ -81,6 +81,7 @@ spec:
           timeoutSeconds: 3
         ports:
         - containerPort: 8082
+          name: web
         volumeMounts:
         - mountPath: "/etc/promxy/"
           name: promxy-config
