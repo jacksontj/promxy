@@ -109,7 +109,8 @@ SYNC_LOOP:
 		for _, targetGroupList := range targetGroupMap {
 			for _, targetGroup := range targetGroupList {
 				for _, target := range targetGroup.Targets {
-					lbls := make([]labels.Label, 0, len(target)+len(targetGroup.Labels))
+
+					lbls := make([]labels.Label, 0, len(target)+len(targetGroup.Labels)+2)
 
 					for ln, lv := range target {
 						lbls = append(lbls, labels.Label{Name: string(ln), Value: string(lv)})
@@ -121,7 +122,11 @@ SYNC_LOOP:
 						}
 					}
 
+					lbls = append(lbls, labels.Label{Name: model.SchemeLabel, Value: string(s.Cfg.Scheme)})
+					lbls = append(lbls, labels.Label{Name: PathPrefixLabel, Value: string(s.Cfg.PathPrefix)})
+
 					lset := labels.New(lbls...)
+
 					logrus.Tracef("Potential target pre-relabel: %v", lset)
 					lset = relabel.Process(lset, s.Cfg.RelabelConfigs...)
 					logrus.Tracef("Potential target post-relabel: %v", lset)
@@ -137,10 +142,11 @@ SYNC_LOOP:
 					}
 
 					u := &url.URL{
-						Scheme: string(s.Cfg.GetScheme()),
-						Host:   string(lset.Get(model.AddressLabel)),
-						Path:   s.Cfg.PathPrefix,
+						Scheme: lset.Get(model.SchemeLabel),
+						Host:   lset.Get(model.AddressLabel),
+						Path:   lset.Get(PathPrefixLabel),
 					}
+
 					targets = append(targets, u.Host)
 
 					client, err := api.NewClient(api.Config{Address: u.String(), RoundTripper: s.client.Transport})

@@ -23,6 +23,11 @@ var (
 	}
 )
 
+const (
+	// PathPrefixLabel is the name of the label that holds the path prefix for a scrape target.
+	PathPrefixLabel = "__path_prefix__"
+)
+
 // Config is the configuration for a ServerGroup that promxy will talk to.
 // This is where the vast majority of options exist.
 type Config struct {

@@ -45,6 +45,7 @@ promxy:
       # configures the path to send remote read requests to. The default is "api/v1/read"
       remote_read_path: api/v1/read
       # path_prefix defines a prefix to prepend to all queries to hosts in this servergroup
+      # This can be relabeled using __path_prefix__
       path_prefix: /example/prefix
       # query_params adds the following map of query parameters to downstream requests.
       # The initial use-case for this is to add `nocache=1` to VictoriaMetrics downstreams
