@@ -161,7 +161,7 @@ SYNC_LOOP:
 							URL: &config_util.URL{u},
 							// TODO: from context?
 							HTTPClientConfig: s.Cfg.HTTPConfig.HTTPConfig,
-							Timeout: model.Duration(time.Minute * 2),
+							Timeout:          model.Duration(time.Minute * 2),
 						}
 						remoteStorageClient, err := remote.NewClient(1, cfg)
 						if err != nil {
