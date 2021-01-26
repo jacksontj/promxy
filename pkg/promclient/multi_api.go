@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -108,13 +107,13 @@ func (m *MultiAPI) recordMetric(i int, api, status string, took float64) {
 }
 
 // LabelValues performs a query for the values of the given label.
-func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, api.Warnings, error) {
+func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
 
 	type chanResult struct {
 		v        model.LabelValues
-		warnings api.Warnings
+		warnings v1.Warnings
 		err      error
 		ls       model.Fingerprint
 	}
@@ -186,13 +185,13 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (m *MultiAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, error) {
+func (m *MultiAPI) LabelNames(ctx context.Context) ([]string, v1.Warnings, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
 
 	type chanResult struct {
 		v        []string
-		warnings api.Warnings
+		warnings v1.Warnings
 		err      error
 		ls       model.Fingerprint
 	}
@@ -267,13 +266,13 @@ func (m *MultiAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, erro
 }
 
 // Query performs a query for the given time.
-func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, api.Warnings, error) {
+func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
 
 	type chanResult struct {
 		v        model.Value
-		warnings api.Warnings
+		warnings v1.Warnings
 		err      error
 		ls       model.Fingerprint
 	}
@@ -347,13 +346,13 @@ func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model
 }
 
 // QueryRange performs a query for the given range.
-func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, api.Warnings, error) {
+func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
 
 	type chanResult struct {
 		v        model.Value
-		warnings api.Warnings
+		warnings v1.Warnings
 		err      error
 		ls       model.Fingerprint
 	}
@@ -427,13 +426,13 @@ func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 }
 
 // Series finds series by label matchers.
-func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, api.Warnings, error) {
+func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
 
 	type chanResult struct {
 		v        []model.LabelSet
-		warnings api.Warnings
+		warnings v1.Warnings
 		err      error
 		ls       model.Fingerprint
 	}
@@ -503,13 +502,13 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 }
 
 // GetValue fetches a `model.Value` which represents the actual collected data
-func (m *MultiAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, api.Warnings, error) {
+func (m *MultiAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
 
 	type chanResult struct {
 		v        model.Value
-		warnings api.Warnings
+		warnings v1.Warnings
 		err      error
 		ls       model.Fingerprint
 	}

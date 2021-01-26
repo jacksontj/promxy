@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/promql/parser"
 )
 
 // NewMultiVisitor takes a set of visitors and returns a MultiVisitor
-func NewMultiVisitor(visitors []promql.Visitor) *MultiVisitor {
+func NewMultiVisitor(visitors []parser.Visitor) *MultiVisitor {
 	return &MultiVisitor{
 		visitors: visitors,
 	}
@@ -18,11 +18,11 @@ func NewMultiVisitor(visitors []promql.Visitor) *MultiVisitor {
 // MultiVisitor runs a set of visitors on the same pass over the node tree
 type MultiVisitor struct {
 	l        sync.Mutex
-	visitors []promql.Visitor
+	visitors []parser.Visitor
 }
 
 // Visit runs on each node in the tree
-func (v *MultiVisitor) Visit(node promql.Node, path []promql.Node) (promql.Visitor, error) {
+func (v *MultiVisitor) Visit(node parser.Node, path []parser.Node) (parser.Visitor, error) {
 	var visitorErr error
 	v.l.Lock()
 	defer v.l.Unlock()
@@ -50,21 +50,11 @@ type OffsetFinder struct {
 }
 
 // Visit runs on each node in the tree
-func (o *OffsetFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor, error) {
+func (o *OffsetFinder) Visit(node parser.Node, _ []parser.Node) (parser.Visitor, error) {
 	o.l.Lock()
 	defer o.l.Unlock()
 	switch n := node.(type) {
-	case *promql.VectorSelector:
-		if !o.Found {
-			o.Offset = n.Offset
-			o.Found = true
-		} else {
-			if n.Offset != o.Offset {
-				o.Error = fmt.Errorf("mismatched offsets %v %v", n.Offset, o.Offset)
-			}
-		}
-
-	case *promql.MatrixSelector:
+	case *parser.VectorSelector:
 		if !o.Found {
 			o.Offset = n.Offset
 			o.Found = true
@@ -74,6 +64,7 @@ func (o *OffsetFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor,
 			}
 		}
 	}
+
 	if o.Error == nil {
 		return o, nil
 	}
@@ -85,25 +76,22 @@ func (o *OffsetFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor,
 type OffsetRemover struct{}
 
 // Visit runs on each node in the tree
-func (o *OffsetRemover) Visit(node promql.Node, _ []promql.Node) (promql.Visitor, error) {
+func (o *OffsetRemover) Visit(node parser.Node, _ []parser.Node) (parser.Visitor, error) {
 	switch n := node.(type) {
-	case *promql.VectorSelector:
-		n.Offset = 0
-
-	case *promql.MatrixSelector:
+	case *parser.VectorSelector:
 		n.Offset = 0
 	}
 	return o, nil
 }
 
-// BooleanFinder uses the given func to determine if something is in there or notret := &promql.VectorSelector{Offset: offset}
+// BooleanFinder uses the given func to determine if something is in there or notret := &parser.VectorSelector{Offset: offset}
 type BooleanFinder struct {
-	Func  func(promql.Node) bool
+	Func  func(parser.Node) bool
 	Found int
 }
 
 // Visit runs on each node in the tree
-func (f *BooleanFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor, error) {
+func (f *BooleanFinder) Visit(node parser.Node, _ []parser.Node) (parser.Visitor, error) {
 	if f.Func(node) {
 		f.Found++
 		return f, nil
@@ -111,13 +99,13 @@ func (f *BooleanFinder) Visit(node promql.Node, _ []promql.Node) (promql.Visitor
 	return f, nil
 }
 
-func CloneExpr(expr promql.Expr) (newExpr promql.Expr) {
-	newExpr, _ = promql.ParseExpr(expr.String())
+func CloneExpr(expr parser.Expr) (newExpr parser.Expr) {
+	newExpr, _ = parser.ParseExpr(expr.String())
 	return
 }
 
 // PreserveLabel wraps the input expression with a label replace in order to preserve the metadata through binary expressions
-func PreserveLabel(expr promql.Expr, srcLabel string, dstLabel string) (relabelExpress promql.Expr) {
-	relabelExpress, _ = promql.ParseExpr(fmt.Sprintf("label_replace(%s,`%s`,`$1`,`%s`,`(.*)`)", expr.String(), dstLabel, srcLabel))
+func PreserveLabel(expr parser.Expr, srcLabel string, dstLabel string) (relabelExpress parser.Expr) {
+	relabelExpress, _ = parser.ParseExpr(fmt.Sprintf("label_replace(%s,`%s`,`$1`,`%s`,`(.*)`)", expr.String(), dstLabel, srcLabel))
 	return relabelExpress
 }

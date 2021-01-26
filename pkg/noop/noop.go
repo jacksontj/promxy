@@ -25,13 +25,18 @@ func (n *noopStorage) StartTime() (int64, error) {
 }
 
 // Appender returns a new appender against the storage.
-func (n *noopStorage) Appender() (storage.Appender, error) {
-	return NewNoopAppender(), nil
+func (n *noopStorage) Appender(_ context.Context) storage.Appender {
+	return NewNoopAppender()
 }
 
 // Close closes the storage and all its underlying resources.
 func (n *noopStorage) Close() error {
 	return nil
+}
+
+// TODO: never work? We aren't a tsdb storage
+func (n *noopStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (storage.ChunkQuerier, error) {
+	return nil, nil
 }
 
 type noopAppender struct{}
@@ -45,7 +50,7 @@ func (a *noopAppender) Add(l labels.Labels, t int64, v float64) (uint64, error) 
 	return 0, nil
 }
 
-func (a *noopAppender) AddFast(l labels.Labels, ref uint64, t int64, v float64) error {
+func (a *noopAppender) AddFast(ref uint64, t int64, v float64) error {
 	return nil
 }
 

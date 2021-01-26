@@ -6,7 +6,8 @@ import (
 
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
-	sd_config "github.com/prometheus/prometheus/discovery/config"
+
+	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/pkg/relabel"
 )
 
@@ -87,9 +88,9 @@ type Config struct {
 	// So in reality its "the same", the difference is in prometheus these apply to the labels/targets of a scrape job,
 	// in promxy they apply to the prometheus hosts in the servergroup - but the behavior is the same.
 	RelabelConfigs []*relabel.Config `yaml:"relabel_configs,omitempty"`
-	// Hosts is a set of ServiceDiscoveryConfig options that allow promxy to discover
+	// ServiceDiscoveryConfigs is a set of ServiceDiscoveryConfig options that allow promxy to discover
 	// all hosts in the server_group
-	Hosts sd_config.ServiceDiscoveryConfig `yaml:",inline"`
+	ServiceDiscoveryConfigs discovery.Configs `yaml:"-"`
 	// PathPrefix to prepend to all queries to hosts in this servergroup
 	PathPrefix string `yaml:"path_prefix"`
 	// QueryParams are a map of query params to add to all HTTP calls made to this downstream
@@ -122,12 +123,12 @@ type Config struct {
 	// RelativeTimeRangeConfig defines a relative time range that this servergroup will respond to
 	// An example use-case would be if a specific servergroup was long-term storage, it might only
 	// have data 3d old and retain 90d of data.
-	*RelativeTimeRangeConfig `yaml:"relative_time_range"`
+	RelativeTimeRangeConfig *RelativeTimeRangeConfig `yaml:"relative_time_range"`
 
 	// AbsoluteTimeRangeConfig defines an absolute time range that this servergroup will respond to
 	// An example use-case would be if a specific servergroup was was "deprecated" and wasn't getting
 	// any new data after a specific given point in time
-	*AbsoluteTimeRangeConfig `yaml:"absolute_time_range"`
+	AbsoluteTimeRangeConfig *AbsoluteTimeRangeConfig `yaml:"absolute_time_range"`
 }
 
 // GetScheme returns the scheme for this servergroup
@@ -143,11 +144,12 @@ func (c *Config) GetAntiAffinity() model.Time {
 // UnmarshalYAML implements the yaml.Unmarshaler interface.
 func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	*c = DefaultConfig
-	// We want to set c to the defaults and then overwrite it with the input.
-	// To make unmarshal fill the plain data struct rather than calling UnmarshalYAML
-	// again, we have to hide it using a type indirection.
-	type plain Config
-	return unmarshal((*plain)(c))
+
+	if err := discovery.UnmarshalYAMLWithInlineConfigs(c, unmarshal); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // HTTPClientConfig extends prometheus' HTTPClientConfig

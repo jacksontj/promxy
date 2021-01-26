@@ -36,7 +36,9 @@ func NewVirtualMachineRunCommandsClient(subscriptionID string) VirtualMachineRun
 	return NewVirtualMachineRunCommandsClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewVirtualMachineRunCommandsClientWithBaseURI creates an instance of the VirtualMachineRunCommandsClient client.
+// NewVirtualMachineRunCommandsClientWithBaseURI creates an instance of the VirtualMachineRunCommandsClient client
+// using a custom endpoint.  Use this when interacting with an Azure cloud that uses a non-standard base URI (sovereign
+// clouds, Azure stack).
 func NewVirtualMachineRunCommandsClientWithBaseURI(baseURI string, subscriptionID string) VirtualMachineRunCommandsClient {
 	return VirtualMachineRunCommandsClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -78,6 +80,7 @@ func (client VirtualMachineRunCommandsClient) Get(ctx context.Context, location 
 	result, err = client.GetResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachineRunCommandsClient", "Get", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -107,8 +110,7 @@ func (client VirtualMachineRunCommandsClient) GetPreparer(ctx context.Context, l
 // GetSender sends the Get request. The method will close the
 // http.Response Body if it receives an error.
 func (client VirtualMachineRunCommandsClient) GetSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // GetResponder handles the response to the Get request. The method always
@@ -116,7 +118,6 @@ func (client VirtualMachineRunCommandsClient) GetSender(req *http.Request) (*htt
 func (client VirtualMachineRunCommandsClient) GetResponder(resp *http.Response) (result RunCommandDocument, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -161,6 +162,10 @@ func (client VirtualMachineRunCommandsClient) List(ctx context.Context, location
 	result.rclr, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachineRunCommandsClient", "List", resp, "Failure responding to request")
+		return
+	}
+	if result.rclr.hasNextLink() && result.rclr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -189,8 +194,7 @@ func (client VirtualMachineRunCommandsClient) ListPreparer(ctx context.Context, 
 // ListSender sends the List request. The method will close the
 // http.Response Body if it receives an error.
 func (client VirtualMachineRunCommandsClient) ListSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // ListResponder handles the response to the List request. The method always
@@ -198,7 +202,6 @@ func (client VirtualMachineRunCommandsClient) ListSender(req *http.Request) (*ht
 func (client VirtualMachineRunCommandsClient) ListResponder(resp *http.Response) (result RunCommandListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -223,6 +226,7 @@ func (client VirtualMachineRunCommandsClient) listNextResults(ctx context.Contex
 	result, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.VirtualMachineRunCommandsClient", "listNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }

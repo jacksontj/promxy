@@ -28,37 +28,46 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/go-kit/kit/log"
 	"github.com/pkg/errors"
-	config_util "github.com/prometheus/common/config"
+	"github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 
+	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/discovery/refresh"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/util/strutil"
 )
 
 const (
-	ec2Label                = model.MetaLabelPrefix + "ec2_"
-	ec2LabelAZ              = ec2Label + "availability_zone"
-	ec2LabelInstanceID      = ec2Label + "instance_id"
-	ec2LabelInstanceState   = ec2Label + "instance_state"
-	ec2LabelInstanceType    = ec2Label + "instance_type"
-	ec2LabelOwnerID         = ec2Label + "owner_id"
-	ec2LabelPlatform        = ec2Label + "platform"
-	ec2LabelPublicDNS       = ec2Label + "public_dns_name"
-	ec2LabelPublicIP        = ec2Label + "public_ip"
-	ec2LabelPrivateDNS      = ec2Label + "private_dns_name"
-	ec2LabelPrivateIP       = ec2Label + "private_ip"
-	ec2LabelPrimarySubnetID = ec2Label + "primary_subnet_id"
-	ec2LabelSubnetID        = ec2Label + "subnet_id"
-	ec2LabelTag             = ec2Label + "tag_"
-	ec2LabelVPCID           = ec2Label + "vpc_id"
-	subnetSeparator         = ","
+	ec2Label                  = model.MetaLabelPrefix + "ec2_"
+	ec2LabelAMI               = ec2Label + "ami"
+	ec2LabelAZ                = ec2Label + "availability_zone"
+	ec2LabelArch              = ec2Label + "architecture"
+	ec2LabelIPv6Addresses     = ec2Label + "ipv6_addresses"
+	ec2LabelInstanceID        = ec2Label + "instance_id"
+	ec2LabelInstanceLifecycle = ec2Label + "instance_lifecycle"
+	ec2LabelInstanceState     = ec2Label + "instance_state"
+	ec2LabelInstanceType      = ec2Label + "instance_type"
+	ec2LabelOwnerID           = ec2Label + "owner_id"
+	ec2LabelPlatform          = ec2Label + "platform"
+	ec2LabelPrimarySubnetID   = ec2Label + "primary_subnet_id"
+	ec2LabelPrivateDNS        = ec2Label + "private_dns_name"
+	ec2LabelPrivateIP         = ec2Label + "private_ip"
+	ec2LabelPublicDNS         = ec2Label + "public_dns_name"
+	ec2LabelPublicIP          = ec2Label + "public_ip"
+	ec2LabelSubnetID          = ec2Label + "subnet_id"
+	ec2LabelTag               = ec2Label + "tag_"
+	ec2LabelVPCID             = ec2Label + "vpc_id"
+	ec2LabelSeparator         = ","
 )
 
 // DefaultSDConfig is the default EC2 SD configuration.
 var DefaultSDConfig = SDConfig{
 	Port:            80,
 	RefreshInterval: model.Duration(60 * time.Second),
+}
+
+func init() {
+	discovery.RegisterConfig(&SDConfig{})
 }
 
 // Filter is the configuration for filtering EC2 instances.
@@ -69,15 +78,23 @@ type Filter struct {
 
 // SDConfig is the configuration for EC2 based service discovery.
 type SDConfig struct {
-	Endpoint        string             `yaml:"endpoint"`
-	Region          string             `yaml:"region"`
-	AccessKey       string             `yaml:"access_key,omitempty"`
-	SecretKey       config_util.Secret `yaml:"secret_key,omitempty"`
-	Profile         string             `yaml:"profile,omitempty"`
-	RoleARN         string             `yaml:"role_arn,omitempty"`
-	RefreshInterval model.Duration     `yaml:"refresh_interval,omitempty"`
-	Port            int                `yaml:"port"`
-	Filters         []*Filter          `yaml:"filters"`
+	Endpoint        string         `yaml:"endpoint"`
+	Region          string         `yaml:"region"`
+	AccessKey       string         `yaml:"access_key,omitempty"`
+	SecretKey       config.Secret  `yaml:"secret_key,omitempty"`
+	Profile         string         `yaml:"profile,omitempty"`
+	RoleARN         string         `yaml:"role_arn,omitempty"`
+	RefreshInterval model.Duration `yaml:"refresh_interval,omitempty"`
+	Port            int            `yaml:"port"`
+	Filters         []*Filter      `yaml:"filters"`
+}
+
+// Name returns the name of the Config.
+func (*SDConfig) Name() string { return "ec2" }
+
+// NewDiscoverer returns a Discoverer for the Config.
+func (c *SDConfig) NewDiscoverer(opts discovery.DiscovererOptions) (discovery.Discoverer, error) {
+	return NewDiscovery(c, opts.Logger), nil
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface.
@@ -112,12 +129,11 @@ func (c *SDConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // the Discoverer interface.
 type Discovery struct {
 	*refresh.Discovery
-	aws      *aws.Config
+	region   string
 	interval time.Duration
-	profile  string
-	roleARN  string
 	port     int
 	filters  []*Filter
+	ec2      *ec2.EC2
 }
 
 // NewDiscovery returns a new EC2Discovery which periodically refreshes its targets.
@@ -129,17 +145,33 @@ func NewDiscovery(conf *SDConfig, logger log.Logger) *Discovery {
 	if logger == nil {
 		logger = log.NewNopLogger()
 	}
-	d := &Discovery{
-		aws: &aws.Config{
+
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
 			Endpoint:    &conf.Endpoint,
 			Region:      &conf.Region,
 			Credentials: creds,
 		},
-		profile:  conf.Profile,
-		roleARN:  conf.RoleARN,
+		Profile: conf.Profile,
+	})
+	if err != nil {
+		return nil
+	}
+
+	var ec2s *ec2.EC2
+	if conf.RoleARN != "" {
+		creds := stscreds.NewCredentials(sess, conf.RoleARN)
+		ec2s = ec2.New(sess, &aws.Config{Credentials: creds})
+	} else {
+		ec2s = ec2.New(sess)
+	}
+
+	d := &Discovery{
+		region:   conf.Region,
 		filters:  conf.Filters,
 		interval: time.Duration(conf.RefreshInterval),
 		port:     conf.Port,
+		ec2:      ec2s,
 	}
 	d.Discovery = refresh.NewDiscovery(
 		logger,
@@ -151,23 +183,8 @@ func NewDiscovery(conf *SDConfig, logger log.Logger) *Discovery {
 }
 
 func (d *Discovery) refresh(ctx context.Context) ([]*targetgroup.Group, error) {
-	sess, err := session.NewSessionWithOptions(session.Options{
-		Config:  *d.aws,
-		Profile: d.profile,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "could not create aws session")
-	}
-
-	var ec2s *ec2.EC2
-	if d.roleARN != "" {
-		creds := stscreds.NewCredentials(sess, d.roleARN)
-		ec2s = ec2.New(sess, &aws.Config{Credentials: creds})
-	} else {
-		ec2s = ec2.New(sess)
-	}
 	tg := &targetgroup.Group{
-		Source: *d.aws.Region,
+		Source: d.region,
 	}
 
 	var filters []*ec2.Filter
@@ -180,7 +197,7 @@ func (d *Discovery) refresh(ctx context.Context) ([]*targetgroup.Group, error) {
 
 	input := &ec2.DescribeInstancesInput{Filters: filters}
 
-	if err = ec2s.DescribeInstancesPagesWithContext(ctx, input, func(p *ec2.DescribeInstancesOutput, lastPage bool) bool {
+	if err := d.ec2.DescribeInstancesPagesWithContext(ctx, input, func(p *ec2.DescribeInstancesOutput, lastPage bool) bool {
 		for _, r := range p.Reservations {
 			for _, inst := range r.Instances {
 				if inst.PrivateIpAddress == nil {
@@ -210,30 +227,50 @@ func (d *Discovery) refresh(ctx context.Context) ([]*targetgroup.Group, error) {
 					labels[ec2LabelPublicDNS] = model.LabelValue(*inst.PublicDnsName)
 				}
 
+				labels[ec2LabelAMI] = model.LabelValue(*inst.ImageId)
 				labels[ec2LabelAZ] = model.LabelValue(*inst.Placement.AvailabilityZone)
 				labels[ec2LabelInstanceState] = model.LabelValue(*inst.State.Name)
 				labels[ec2LabelInstanceType] = model.LabelValue(*inst.InstanceType)
+
+				if inst.InstanceLifecycle != nil {
+					labels[ec2LabelInstanceLifecycle] = model.LabelValue(*inst.InstanceLifecycle)
+				}
+
+				if inst.Architecture != nil {
+					labels[ec2LabelArch] = model.LabelValue(*inst.Architecture)
+				}
 
 				if inst.VpcId != nil {
 					labels[ec2LabelVPCID] = model.LabelValue(*inst.VpcId)
 					labels[ec2LabelPrimarySubnetID] = model.LabelValue(*inst.SubnetId)
 
-					// Deduplicate VPC Subnet IDs maintaining the order of the network interfaces returned by EC2.
 					var subnets []string
+					var ipv6addrs []string
 					subnetsMap := make(map[string]struct{})
 					for _, eni := range inst.NetworkInterfaces {
 						if eni.SubnetId == nil {
 							continue
 						}
+						// Deduplicate VPC Subnet IDs maintaining the order of the subnets returned by EC2.
 						if _, ok := subnetsMap[*eni.SubnetId]; !ok {
 							subnetsMap[*eni.SubnetId] = struct{}{}
 							subnets = append(subnets, *eni.SubnetId)
 						}
+
+						for _, ipv6addr := range eni.Ipv6Addresses {
+							ipv6addrs = append(ipv6addrs, *ipv6addr.Ipv6Address)
+						}
 					}
 					labels[ec2LabelSubnetID] = model.LabelValue(
-						subnetSeparator +
-							strings.Join(subnets, subnetSeparator) +
-							subnetSeparator)
+						ec2LabelSeparator +
+							strings.Join(subnets, ec2LabelSeparator) +
+							ec2LabelSeparator)
+					if len(ipv6addrs) > 0 {
+						labels[ec2LabelIPv6Addresses] = model.LabelValue(
+							ec2LabelSeparator +
+								strings.Join(ipv6addrs, ec2LabelSeparator) +
+								ec2LabelSeparator)
+					}
 				}
 
 				for _, t := range inst.Tags {

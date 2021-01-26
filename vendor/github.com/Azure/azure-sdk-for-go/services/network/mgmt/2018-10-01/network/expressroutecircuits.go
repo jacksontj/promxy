@@ -35,7 +35,9 @@ func NewExpressRouteCircuitsClient(subscriptionID string) ExpressRouteCircuitsCl
 	return NewExpressRouteCircuitsClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewExpressRouteCircuitsClientWithBaseURI creates an instance of the ExpressRouteCircuitsClient client.
+// NewExpressRouteCircuitsClientWithBaseURI creates an instance of the ExpressRouteCircuitsClient client using a custom
+// endpoint.  Use this when interacting with an Azure cloud that uses a non-standard base URI (sovereign clouds, Azure
+// stack).
 func NewExpressRouteCircuitsClientWithBaseURI(baseURI string, subscriptionID string) ExpressRouteCircuitsClient {
 	return ExpressRouteCircuitsClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -99,8 +101,7 @@ func (client ExpressRouteCircuitsClient) CreateOrUpdatePreparer(ctx context.Cont
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitsClient) CreateOrUpdateSender(req *http.Request) (future ExpressRouteCircuitsCreateOrUpdateFuture, err error) {
 	var resp *http.Response
-	resp, err = autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
 	if err != nil {
 		return
 	}
@@ -113,7 +114,6 @@ func (client ExpressRouteCircuitsClient) CreateOrUpdateSender(req *http.Request)
 func (client ExpressRouteCircuitsClient) CreateOrUpdateResponder(resp *http.Response) (result ExpressRouteCircuit, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -176,8 +176,7 @@ func (client ExpressRouteCircuitsClient) DeletePreparer(ctx context.Context, res
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitsClient) DeleteSender(req *http.Request) (future ExpressRouteCircuitsDeleteFuture, err error) {
 	var resp *http.Response
-	resp, err = autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
 	if err != nil {
 		return
 	}
@@ -190,7 +189,6 @@ func (client ExpressRouteCircuitsClient) DeleteSender(req *http.Request) (future
 func (client ExpressRouteCircuitsClient) DeleteResponder(resp *http.Response) (result autorest.Response, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted, http.StatusNoContent),
 		autorest.ByClosing())
 	result.Response = resp
@@ -228,6 +226,7 @@ func (client ExpressRouteCircuitsClient) Get(ctx context.Context, resourceGroupN
 	result, err = client.GetResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ExpressRouteCircuitsClient", "Get", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -257,8 +256,7 @@ func (client ExpressRouteCircuitsClient) GetPreparer(ctx context.Context, resour
 // GetSender sends the Get request. The method will close the
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitsClient) GetSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // GetResponder handles the response to the Get request. The method always
@@ -266,7 +264,6 @@ func (client ExpressRouteCircuitsClient) GetSender(req *http.Request) (*http.Res
 func (client ExpressRouteCircuitsClient) GetResponder(resp *http.Response) (result ExpressRouteCircuit, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -306,6 +303,7 @@ func (client ExpressRouteCircuitsClient) GetPeeringStats(ctx context.Context, re
 	result, err = client.GetPeeringStatsResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ExpressRouteCircuitsClient", "GetPeeringStats", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -336,8 +334,7 @@ func (client ExpressRouteCircuitsClient) GetPeeringStatsPreparer(ctx context.Con
 // GetPeeringStatsSender sends the GetPeeringStats request. The method will close the
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitsClient) GetPeeringStatsSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // GetPeeringStatsResponder handles the response to the GetPeeringStats request. The method always
@@ -345,7 +342,6 @@ func (client ExpressRouteCircuitsClient) GetPeeringStatsSender(req *http.Request
 func (client ExpressRouteCircuitsClient) GetPeeringStatsResponder(resp *http.Response) (result ExpressRouteCircuitStats, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -384,6 +380,7 @@ func (client ExpressRouteCircuitsClient) GetStats(ctx context.Context, resourceG
 	result, err = client.GetStatsResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ExpressRouteCircuitsClient", "GetStats", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -413,8 +410,7 @@ func (client ExpressRouteCircuitsClient) GetStatsPreparer(ctx context.Context, r
 // GetStatsSender sends the GetStats request. The method will close the
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitsClient) GetStatsSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // GetStatsResponder handles the response to the GetStats request. The method always
@@ -422,7 +418,6 @@ func (client ExpressRouteCircuitsClient) GetStatsSender(req *http.Request) (*htt
 func (client ExpressRouteCircuitsClient) GetStatsResponder(resp *http.Response) (result ExpressRouteCircuitStats, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -461,6 +456,10 @@ func (client ExpressRouteCircuitsClient) List(ctx context.Context, resourceGroup
 	result.erclr, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ExpressRouteCircuitsClient", "List", resp, "Failure responding to request")
+		return
+	}
+	if result.erclr.hasNextLink() && result.erclr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -489,8 +488,7 @@ func (client ExpressRouteCircuitsClient) ListPreparer(ctx context.Context, resou
 // ListSender sends the List request. The method will close the
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitsClient) ListSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // ListResponder handles the response to the List request. The method always
@@ -498,7 +496,6 @@ func (client ExpressRouteCircuitsClient) ListSender(req *http.Request) (*http.Re
 func (client ExpressRouteCircuitsClient) ListResponder(resp *http.Response) (result ExpressRouteCircuitListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -523,6 +520,7 @@ func (client ExpressRouteCircuitsClient) listNextResults(ctx context.Context, la
 	result, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ExpressRouteCircuitsClient", "listNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }
@@ -572,6 +570,10 @@ func (client ExpressRouteCircuitsClient) ListAll(ctx context.Context) (result Ex
 	result.erclr, err = client.ListAllResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ExpressRouteCircuitsClient", "ListAll", resp, "Failure responding to request")
+		return
+	}
+	if result.erclr.hasNextLink() && result.erclr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -599,8 +601,7 @@ func (client ExpressRouteCircuitsClient) ListAllPreparer(ctx context.Context) (*
 // ListAllSender sends the ListAll request. The method will close the
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitsClient) ListAllSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // ListAllResponder handles the response to the ListAll request. The method always
@@ -608,7 +609,6 @@ func (client ExpressRouteCircuitsClient) ListAllSender(req *http.Request) (*http
 func (client ExpressRouteCircuitsClient) ListAllResponder(resp *http.Response) (result ExpressRouteCircuitListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -633,6 +633,7 @@ func (client ExpressRouteCircuitsClient) listAllNextResults(ctx context.Context,
 	result, err = client.ListAllResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ExpressRouteCircuitsClient", "listAllNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }
@@ -712,8 +713,7 @@ func (client ExpressRouteCircuitsClient) ListArpTablePreparer(ctx context.Contex
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitsClient) ListArpTableSender(req *http.Request) (future ExpressRouteCircuitsListArpTableFuture, err error) {
 	var resp *http.Response
-	resp, err = autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
 	if err != nil {
 		return
 	}
@@ -726,7 +726,6 @@ func (client ExpressRouteCircuitsClient) ListArpTableSender(req *http.Request) (
 func (client ExpressRouteCircuitsClient) ListArpTableResponder(resp *http.Response) (result ExpressRouteCircuitsArpTableListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -794,8 +793,7 @@ func (client ExpressRouteCircuitsClient) ListRoutesTablePreparer(ctx context.Con
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitsClient) ListRoutesTableSender(req *http.Request) (future ExpressRouteCircuitsListRoutesTableFuture, err error) {
 	var resp *http.Response
-	resp, err = autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
 	if err != nil {
 		return
 	}
@@ -808,7 +806,6 @@ func (client ExpressRouteCircuitsClient) ListRoutesTableSender(req *http.Request
 func (client ExpressRouteCircuitsClient) ListRoutesTableResponder(resp *http.Response) (result ExpressRouteCircuitsRoutesTableListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -876,8 +873,7 @@ func (client ExpressRouteCircuitsClient) ListRoutesTableSummaryPreparer(ctx cont
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitsClient) ListRoutesTableSummarySender(req *http.Request) (future ExpressRouteCircuitsListRoutesTableSummaryFuture, err error) {
 	var resp *http.Response
-	resp, err = autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
 	if err != nil {
 		return
 	}
@@ -890,7 +886,6 @@ func (client ExpressRouteCircuitsClient) ListRoutesTableSummarySender(req *http.
 func (client ExpressRouteCircuitsClient) ListRoutesTableSummaryResponder(resp *http.Response) (result ExpressRouteCircuitsRoutesTableSummaryListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -956,8 +951,7 @@ func (client ExpressRouteCircuitsClient) UpdateTagsPreparer(ctx context.Context,
 // http.Response Body if it receives an error.
 func (client ExpressRouteCircuitsClient) UpdateTagsSender(req *http.Request) (future ExpressRouteCircuitsUpdateTagsFuture, err error) {
 	var resp *http.Response
-	resp, err = autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
 	if err != nil {
 		return
 	}
@@ -970,7 +964,6 @@ func (client ExpressRouteCircuitsClient) UpdateTagsSender(req *http.Request) (fu
 func (client ExpressRouteCircuitsClient) UpdateTagsResponder(resp *http.Response) (result ExpressRouteCircuit, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())

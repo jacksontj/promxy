@@ -35,7 +35,9 @@ func NewProximityPlacementGroupsClient(subscriptionID string) ProximityPlacement
 	return NewProximityPlacementGroupsClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewProximityPlacementGroupsClientWithBaseURI creates an instance of the ProximityPlacementGroupsClient client.
+// NewProximityPlacementGroupsClientWithBaseURI creates an instance of the ProximityPlacementGroupsClient client using
+// a custom endpoint.  Use this when interacting with an Azure cloud that uses a non-standard base URI (sovereign
+// clouds, Azure stack).
 func NewProximityPlacementGroupsClientWithBaseURI(baseURI string, subscriptionID string) ProximityPlacementGroupsClient {
 	return ProximityPlacementGroupsClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -72,6 +74,7 @@ func (client ProximityPlacementGroupsClient) CreateOrUpdate(ctx context.Context,
 	result, err = client.CreateOrUpdateResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.ProximityPlacementGroupsClient", "CreateOrUpdate", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -103,8 +106,7 @@ func (client ProximityPlacementGroupsClient) CreateOrUpdatePreparer(ctx context.
 // CreateOrUpdateSender sends the CreateOrUpdate request. The method will close the
 // http.Response Body if it receives an error.
 func (client ProximityPlacementGroupsClient) CreateOrUpdateSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // CreateOrUpdateResponder handles the response to the CreateOrUpdate request. The method always
@@ -112,7 +114,6 @@ func (client ProximityPlacementGroupsClient) CreateOrUpdateSender(req *http.Requ
 func (client ProximityPlacementGroupsClient) CreateOrUpdateResponder(resp *http.Response) (result ProximityPlacementGroup, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusCreated),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -151,6 +152,7 @@ func (client ProximityPlacementGroupsClient) Delete(ctx context.Context, resourc
 	result, err = client.DeleteResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.ProximityPlacementGroupsClient", "Delete", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -180,8 +182,7 @@ func (client ProximityPlacementGroupsClient) DeletePreparer(ctx context.Context,
 // DeleteSender sends the Delete request. The method will close the
 // http.Response Body if it receives an error.
 func (client ProximityPlacementGroupsClient) DeleteSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // DeleteResponder handles the response to the Delete request. The method always
@@ -189,7 +190,6 @@ func (client ProximityPlacementGroupsClient) DeleteSender(req *http.Request) (*h
 func (client ProximityPlacementGroupsClient) DeleteResponder(resp *http.Response) (result autorest.Response, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByClosing())
 	result.Response = resp
@@ -227,6 +227,7 @@ func (client ProximityPlacementGroupsClient) Get(ctx context.Context, resourceGr
 	result, err = client.GetResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.ProximityPlacementGroupsClient", "Get", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -256,8 +257,7 @@ func (client ProximityPlacementGroupsClient) GetPreparer(ctx context.Context, re
 // GetSender sends the Get request. The method will close the
 // http.Response Body if it receives an error.
 func (client ProximityPlacementGroupsClient) GetSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // GetResponder handles the response to the Get request. The method always
@@ -265,7 +265,6 @@ func (client ProximityPlacementGroupsClient) GetSender(req *http.Request) (*http
 func (client ProximityPlacementGroupsClient) GetResponder(resp *http.Response) (result ProximityPlacementGroup, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -304,6 +303,10 @@ func (client ProximityPlacementGroupsClient) ListByResourceGroup(ctx context.Con
 	result.ppglr, err = client.ListByResourceGroupResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.ProximityPlacementGroupsClient", "ListByResourceGroup", resp, "Failure responding to request")
+		return
+	}
+	if result.ppglr.hasNextLink() && result.ppglr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -332,8 +335,7 @@ func (client ProximityPlacementGroupsClient) ListByResourceGroupPreparer(ctx con
 // ListByResourceGroupSender sends the ListByResourceGroup request. The method will close the
 // http.Response Body if it receives an error.
 func (client ProximityPlacementGroupsClient) ListByResourceGroupSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // ListByResourceGroupResponder handles the response to the ListByResourceGroup request. The method always
@@ -341,7 +343,6 @@ func (client ProximityPlacementGroupsClient) ListByResourceGroupSender(req *http
 func (client ProximityPlacementGroupsClient) ListByResourceGroupResponder(resp *http.Response) (result ProximityPlacementGroupListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -366,6 +367,7 @@ func (client ProximityPlacementGroupsClient) listByResourceGroupNextResults(ctx 
 	result, err = client.ListByResourceGroupResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.ProximityPlacementGroupsClient", "listByResourceGroupNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }
@@ -415,6 +417,10 @@ func (client ProximityPlacementGroupsClient) ListBySubscription(ctx context.Cont
 	result.ppglr, err = client.ListBySubscriptionResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.ProximityPlacementGroupsClient", "ListBySubscription", resp, "Failure responding to request")
+		return
+	}
+	if result.ppglr.hasNextLink() && result.ppglr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -442,8 +448,7 @@ func (client ProximityPlacementGroupsClient) ListBySubscriptionPreparer(ctx cont
 // ListBySubscriptionSender sends the ListBySubscription request. The method will close the
 // http.Response Body if it receives an error.
 func (client ProximityPlacementGroupsClient) ListBySubscriptionSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // ListBySubscriptionResponder handles the response to the ListBySubscription request. The method always
@@ -451,7 +456,6 @@ func (client ProximityPlacementGroupsClient) ListBySubscriptionSender(req *http.
 func (client ProximityPlacementGroupsClient) ListBySubscriptionResponder(resp *http.Response) (result ProximityPlacementGroupListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -476,6 +480,7 @@ func (client ProximityPlacementGroupsClient) listBySubscriptionNextResults(ctx c
 	result, err = client.ListBySubscriptionResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.ProximityPlacementGroupsClient", "listBySubscriptionNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }
@@ -528,6 +533,7 @@ func (client ProximityPlacementGroupsClient) Update(ctx context.Context, resourc
 	result, err = client.UpdateResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "compute.ProximityPlacementGroupsClient", "Update", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -559,8 +565,7 @@ func (client ProximityPlacementGroupsClient) UpdatePreparer(ctx context.Context,
 // UpdateSender sends the Update request. The method will close the
 // http.Response Body if it receives an error.
 func (client ProximityPlacementGroupsClient) UpdateSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // UpdateResponder handles the response to the Update request. The method always
@@ -568,7 +573,6 @@ func (client ProximityPlacementGroupsClient) UpdateSender(req *http.Request) (*h
 func (client ProximityPlacementGroupsClient) UpdateResponder(resp *http.Response) (result ProximityPlacementGroup, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())

@@ -24,8 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/jacksontj/promxy/pkg/promclient"
-
-	sd_config "github.com/prometheus/prometheus/discovery/config"
+	//	sd_config "github.com/prometheus/prometheus/discovery/config"
 )
 
 var (
@@ -169,7 +168,7 @@ SYNC_LOOP:
 							HTTPClientConfig: s.Cfg.HTTPConfig.HTTPConfig,
 							Timeout:          model.Duration(time.Minute * 2),
 						}
-						remoteStorageClient, err := remote.NewClient(1, cfg)
+						remoteStorageClient, err := remote.NewReadClient("foo", cfg)
 						if err != nil {
 							panic(err)
 						}
@@ -279,7 +278,7 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 
 	s.client = &http.Client{Transport: rt}
 
-	if err := s.targetManager.ApplyConfig(map[string]sd_config.ServiceDiscoveryConfig{"foo": cfg.Hosts}); err != nil {
+	if err := s.targetManager.ApplyConfig(map[string]discovery.Configs{"foo": cfg.ServiceDiscoveryConfigs}); err != nil {
 		return err
 	}
 	return nil
@@ -295,31 +294,31 @@ func (s *ServerGroup) State() *ServerGroupState {
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, api.Warnings, error) {
+func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
 	return s.State().apiClient.GetValue(ctx, start, end, matchers)
 }
 
 // Query performs a query for the given time.
-func (s *ServerGroup) Query(ctx context.Context, query string, ts time.Time) (model.Value, api.Warnings, error) {
+func (s *ServerGroup) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
 	return s.State().apiClient.Query(ctx, query, ts)
 }
 
 // QueryRange performs a query for the given range.
-func (s *ServerGroup) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, api.Warnings, error) {
+func (s *ServerGroup) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
 	return s.State().apiClient.QueryRange(ctx, query, r)
 }
 
 // LabelValues performs a query for the values of the given label.
-func (s *ServerGroup) LabelValues(ctx context.Context, label string) (model.LabelValues, api.Warnings, error) {
+func (s *ServerGroup) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
 	return s.State().apiClient.LabelValues(ctx, label)
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (s *ServerGroup) LabelNames(ctx context.Context) ([]string, api.Warnings, error) {
+func (s *ServerGroup) LabelNames(ctx context.Context) ([]string, v1.Warnings, error) {
 	return s.State().apiClient.LabelNames(ctx)
 }
 
 // Series finds series by label matchers.
-func (s *ServerGroup) Series(ctx context.Context, matches []string, startTime, endTime time.Time) ([]model.LabelSet, api.Warnings, error) {
+func (s *ServerGroup) Series(ctx context.Context, matches []string, startTime, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
 	return s.State().apiClient.Series(ctx, matches, startTime, endTime)
 }

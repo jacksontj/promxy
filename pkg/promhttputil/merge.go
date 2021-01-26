@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/prometheus/client_golang/api"
+	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/storage"
 )
 
-// WarningsConvert simply converts api.Warnings to storage.Warnings
-func WarningsConvert(ws api.Warnings) storage.Warnings {
+// WarningsConvert simply converts v1.Warnings to storage.Warnings
+func WarningsConvert(ws v1.Warnings) storage.Warnings {
 	w := make(storage.Warnings, len(ws))
 	for i, item := range ws {
 		w[i] = errors.New(item)
@@ -23,7 +23,7 @@ func WarningsConvert(ws api.Warnings) storage.Warnings {
 type WarningSet map[string]struct{}
 
 // AddWarnings will add all warnings to the set
-func (s WarningSet) AddWarnings(ws api.Warnings) {
+func (s WarningSet) AddWarnings(ws v1.Warnings) {
 	for _, w := range ws {
 		s.AddWarning(w)
 	}
@@ -35,8 +35,8 @@ func (s WarningSet) AddWarning(w string) {
 }
 
 // Warnings returns all of the warnings contained in the set
-func (s WarningSet) Warnings() api.Warnings {
-	w := make(api.Warnings, 0, len(s))
+func (s WarningSet) Warnings() v1.Warnings {
+	w := make(v1.Warnings, 0, len(s))
 	for k := range s {
 		w = append(w, k)
 	}

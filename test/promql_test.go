@@ -3,7 +3,9 @@ package test
 import (
 	"context"
 	"io/ioutil"
+	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/prometheus/common/route"
 	"github.com/prometheus/prometheus/config"
+	_ "github.com/prometheus/prometheus/discovery/install" // Register service discovery implementations.
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/testutil"
@@ -23,6 +26,12 @@ import (
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/proxystorage"
 )
+
+func init() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+}
 
 const rawPSConfig = `
 promxy:
@@ -116,23 +125,32 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 
 	api := v1.NewAPI(
 		promql.NewEngine(promql.EngineOpts{
-			MaxConcurrent: 20,
-			Timeout:       10 * time.Minute,
-			MaxSamples:    50000000,
+			Timeout:    10 * time.Minute,
+			MaxSamples: 50000000,
 		}),
-		s.(storage.Queryable),
-		nil,
-		nil,
+		s.(storage.SampleAndChunkQueryable),
+		nil, //factoryTr
+		nil, //factoryAr
 		cfgFunc,
-		nil,
-		readyFunc,
-		nil,
-		true,
-		nil,
-		nil,
-		50000000,
-		1000,
-		nil,
+		nil, // flags
+		v1.GlobalURLOptions{
+			ListenAddress: listen,
+			Host:          "localhost",
+			Scheme:        "http",
+		}, // global URL options
+		readyFunc, // ready
+		nil,       // local storage
+		"",        //tsdb dir
+		false,     // enable admin API
+		nil,       // logger
+		nil,       // FactoryRr
+		50000000,  // RemoteReadSampleLimit
+		1000,      // RemoteReadConcurrencyLimit
+		1048576,   // RemoteReadBytesInFrame
+		nil,       // CORSOrigin
+		nil,       // runtimeInfo
+		nil,       // versionInfo
+		nil,       // gatherer
 	)
 
 	apiRouter := route.New()
@@ -267,9 +285,12 @@ func (p *LayeredStorage) StartTime() (int64, error) {
 	return p.baseStorage.StartTime()
 }
 
-func (p *LayeredStorage) Appender() (storage.Appender, error) {
-	return p.baseStorage.Appender()
+func (p *LayeredStorage) Appender(ctx context.Context) storage.Appender {
+	return p.baseStorage.Appender(ctx)
 }
 func (p *LayeredStorage) Close() error {
 	return p.baseStorage.Close()
+}
+func (p *LayeredStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (storage.ChunkQuerier, error) {
+	return p.baseStorage.ChunkQuerier(ctx, mint, maxt)
 }

@@ -27,8 +27,8 @@ func (a *appenderStub) Add(l labels.Labels, t int64, v float64) (uint64, error) 
 	return 0, nil
 }
 
-func (a *appenderStub) AddFast(l labels.Labels, ref uint64, t int64, v float64) error {
-	_, err := a.Add(l, t, v)
+func (a *appenderStub) AddFast(ref uint64, t int64, v float64) error {
+	_, err := a.Add(nil, t, v)
 	return err
 }
 
