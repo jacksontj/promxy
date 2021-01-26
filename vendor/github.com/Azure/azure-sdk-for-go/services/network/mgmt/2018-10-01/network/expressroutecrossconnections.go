@@ -36,7 +36,8 @@ func NewExpressRouteCrossConnectionsClient(subscriptionID string) ExpressRouteCr
 }
 
 // NewExpressRouteCrossConnectionsClientWithBaseURI creates an instance of the ExpressRouteCrossConnectionsClient
-// client.
+// client using a custom endpoint.  Use this when interacting with an Azure cloud that uses a non-standard base URI
+// (sovereign clouds, Azure stack).
 func NewExpressRouteCrossConnectionsClientWithBaseURI(baseURI string, subscriptionID string) ExpressRouteCrossConnectionsClient {
 	return ExpressRouteCrossConnectionsClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -100,8 +101,7 @@ func (client ExpressRouteCrossConnectionsClient) CreateOrUpdatePreparer(ctx cont
 // http.Response Body if it receives an error.
 func (client ExpressRouteCrossConnectionsClient) CreateOrUpdateSender(req *http.Request) (future ExpressRouteCrossConnectionsCreateOrUpdateFuture, err error) {
 	var resp *http.Response
-	resp, err = autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
 	if err != nil {
 		return
 	}
@@ -114,7 +114,6 @@ func (client ExpressRouteCrossConnectionsClient) CreateOrUpdateSender(req *http.
 func (client ExpressRouteCrossConnectionsClient) CreateOrUpdateResponder(resp *http.Response) (result ExpressRouteCrossConnection, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -153,6 +152,7 @@ func (client ExpressRouteCrossConnectionsClient) Get(ctx context.Context, resour
 	result, err = client.GetResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ExpressRouteCrossConnectionsClient", "Get", resp, "Failure responding to request")
+		return
 	}
 
 	return
@@ -182,8 +182,7 @@ func (client ExpressRouteCrossConnectionsClient) GetPreparer(ctx context.Context
 // GetSender sends the Get request. The method will close the
 // http.Response Body if it receives an error.
 func (client ExpressRouteCrossConnectionsClient) GetSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // GetResponder handles the response to the Get request. The method always
@@ -191,7 +190,6 @@ func (client ExpressRouteCrossConnectionsClient) GetSender(req *http.Request) (*
 func (client ExpressRouteCrossConnectionsClient) GetResponder(resp *http.Response) (result ExpressRouteCrossConnection, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -228,6 +226,10 @@ func (client ExpressRouteCrossConnectionsClient) List(ctx context.Context) (resu
 	result.ercclr, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ExpressRouteCrossConnectionsClient", "List", resp, "Failure responding to request")
+		return
+	}
+	if result.ercclr.hasNextLink() && result.ercclr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -255,8 +257,7 @@ func (client ExpressRouteCrossConnectionsClient) ListPreparer(ctx context.Contex
 // ListSender sends the List request. The method will close the
 // http.Response Body if it receives an error.
 func (client ExpressRouteCrossConnectionsClient) ListSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // ListResponder handles the response to the List request. The method always
@@ -264,7 +265,6 @@ func (client ExpressRouteCrossConnectionsClient) ListSender(req *http.Request) (
 func (client ExpressRouteCrossConnectionsClient) ListResponder(resp *http.Response) (result ExpressRouteCrossConnectionListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -289,6 +289,7 @@ func (client ExpressRouteCrossConnectionsClient) listNextResults(ctx context.Con
 	result, err = client.ListResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ExpressRouteCrossConnectionsClient", "listNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }
@@ -369,8 +370,7 @@ func (client ExpressRouteCrossConnectionsClient) ListArpTablePreparer(ctx contex
 // http.Response Body if it receives an error.
 func (client ExpressRouteCrossConnectionsClient) ListArpTableSender(req *http.Request) (future ExpressRouteCrossConnectionsListArpTableFuture, err error) {
 	var resp *http.Response
-	resp, err = autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
 	if err != nil {
 		return
 	}
@@ -383,7 +383,6 @@ func (client ExpressRouteCrossConnectionsClient) ListArpTableSender(req *http.Re
 func (client ExpressRouteCrossConnectionsClient) ListArpTableResponder(resp *http.Response) (result ExpressRouteCircuitsArpTableListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -422,6 +421,10 @@ func (client ExpressRouteCrossConnectionsClient) ListByResourceGroup(ctx context
 	result.ercclr, err = client.ListByResourceGroupResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ExpressRouteCrossConnectionsClient", "ListByResourceGroup", resp, "Failure responding to request")
+		return
+	}
+	if result.ercclr.hasNextLink() && result.ercclr.IsEmpty() {
+		err = result.NextWithContext(ctx)
 	}
 
 	return
@@ -450,8 +453,7 @@ func (client ExpressRouteCrossConnectionsClient) ListByResourceGroupPreparer(ctx
 // ListByResourceGroupSender sends the ListByResourceGroup request. The method will close the
 // http.Response Body if it receives an error.
 func (client ExpressRouteCrossConnectionsClient) ListByResourceGroupSender(req *http.Request) (*http.Response, error) {
-	return autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
 }
 
 // ListByResourceGroupResponder handles the response to the ListByResourceGroup request. The method always
@@ -459,7 +461,6 @@ func (client ExpressRouteCrossConnectionsClient) ListByResourceGroupSender(req *
 func (client ExpressRouteCrossConnectionsClient) ListByResourceGroupResponder(resp *http.Response) (result ExpressRouteCrossConnectionListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -484,6 +485,7 @@ func (client ExpressRouteCrossConnectionsClient) listByResourceGroupNextResults(
 	result, err = client.ListByResourceGroupResponder(resp)
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "network.ExpressRouteCrossConnectionsClient", "listByResourceGroupNextResults", resp, "Failure responding to next results request")
+		return
 	}
 	return
 }
@@ -564,8 +566,7 @@ func (client ExpressRouteCrossConnectionsClient) ListRoutesTablePreparer(ctx con
 // http.Response Body if it receives an error.
 func (client ExpressRouteCrossConnectionsClient) ListRoutesTableSender(req *http.Request) (future ExpressRouteCrossConnectionsListRoutesTableFuture, err error) {
 	var resp *http.Response
-	resp, err = autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
 	if err != nil {
 		return
 	}
@@ -578,7 +579,6 @@ func (client ExpressRouteCrossConnectionsClient) ListRoutesTableSender(req *http
 func (client ExpressRouteCrossConnectionsClient) ListRoutesTableResponder(resp *http.Response) (result ExpressRouteCircuitsRoutesTableListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -646,8 +646,7 @@ func (client ExpressRouteCrossConnectionsClient) ListRoutesTableSummaryPreparer(
 // http.Response Body if it receives an error.
 func (client ExpressRouteCrossConnectionsClient) ListRoutesTableSummarySender(req *http.Request) (future ExpressRouteCrossConnectionsListRoutesTableSummaryFuture, err error) {
 	var resp *http.Response
-	resp, err = autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
 	if err != nil {
 		return
 	}
@@ -660,7 +659,6 @@ func (client ExpressRouteCrossConnectionsClient) ListRoutesTableSummarySender(re
 func (client ExpressRouteCrossConnectionsClient) ListRoutesTableSummaryResponder(resp *http.Response) (result ExpressRouteCrossConnectionsRoutesTableSummaryListResult, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK, http.StatusAccepted),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())
@@ -726,8 +724,7 @@ func (client ExpressRouteCrossConnectionsClient) UpdateTagsPreparer(ctx context.
 // http.Response Body if it receives an error.
 func (client ExpressRouteCrossConnectionsClient) UpdateTagsSender(req *http.Request) (future ExpressRouteCrossConnectionsUpdateTagsFuture, err error) {
 	var resp *http.Response
-	resp, err = autorest.SendWithSender(client, req,
-		azure.DoRetryWithRegistration(client.Client))
+	resp, err = client.Send(req, azure.DoRetryWithRegistration(client.Client))
 	if err != nil {
 		return
 	}
@@ -740,7 +737,6 @@ func (client ExpressRouteCrossConnectionsClient) UpdateTagsSender(req *http.Requ
 func (client ExpressRouteCrossConnectionsClient) UpdateTagsResponder(resp *http.Response) (result ExpressRouteCrossConnection, err error) {
 	err = autorest.Respond(
 		resp,
-		client.ByInspecting(),
 		azure.WithErrorUnlessStatusCode(http.StatusOK),
 		autorest.ByUnmarshallingJSON(&result),
 		autorest.ByClosing())

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/api"
+	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/timestamp"
@@ -27,14 +27,15 @@ type ProxyQuerier struct {
 	Cfg *proxyconfig.PromxyConfig
 }
 
+// TODO: switch based on sortSeries bool(first arg)
 // Select returns a set of series that matches the given label matchers.
-func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*labels.Matcher) (storage.SeriesSet, storage.Warnings, error) {
+func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
-			"selectParams": selectParams,
-			"matchers":     matchers,
-			"took":         time.Since(start),
+			"selectHints": hints,
+			"matchers":    matchers,
+			"took":        time.Since(start),
 		}).Debug("Select")
 	}()
 
@@ -45,17 +46,17 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 	// Select() is a combined API call for query/query_range/series.
 	// as of right now there is no great way of differentiating between a
 	// data call (query/query_range) and a metadata call (series). For now
-	// the working workaround is to switch based on the selectParams.
+	// the working workaround is to switch based on the hints.
 	// https://github.com/prometheus/prometheus/issues/4057
-	if selectParams == nil {
+	if hints == nil {
 		matcherString, err := promhttputil.MatcherToString(matchers)
 		if err != nil {
-			return nil, nil, err
+			return NewSeriesSet(nil, nil, err)
 		}
 		labelsets, w, err := h.Client.Series(h.Ctx, []string{matcherString}, h.Start, h.End)
 		warnings = promhttputil.WarningsConvert(w)
 		if err != nil {
-			return nil, warnings, errors.Cause(err)
+			return NewSeriesSet(nil, warnings, errors.Cause(err))
 		}
 		// Convert labelsets to vectors
 		// convert to vector (there aren't points, but this way we don't have to make more merging functions)
@@ -67,12 +68,12 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		}
 		result = retVector
 	} else {
-		var w api.Warnings
-		result, w, err = h.Client.GetValue(h.Ctx, timestamp.Time(selectParams.Start), timestamp.Time(selectParams.End), matchers)
+		var w v1.Warnings
+		result, w, err = h.Client.GetValue(h.Ctx, timestamp.Time(hints.Start), timestamp.Time(hints.End), matchers)
 		warnings = promhttputil.WarningsConvert(w)
 	}
 	if err != nil {
-		return nil, warnings, errors.Cause(err)
+		return NewSeriesSet(nil, warnings, errors.Cause(err))
 	}
 
 	iterators := promclient.IteratorsForValue(result)
@@ -82,7 +83,7 @@ func (h *ProxyQuerier) Select(selectParams *storage.SelectParams, matchers ...*l
 		series[i] = &Series{iterator}
 	}
 
-	return NewSeriesSet(series), warnings, nil
+	return NewSeriesSet(series, warnings, nil)
 }
 
 // LabelValues returns all potential values for a label name.

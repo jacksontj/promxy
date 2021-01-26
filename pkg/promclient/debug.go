@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -18,7 +17,7 @@ type DebugAPI struct {
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (d *DebugAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, error) {
+func (d *DebugAPI) LabelNames(ctx context.Context) ([]string, v1.Warnings, error) {
 	fields := logrus.Fields{
 		"api": "LabelNames",
 	}
@@ -41,7 +40,7 @@ func (d *DebugAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, erro
 }
 
 // LabelValues performs a query for the values of the given label.
-func (d *DebugAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, api.Warnings, error) {
+func (d *DebugAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
 	fields := logrus.Fields{
 		"api":   "LabelValues",
 		"label": label,
@@ -65,7 +64,7 @@ func (d *DebugAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 }
 
 // Query performs a query for the given time.
-func (d *DebugAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, api.Warnings, error) {
+func (d *DebugAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
 	fields := logrus.Fields{
 		"api":   "Query",
 		"query": query,
@@ -90,7 +89,7 @@ func (d *DebugAPI) Query(ctx context.Context, query string, ts time.Time) (model
 }
 
 // QueryRange performs a query for the given range.
-func (d *DebugAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, api.Warnings, error) {
+func (d *DebugAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
 	fields := logrus.Fields{
 		"api":   "QueryRange",
 		"query": query,
@@ -115,7 +114,7 @@ func (d *DebugAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 }
 
 // Series finds series by label matchers.
-func (d *DebugAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, api.Warnings, error) {
+func (d *DebugAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
 	fields := logrus.Fields{
 		"api":       "Series",
 		"matches":   matches,
@@ -140,7 +139,7 @@ func (d *DebugAPI) Series(ctx context.Context, matches []string, startTime time.
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (d *DebugAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, api.Warnings, error) {
+func (d *DebugAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
 	fields := logrus.Fields{
 		"api":      "GetValue",
 		"start":    start,

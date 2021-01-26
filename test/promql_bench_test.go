@@ -123,9 +123,12 @@ func (p *SwappableStorage) Querier(ctx context.Context, mint, maxt int64) (stora
 func (p *SwappableStorage) StartTime() (int64, error) {
 	return p.s.StartTime()
 }
-func (p *SwappableStorage) Appender() (storage.Appender, error) {
-	return p.s.Appender()
+func (p *SwappableStorage) Appender(ctx context.Context) storage.Appender {
+	return p.s.Appender(ctx)
 }
 func (p *SwappableStorage) Close() error {
 	return p.s.Close()
+}
+func (p *SwappableStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (storage.ChunkQuerier, error) {
+	return p.s.ChunkQuerier(ctx, mint, maxt)
 }

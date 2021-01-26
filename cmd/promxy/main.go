@@ -7,6 +7,7 @@ import (
 	"path"
 	"regexp"
 
+	"go.uber.org/atomic"
 	"k8s.io/klog"
 
 	"github.com/golang/glog"
@@ -24,20 +25,19 @@ import (
 
 	_ "net/http/pprof"
 
-	"crypto/md5"
-
 	kitlog "github.com/go-kit/kit/log"
 	"github.com/jessevdk/go-flags"
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/log"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/route"
 	"github.com/prometheus/common/version"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
-	sd_config "github.com/prometheus/prometheus/discovery/config"
+	_ "github.com/prometheus/prometheus/discovery/install" // Register service discovery implementations.
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/pkg/relabel"
 	"github.com/prometheus/prometheus/promql"
@@ -50,7 +50,6 @@ import (
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/logging"
-	"github.com/jacksontj/promxy/pkg/noop"
 	"github.com/jacksontj/promxy/pkg/proxystorage"
 )
 
@@ -79,10 +78,11 @@ type cliOpts struct {
 	ExternalURL     string `long:"web.external-url" description:"The URL under which Prometheus is externally reachable (for example, if Prometheus is served via a reverse proxy). Used for generating relative and absolute links back to Prometheus itself. If the URL has a path portion, it will be used to prefix all HTTP endpoints served by Prometheus. If omitted, relevant URL components will be derived automatically."`
 	EnableLifecycle bool   `long:"web.enable-lifecycle" description:"Enable shutdown and reload via HTTP request."`
 
-	QueryTimeout        time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
-	QueryMaxConcurrency int           `long:"query.max-concurrency" description:"Maximum number of queries executed concurrently." default:"1000"`
-	QueryMaxSamples     int           `long:"query.max-samples" description:"Maximum number of samples a single query can load into memory. Note that queries will fail if they would load more samples than this into memory, so this also limits the number of samples a query can return." default:"50000000"`
-	QueryLookbackDelta  time.Duration `long:"query.lookback-delta" description:"The maximum lookback duration for retrieving metrics during expression evaluations." default:"5m"`
+	QueryTimeout time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
+	// TODO: REMOVE
+	//QueryMaxConcurrency int           `long:"query.max-concurrency" description:"Maximum number of queries executed concurrently." default:"1000"`
+	QueryMaxSamples    int           `long:"query.max-samples" description:"Maximum number of samples a single query can load into memory. Note that queries will fail if they would load more samples than this into memory, so this also limits the number of samples a query can return." default:"50000000"`
+	QueryLookbackDelta time.Duration `long:"query.lookback-delta" description:"The maximum lookback duration for retrieving metrics during expression evaluations." default:"5m"`
 
 	RemoteReadMaxConcurrency int `long:"remote-read.max-concurrency" description:"Maximum number of concurrent remote read calls." default:"10"`
 
@@ -106,7 +106,7 @@ func (c *cliOpts) ToFlags() map[string]string {
 
 var opts cliOpts
 
-func reloadConfig(rls ...proxyconfig.Reloadable) error {
+func reloadConfig(noStepSuqueryInterval *safePromQLNoStepSubqueryInterval, rls ...proxyconfig.Reloadable) error {
 	cfg, err := proxyconfig.ConfigFromFile(opts.ConfigFile)
 	if err != nil {
 		return fmt.Errorf("error loading cfg: %v", err)
@@ -123,7 +123,7 @@ func reloadConfig(rls ...proxyconfig.Reloadable) error {
 	if failed {
 		return fmt.Errorf("one or more errors occurred while applying new configuration")
 	}
-	promql.SetDefaultEvaluationInterval(time.Duration(cfg.PromConfig.GlobalConfig.EvaluationInterval))
+	noStepSuqueryInterval.Set(cfg.PromConfig.GlobalConfig.EvaluationInterval)
 	reloadTime.Set(float64(time.Now().Unix()))
 	return nil
 }
@@ -199,16 +199,18 @@ func main() {
 	}
 	reloadables = append(reloadables, ps)
 	proxyStorage = ps
+	noStepSubqueryInterval := &safePromQLNoStepSubqueryInterval{}
+	noStepSubqueryInterval.Set(config.DefaultGlobalConfig.EvaluationInterval)
 
 	engine := promql.NewEngine(promql.EngineOpts{
-		Reg:           prometheus.DefaultRegisterer,
-		MaxConcurrent: opts.QueryMaxConcurrency,
-		Timeout:       opts.QueryTimeout,
-		MaxSamples:    opts.QueryMaxSamples,
+		Reg: prometheus.DefaultRegisterer,
+		//MaxConcurrent: opts.QueryMaxConcurrency,	TODO: remove
+		Timeout:                  opts.QueryTimeout,
+		MaxSamples:               opts.QueryMaxSamples,
+		NoStepSubqueryIntervalFn: noStepSubqueryInterval.Get,
+		LookbackDelta:            opts.QueryLookbackDelta,
 	})
 	engine.NodeReplacer = ps.NodeReplacer
-
-	promql.LookbackDelta = opts.QueryLookbackDelta
 
 	// TODO: rename
 	externalUrl, err := computeExternalURL(opts.ExternalURL, opts.BindAddr)
@@ -237,16 +239,12 @@ func main() {
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(notifierManager))
 
 	discoveryManagerNotify := discovery.NewManager(ctx, kitlog.With(logger, "component", "discovery manager notify"))
+
 	reloadables = append(reloadables,
 		proxyconfig.WrapPromReloadable(&proxyconfig.ApplyConfigFunc{func(cfg *config.Config) error {
-			c := make(map[string]sd_config.ServiceDiscoveryConfig)
-			for _, v := range cfg.AlertingConfig.AlertmanagerConfigs {
-				// AlertmanagerConfigs doesn't hold an unique identifier so we use the config hash as the identifier.
-				b, err := json.Marshal(v)
-				if err != nil {
-					return err
-				}
-				c[fmt.Sprintf("%x", md5.Sum(b))] = v.ServiceDiscoveryConfig
+			c := make(map[string]discovery.Configs)
+			for k, v := range cfg.AlertingConfig.AlertmanagerConfigs.ToMap() {
+				c[k] = v.ServiceDiscoveryConfigs
 			}
 			return discoveryManagerNotify.ApplyConfig(c)
 		}}),
@@ -270,7 +268,6 @@ func main() {
 		ExternalURL:     externalUrl, // URL listed as URL for "who fired this alert"
 		QueryFunc:       rules.EngineQueryFunc(engine, proxyStorage),
 		NotifyFunc:      sendAlerts(notifierManager, externalUrl.String()),
-		TSDB:            noop.NewNoopStorage(), // TODO: use remote_read?
 		Appendable:      proxyStorage,
 		Logger:          logger,
 		Registerer:      prometheus.DefaultRegisterer,
@@ -383,7 +380,7 @@ func main() {
 		}
 	})
 
-	if err := reloadConfig(reloadables...); err != nil {
+	if err := reloadConfig(noStepSubqueryInterval, reloadables...); err != nil {
 		logrus.Fatalf("Error loading config: %s", err)
 	}
 
@@ -434,7 +431,7 @@ func main() {
 		select {
 		case rc := <-webHandler.Reload():
 			log.Infof("Reloading config")
-			if err := reloadConfig(reloadables...); err != nil {
+			if err := reloadConfig(noStepSubqueryInterval, reloadables...); err != nil {
 				log.Errorf("Error reloading config: %s", err)
 				rc <- err
 			} else {
@@ -444,7 +441,7 @@ func main() {
 			switch sig {
 			case syscall.SIGHUP:
 				log.Infof("Reloading config")
-				if err := reloadConfig(reloadables...); err != nil {
+				if err := reloadConfig(noStepSubqueryInterval, reloadables...); err != nil {
 					log.Errorf("Error reloading config: %s", err)
 				}
 			case syscall.SIGTERM, syscall.SIGINT:
@@ -549,4 +546,19 @@ func compileCORSRegexString(s string) (*regexp.Regexp, error) {
 		return nil, err
 	}
 	return r.Regexp, nil
+}
+
+type safePromQLNoStepSubqueryInterval struct {
+	value atomic.Int64
+}
+
+func durationToInt64Millis(d time.Duration) int64 {
+	return int64(d / time.Millisecond)
+}
+func (i *safePromQLNoStepSubqueryInterval) Set(ev model.Duration) {
+	i.value.Store(durationToInt64Millis(time.Duration(ev)))
+}
+
+func (i *safePromQLNoStepSubqueryInterval) Get(int64) int64 {
+	return i.value.Load()
 }

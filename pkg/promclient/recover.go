@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -15,7 +14,7 @@ import (
 type recoverAPI struct{ API }
 
 // LabelValues performs a query for the values of the given label.
-func (api *recoverAPI) LabelValues(ctx context.Context, label string) (v model.LabelValues, w api.Warnings, err error) {
+func (api *recoverAPI) LabelValues(ctx context.Context, label string) (v model.LabelValues, w v1.Warnings, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -25,7 +24,7 @@ func (api *recoverAPI) LabelValues(ctx context.Context, label string) (v model.L
 }
 
 // Query performs a query for the given time.
-func (api *recoverAPI) Query(ctx context.Context, query string, ts time.Time) (v model.Value, w api.Warnings, err error) {
+func (api *recoverAPI) Query(ctx context.Context, query string, ts time.Time) (v model.Value, w v1.Warnings, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -35,7 +34,7 @@ func (api *recoverAPI) Query(ctx context.Context, query string, ts time.Time) (v
 }
 
 // QueryRange performs a query for the given range.
-func (api *recoverAPI) QueryRange(ctx context.Context, query string, r v1.Range) (v model.Value, w api.Warnings, err error) {
+func (api *recoverAPI) QueryRange(ctx context.Context, query string, r v1.Range) (v model.Value, w v1.Warnings, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -45,7 +44,7 @@ func (api *recoverAPI) QueryRange(ctx context.Context, query string, r v1.Range)
 }
 
 // Series finds series by label matchers.
-func (api *recoverAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) (v []model.LabelSet, w api.Warnings, err error) {
+func (api *recoverAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) (v []model.LabelSet, w v1.Warnings, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -55,7 +54,7 @@ func (api *recoverAPI) Series(ctx context.Context, matches []string, startTime t
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (api *recoverAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (v model.Value, w api.Warnings, err error) {
+func (api *recoverAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (v model.Value, w v1.Warnings, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)

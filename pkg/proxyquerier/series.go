@@ -2,7 +2,7 @@ package proxyquerier
 
 import (
 	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 
 	"github.com/jacksontj/promxy/pkg/promclient"
 )
@@ -18,6 +18,6 @@ func (s *Series) Labels() labels.Labels {
 }
 
 // Iterator returns an iterator over the series
-func (s *Series) Iterator() storage.SeriesIterator {
+func (s *Series) Iterator() chunkenc.Iterator {
 	return s.It
 }

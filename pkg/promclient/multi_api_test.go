@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -23,32 +22,32 @@ type stubAPI struct {
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (s *stubAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, error) {
+func (s *stubAPI) LabelNames(ctx context.Context) ([]string, v1.Warnings, error) {
 	return s.labelNames(), nil, nil
 }
 
 // LabelValues performs a query for the values of the given label.
-func (s *stubAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, api.Warnings, error) {
+func (s *stubAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
 	return s.labelValues(), nil, nil
 }
 
 // Query performs a query for the given time.
-func (s *stubAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, api.Warnings, error) {
+func (s *stubAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
 	return s.query(), nil, nil
 }
 
 // QueryRange performs a query for the given range.
-func (s *stubAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, api.Warnings, error) {
+func (s *stubAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
 	return s.queryRange(), nil, nil
 }
 
 // Series finds series by label matchers.
-func (s *stubAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, api.Warnings, error) {
+func (s *stubAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
 	return s.series(), nil, nil
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (s *stubAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, api.Warnings, error) {
+func (s *stubAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
 	return s.getValue(), nil, nil
 }
 
@@ -64,7 +63,7 @@ func (s *errorAPI) Key() model.LabelSet {
 	return nil
 }
 
-func (s *errorAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, error) {
+func (s *errorAPI) LabelNames(ctx context.Context) ([]string, v1.Warnings, error) {
 	if s.err != nil {
 		return nil, nil, s.err
 	}
@@ -72,7 +71,7 @@ func (s *errorAPI) LabelNames(ctx context.Context) ([]string, api.Warnings, erro
 }
 
 // LabelValues performs a query for the values of the given label.
-func (s *errorAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, api.Warnings, error) {
+func (s *errorAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
 	if s.err != nil {
 		return nil, nil, s.err
 	}
@@ -80,7 +79,7 @@ func (s *errorAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 }
 
 // Query performs a query for the given time.
-func (s *errorAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, api.Warnings, error) {
+func (s *errorAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
 	if s.err != nil {
 		return nil, nil, s.err
 	}
@@ -88,7 +87,7 @@ func (s *errorAPI) Query(ctx context.Context, query string, ts time.Time) (model
 }
 
 // QueryRange performs a query for the given range.
-func (s *errorAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, api.Warnings, error) {
+func (s *errorAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
 	if s.err != nil {
 		return nil, nil, s.err
 	}
@@ -96,7 +95,7 @@ func (s *errorAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 }
 
 // Series finds series by label matchers.
-func (s *errorAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, api.Warnings, error) {
+func (s *errorAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
 	if s.err != nil {
 		return nil, nil, s.err
 	}
@@ -104,7 +103,7 @@ func (s *errorAPI) Series(ctx context.Context, matches []string, startTime time.
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (s *errorAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, api.Warnings, error) {
+func (s *errorAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
 	if s.err != nil {
 		return nil, nil, s.err
 	}

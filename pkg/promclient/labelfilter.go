@@ -3,19 +3,19 @@ package promclient
 import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/promql/parser"
 )
 
-// LabelFilterVisitor implements the promql.Visitor interface to filter selectors based on a labelstet
+// LabelFilterVisitor implements the parser.Visitor interface to filter selectors based on a labelstet
 type LabelFilterVisitor struct {
 	ls          model.LabelSet
 	filterMatch bool
 }
 
 // Visit checks if the given node matches the labels in the filter
-func (l *LabelFilterVisitor) Visit(node promql.Node, path []promql.Node) (w promql.Visitor, err error) {
+func (l *LabelFilterVisitor) Visit(node parser.Node, path []parser.Node) (w parser.Visitor, err error) {
 	switch nodeTyped := node.(type) {
-	case *promql.VectorSelector:
+	case *parser.VectorSelector:
 		for _, matcher := range nodeTyped.LabelMatchers {
 			if matcher.Name == model.MetricNameLabel && matcher.Type == labels.MatchEqual {
 				nodeTyped.Name = matcher.Value
@@ -30,18 +30,18 @@ func (l *LabelFilterVisitor) Visit(node promql.Node, path []promql.Node) (w prom
 		} else {
 			return nil, nil
 		}
-	case *promql.MatrixSelector:
-		for _, matcher := range nodeTyped.LabelMatchers {
+	case *parser.MatrixSelector:
+		for _, matcher := range nodeTyped.VectorSelector.(*parser.VectorSelector).LabelMatchers {
 			if matcher.Name == model.MetricNameLabel && matcher.Type == labels.MatchEqual {
-				nodeTyped.Name = matcher.Value
+				nodeTyped.VectorSelector.(*parser.VectorSelector).Name = matcher.Value
 			}
 		}
 
-		filteredMatchers, ok := FilterMatchers(l.ls, nodeTyped.LabelMatchers)
+		filteredMatchers, ok := FilterMatchers(l.ls, nodeTyped.VectorSelector.(*parser.VectorSelector).LabelMatchers)
 		l.filterMatch = l.filterMatch && ok
 
 		if ok {
-			nodeTyped.LabelMatchers = filteredMatchers
+			nodeTyped.VectorSelector.(*parser.VectorSelector).LabelMatchers = filteredMatchers
 		} else {
 			return nil, nil
 		}
