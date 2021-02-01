@@ -1,7 +1,7 @@
 FROM       golang:alpine as builder
 
 COPY . /go/src/github.com/jacksontj/promxy
-RUN cd /go/src/github.com/jacksontj/promxy/cmd/promxy && CGO_ENABLED=0 go build -mod=vendor
+RUN cd /go/src/github.com/jacksontj/promxy/cmd/promxy && CGO_ENABLED=0 go build -mod=vendor -tags netgo,builtinassets
 RUN cd /go/src/github.com/jacksontj/promxy/cmd/remote_write_exporter && CGO_ENABLED=0 go build -mod=vendor
 
 FROM alpine:3.12.1
