@@ -24,7 +24,7 @@ do
     fi  
 
     env GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 GO111MODULE=on \
-        go build -mod=vendor -x \
+        go build -mod=vendor -tags netgo,builtinassets -x \
                 -ldflags="-X main.Version=$VERSION" \
                 -o $destination/$output_name $package
     if [ $? -ne 0 ]; then
