@@ -35,7 +35,7 @@ testlocal-build:
 	docker build -t 127.0.0.1:32000/promxy:latest .
 	docker push 127.0.0.1:32000/promxy:latest
 
-.PHONY: make-vendor
-make-vendor:
+.PHONY: vendor
+vendor:
 	GO111MODULE=on $(GO) mod tidy
 	GO111MODULE=on $(GO) mod vendor
