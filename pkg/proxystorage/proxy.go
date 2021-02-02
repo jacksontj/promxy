@@ -66,13 +66,14 @@ func (p *proxyStorageState) Cancel(n *proxyStorageState) {
 }
 
 // NewProxyStorage creates a new ProxyStorage
-func NewProxyStorage() (*ProxyStorage, error) {
-	return &ProxyStorage{}, nil
+func NewProxyStorage(NoStepSubqueryIntervalFn func(rangeMillis int64) int64) (*ProxyStorage, error) {
+	return &ProxyStorage{NoStepSubqueryIntervalFn: NoStepSubqueryIntervalFn}, nil
 }
 
 // ProxyStorage implements prometheus' Storage interface
 type ProxyStorage struct {
-	state atomic.Value
+	NoStepSubqueryIntervalFn func(rangeMillis int64) int64
+	state                    atomic.Value
 }
 
 // GetState returns the current state of the ProxyStorage
@@ -513,12 +514,22 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// downstream (which may have access to less data, and promql has some weird heuristics on how it calculates values on step)
 	case *parser.SubqueryExpr:
 		logrus.Debugf("SubqueryExpr: %v", n)
-		subEvalStmt := *s
 
+		subEvalStmt := *s
 		subEvalStmt.Expr = n.Expr
-		subEvalStmt.Start = subEvalStmt.Start.Add(-n.Offset).Add(-n.Range)
 		subEvalStmt.End = subEvalStmt.End.Add(-n.Offset)
-		subEvalStmt.Interval = n.Step
+		//subEvalStmt.Start = subEvalStmt.End.Add(-n.Range)
+
+		if n.Step == 0 {
+			subEvalStmt.Interval = time.Duration(p.NoStepSubqueryIntervalFn(durationMilliseconds(n.Range))) * time.Millisecond
+		} else {
+			subEvalStmt.Interval = n.Step
+		}
+
+		subEvalStmt.Start = s.Start.Add(-n.Offset).Add(-n.Range).Truncate(subEvalStmt.Interval)
+		if subEvalStmt.Start.Before(s.Start.Add(-n.Offset).Add(-n.Range)) {
+			subEvalStmt.Start.Add(subEvalStmt.Interval)
+		}
 
 		newN, err := parser.Inspect(ctx, &subEvalStmt, func(parser.Node, []parser.Node) error { return nil }, p.NodeReplacer)
 		if err != nil {
@@ -535,4 +546,8 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 	}
 	return nil, nil
+}
+
+func durationMilliseconds(d time.Duration) int64 {
+	return int64(d / (time.Millisecond / time.Nanosecond))
 }

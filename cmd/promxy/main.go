@@ -187,20 +187,21 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	noStepSubqueryInterval := &safePromQLNoStepSubqueryInterval{}
+	noStepSubqueryInterval.Set(config.DefaultGlobalConfig.EvaluationInterval)
+
 	// Reload ready -- channel to close once we are ready to start reloaders
 	reloadReady := make(chan struct{})
 
 	// Create the proxy storage
 	var proxyStorage storage.Storage
 
-	ps, err := proxystorage.NewProxyStorage()
+	ps, err := proxystorage.NewProxyStorage(noStepSubqueryInterval.Get)
 	if err != nil {
 		logrus.Fatalf("Error creating proxy: %v", err)
 	}
 	reloadables = append(reloadables, ps)
 	proxyStorage = ps
-	noStepSubqueryInterval := &safePromQLNoStepSubqueryInterval{}
-	noStepSubqueryInterval.Set(config.DefaultGlobalConfig.EvaluationInterval)
 
 	engine := promql.NewEngine(promql.EngineOpts{
 		Reg: prometheus.DefaultRegisterer,
