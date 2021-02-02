@@ -54,6 +54,10 @@ requires that API to be present. Promxy has been used with as early as prom 1.7
 and as recent as 2.13. If you run into issues with any prometheus version with the `/v1`
 API please open up an issue.
 
+### What version of prometheus does promxy use? And what does that mean?
+Promxy is currently using a fork based on prometheus 2.24. This version isn't supremely important,
+but it is relevant for promql features (e.g. subqueries) and sd config options.
+
 ### What changes are required to my prometheus infra for promxy?
 None. Promxy is simply an aggregating proxy that sends requests to prometheus-- meaning
 it requires no changes to your existing prometheus install.
