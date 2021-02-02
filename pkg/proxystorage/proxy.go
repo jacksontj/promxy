@@ -184,7 +184,7 @@ func (p *ProxyStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (stor
 //      - Children cannot be AggregateExpr: aggregates have their own combining logic, so its not safe to send a subquery with additional aggregations
 //      - offsets within the subtree must match: if they don't then we'll get mismatched data, so we wait until we are far enough down the tree that they converge
 //      - Don't reduce accuracy/granularity: the intention of this is to get the correct data faster, meaning correctness overrules speed.
-func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, node parser.Node) (parser.Node, error) {
+func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, node parser.Node, path []parser.Node) (parser.Node, error) {
 	isAgg := func(node parser.Node) bool {
 		_, ok := node.(*parser.AggregateExpr)
 		return ok
@@ -193,6 +193,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	isSubQuery := func(node parser.Node) bool {
 		_, ok := node.(*parser.SubqueryExpr)
 		return ok
+	}
+
+	// If we are a child of a subquery; we just skip replacement (since it already did a nodereplacer for those)
+	for _, n := range path {
+		if isSubQuery(n) {
+			return nil, nil
+		}
 	}
 
 	// If there is a child that is an aggregator we cannot do anything (as they have their own
@@ -500,6 +507,28 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// have anyway to ask for less-- since this is exactly what they are asking for
 	case *parser.MatrixSelector:
 		// DO NOTHING
+
+	// For Subquery Expressions; we basically want to replace them with our own statement (separate interval, step, etc.)
+	// Note: since we are replacing this with another query we can get some value differences as this sends larger sub-queries
+	// downstream (which may have access to less data, and promql has some weird heuristics on how it calculates values on step)
+	case *parser.SubqueryExpr:
+		logrus.Debugf("SubqueryExpr: %v", n)
+		subEvalStmt := *s
+
+		subEvalStmt.Expr = n.Expr
+		subEvalStmt.Start = subEvalStmt.Start.Add(-n.Offset).Add(-n.Range)
+		subEvalStmt.End = subEvalStmt.End.Add(-n.Offset)
+		subEvalStmt.Interval = n.Step
+
+		newN, err := parser.Inspect(ctx, &subEvalStmt, func(parser.Node, []parser.Node) error { return nil }, p.NodeReplacer)
+		if err != nil {
+			return nil, err
+		}
+
+		if newN != nil {
+			n.Expr = newN.(parser.Expr)
+			return n, nil
+		}
 
 	default:
 		logrus.Debugf("default %v %s", n, reflect.TypeOf(n))

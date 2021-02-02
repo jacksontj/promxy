@@ -288,7 +288,7 @@ func Walk(ctx context.Context, v Visitor, s *EvalStmt, node Node, path []Node, n
 	}
 
 	if nr != nil {
-		replacement, err := nr(ctx, s, node)
+		replacement, err := nr(ctx, s, node, path)
 		if replacement != nil {
 			node = replacement
 		}
@@ -506,4 +506,4 @@ func (e *VectorSelector) PositionRange() PositionRange {
 	return e.PosRange
 }
 
-type NodeReplacer func(context.Context, *EvalStmt, Node) (Node, error)
+type NodeReplacer func(context.Context, *EvalStmt, Node, []Node) (Node, error)
