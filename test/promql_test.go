@@ -101,16 +101,19 @@ promxy:
 `
 
 func getProxyStorage(cfg string) *proxystorage.ProxyStorage {
-	ps, err := proxystorage.NewProxyStorage()
-	if err != nil {
-		logrus.Fatalf("Error creating proxy: %v", err)
-	}
-
 	// Create promxy in front of it
 	pstorageConfig := &proxyconfig.Config{}
 	if err := yaml.Unmarshal([]byte(cfg), &pstorageConfig); err != nil {
 		panic(err)
 	}
+
+	ps, err := proxystorage.NewProxyStorage(func(rangeMillis int64) int64 {
+		return int64(config.DefaultGlobalConfig.EvaluationInterval) / int64(time.Millisecond)
+	})
+	if err != nil {
+		logrus.Fatalf("Error creating proxy: %v", err)
+	}
+
 	if err := ps.ApplyConfig(pstorageConfig); err != nil {
 		logrus.Fatalf("Unable to apply config: %v", err)
 	}
