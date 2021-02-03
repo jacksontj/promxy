@@ -1,0 +1,32 @@
+name: build
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: azure/docker-login@v1
+        with:
+          login-server: quay.io
+          username: '${{ secrets.QUAYIO_USERNAME }}'
+          password: '${{ secrets.QUAYIO_PASSWORD }}'
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: crazy-max/ghaction-docker-buildx@v1
+        with:
+          buildx-version: latest
+          qemu-version: latest
+      - name: Available platforms
+        run: 'echo ${{ steps.buildx.outputs.platforms }}'
+      - name: Run Buildx
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --push -t quay.io/jacksontj/promxy:${GITHUB_REF##*/} .
