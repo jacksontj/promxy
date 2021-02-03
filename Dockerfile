@@ -1,4 +1,9 @@
-FROM       golang:alpine as builder
+FROM --platform=$BUILDPLATFORM golang:alpine as builder
+
+ARG BUILDPLATFORM
+ARG TARGETARCH
+ARG TARGETOS
+ENV GOARCH=${TARGETARCH} GOOS=${TARGETOS}
 
 COPY . /go/src/github.com/jacksontj/promxy
 RUN cd /go/src/github.com/jacksontj/promxy/cmd/promxy && CGO_ENABLED=0 go build -mod=vendor -tags netgo,builtinassets
