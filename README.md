@@ -1,4 +1,4 @@
-# Promxy [![Build Status](https://travis-ci.org/jacksontj/promxy.svg?branch=master)](https://travis-ci.org/jacksontj/promxy) [![GoDoc](https://godoc.org/github.com/jacksontj/promxy?status.svg)](https://godoc.org/github.com/jacksontj/promxy) [![Go Report Card](https://goreportcard.com/badge/github.com/jacksontj/promxy)](https://goreportcard.com/report/github.com/jacksontj/promxy) [![Docker Repository on Quay](https://quay.io/repository/jacksontj/promxy/status "Docker Repository on Quay")](https://quay.io/repository/jacksontj/promxy)
+# Promxy [![Test Actions Status](https://github.com/jacksontj/promxy/workflows/Go/badge.svg)](https://github.com/jacksontj/promxy/actions) [![GoDoc](https://godoc.org/github.com/jacksontj/promxy?status.svg)](https://godoc.org/github.com/jacksontj/promxy) [![Go Report Card](https://goreportcard.com/badge/github.com/jacksontj/promxy)](https://goreportcard.com/report/github.com/jacksontj/promxy) [![Docker Repository on Quay](https://quay.io/repository/jacksontj/promxy/status "Docker Repository on Quay")](https://quay.io/repository/jacksontj/promxy)
 
 pronounced "promski" or präm-sē
 
