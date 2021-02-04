@@ -176,7 +176,7 @@ func (p *ProxyStorage) Appender(context.Context) storage.Appender {
 func (p *ProxyStorage) Close() error { return nil }
 
 func (p *ProxyStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (storage.ChunkQuerier, error) {
-	panic("not implemented") // TODO
+	return nil, errors.New("not implemented")
 }
 
 // NodeReplacer replaces promql Nodes with more efficient-to-fetch ones. This works by taking lower-layer
