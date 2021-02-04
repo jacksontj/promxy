@@ -225,7 +225,7 @@ func main() {
 		Format: &promlog.AllowedFormat{},
 	}
 	if err := logCfg.Level.Set("info"); err != nil {
-		panic(err)
+		logrus.Fatalf("Unable to set log level: %v", err)
 	}
 
 	logger := promlog.New(logCfg)
