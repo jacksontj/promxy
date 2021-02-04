@@ -270,6 +270,7 @@ func main() {
 		QueryFunc:       rules.EngineQueryFunc(engine, proxyStorage),
 		NotifyFunc:      sendAlerts(notifierManager, externalUrl.String()),
 		Appendable:      proxyStorage,
+		Queryable:       proxyStorage,
 		Logger:          logger,
 		Registerer:      prometheus.DefaultRegisterer,
 		OutageTolerance: opts.ForOutageTolerance,
