@@ -16,7 +16,9 @@ require (
 	github.com/prometheus/common v0.15.0
 	github.com/prometheus/prometheus v1.8.1-0.20200513230854-c784807932c2
 	github.com/sirupsen/logrus v1.6.0
+	github.com/stretchr/testify v1.6.1
 	go.uber.org/atomic v1.7.0
+	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/klog v1.0.0
 )

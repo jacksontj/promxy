@@ -15,8 +15,9 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 
-	"github.com/prometheus/prometheus/storage/remote"
+	"github.com/jacksontj/promxy/pkg/remote"
 
+	"github.com/jacksontj/promxy/pkg/logging"
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
@@ -120,20 +121,20 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 			}
 			newState.remoteStorage = oldState.remoteStorage
 		} else {
-			panic("WHAT")
-			/*
-				// TODO: configure path?
-				remote := remote.NewStorage(logging.NewLogger(logrus.WithField("component", "remote_write").Logger), func() (int64, error) { return 0, nil }, 1*time.Second)
-				if err := remote.ApplyConfig(&c.PromConfig); err != nil {
-					return err
-				}
-				newState.remoteStorage = remote
-				newState.appenderCloser = remote.Close
-			*/
+			remote := remote.NewStorage(logging.NewLogger(logrus.WithField("component", "remote_write").Logger), func() (int64, error) { return 0, nil }, 1*time.Second)
+			if err := remote.ApplyConfig(&c.PromConfig); err != nil {
+				return err
+			}
+			newState.remoteStorage = remote
+			newState.appenderCloser = remote.Close
 		}
 
 		// Whether old or new, update the appender
-		newState.appender = newState.remoteStorage.Appender(context.TODO())
+		var err error
+		newState.appender, err = newState.remoteStorage.Appender()
+		if err != nil {
+			return err
+		}
 
 	} else {
 		newState.appender = &appenderStub{}
