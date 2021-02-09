@@ -316,8 +316,11 @@ func main() {
 
 	// TODO: separate package?
 	webOptions := &web.Options{
+		Registerer:    prometheus.DefaultRegisterer,
+		Gatherer:      prometheus.DefaultGatherer,
 		Context:       ctx,
 		Storage:       proxyStorage,
+		LocalStorage:  ps,
 		QueryEngine:   engine,
 		ScrapeManager: scrapeManager,
 		RuleManager:   ruleManager,

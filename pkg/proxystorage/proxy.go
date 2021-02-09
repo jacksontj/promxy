@@ -10,9 +10,12 @@ import (
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb"
+	"github.com/prometheus/prometheus/tsdb/index"
 	"github.com/sirupsen/logrus"
 
 	"github.com/jacksontj/promxy/pkg/remote"
@@ -177,6 +180,14 @@ func (p *ProxyStorage) Close() error { return nil }
 
 func (p *ProxyStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (storage.ChunkQuerier, error) {
 	return nil, errors.New("not implemented")
+}
+
+// Implement web.LocalStorage
+func (p *ProxyStorage) CleanTombstones() (err error)                         { return nil }
+func (p *ProxyStorage) Delete(mint, maxt int64, ms ...*labels.Matcher) error { return nil }
+func (p *ProxyStorage) Snapshot(dir string, withHead bool) error             { return nil }
+func (p *ProxyStorage) Stats(statsByLabelName string) (*tsdb.Stats, error) {
+	return &tsdb.Stats{IndexPostingStats: &index.PostingsStats{}}, nil
 }
 
 // NodeReplacer replaces promql Nodes with more efficient-to-fetch ones. This works by taking lower-layer
