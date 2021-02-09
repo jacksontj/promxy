@@ -29,6 +29,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/model"
@@ -54,7 +55,16 @@ import (
 )
 
 var (
-	reloadTime = prometheus.NewGauge(prometheus.GaugeOpts{
+	configSuccess = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "prometheus_config_last_reload_successful",
+		Help: "Whether the last configuration reload attempt was successful.",
+	})
+	configSuccessTime = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "prometheus_config_last_reload_success_timestamp_seconds",
+		Help: "Timestamp of the last successful configuration reload.",
+	})
+
+	reloadTime = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "process_reload_time_seconds",
 		Help: "Last reload (SIGHUP) time of the process since unix epoch in seconds.",
 	})
@@ -106,7 +116,16 @@ func (c *cliOpts) ToFlags() map[string]string {
 
 var opts cliOpts
 
-func reloadConfig(noStepSuqueryInterval *safePromQLNoStepSubqueryInterval, rls ...proxyconfig.Reloadable) error {
+func reloadConfig(noStepSuqueryInterval *safePromQLNoStepSubqueryInterval, rls ...proxyconfig.Reloadable) (err error) {
+	defer func() {
+		if err == nil {
+			configSuccess.Set(1)
+			configSuccessTime.SetToCurrentTime()
+		} else {
+			configSuccess.Set(0)
+		}
+	}()
+
 	cfg, err := proxyconfig.ConfigFromFile(opts.ConfigFile)
 	if err != nil {
 		return fmt.Errorf("error loading cfg: %v", err)
@@ -135,8 +154,6 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	defer close(sigs)
 	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
-
-	prometheus.MustRegister(reloadTime)
 
 	reloadables := make([]proxyconfig.Reloadable, 0)
 
@@ -388,6 +405,9 @@ func main() {
 	if err := reloadConfig(noStepSubqueryInterval, reloadables...); err != nil {
 		logrus.Fatalf("Error loading config: %s", err)
 	}
+
+	configSuccess.Set(1)
+	configSuccessTime.SetToCurrentTime()
 
 	close(reloadReady)
 
