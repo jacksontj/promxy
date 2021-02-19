@@ -70,7 +70,6 @@ func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
 }
 
 // MergeValues merges values `a` and `b` with the given antiAffinityBuffer
-// TODO: always make copies? Now we sometimes return one, or make a copy, or do nothing
 func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, error) {
 	if a == nil {
 		return b, nil
@@ -116,7 +115,7 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, 
 
 			// If we've seen this fingerPrint before, lets make sure that a value exists
 			if index, ok := fingerPrintMap[finger]; ok {
-				// TODO: better? For now we only replace if we have no value (which seems reasonable)
+				// Only replace if we have no value (which seems reasonable)
 				if newValue[index].Value == model.SampleValue(0) {
 					newValue[index].Value = item.Value
 				}
@@ -203,8 +202,6 @@ func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream) 
 		b = tmp
 	}
 
-	// TODO: really there should be a library method for this in prometheus IMO
-	// At this point we have 2 sorted lists of datapoints which we need to merge
 	newValues := make([]model.SamplePair, 0, len(a.Values))
 
 	bOffset := 0

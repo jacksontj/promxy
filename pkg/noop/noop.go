@@ -2,6 +2,7 @@ package noop
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/storage"
@@ -34,9 +35,8 @@ func (n *noopStorage) Close() error {
 	return nil
 }
 
-// TODO: never work? We aren't a tsdb storage
 func (n *noopStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (storage.ChunkQuerier, error) {
-	return nil, nil
+	return nil, fmt.Errorf("promxy is not a ChunkQuerier")
 }
 
 type noopAppender struct{}

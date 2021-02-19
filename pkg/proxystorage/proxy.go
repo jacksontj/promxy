@@ -248,8 +248,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// the node API to String() the query to downstreams. Promql's iterators require
 	// that the time be the absolute time, whereas the API returns them based on the
 	// range you ask for (with the offset being implicit)
-	// TODO: rename
-	removeOffset := func() error {
+	removeOffsetFn := func() error {
 		_, err := parser.Walk(ctx, &OffsetRemover{}, s, node, nil, nil)
 		return err
 	}
@@ -269,7 +268,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		switch n.Op {
 		// All "reentrant" cases (meaning they can be done repeatedly and the outcome doesn't change)
 		case parser.SUM, parser.MIN, parser.MAX, parser.TOPK, parser.BOTTOMK:
-			removeOffset()
+			removeOffsetFn()
 
 			if s.Interval > 0 {
 				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
@@ -355,7 +354,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 		// For count we simply need to change this to a sum over the data we get back
 		case parser.COUNT:
-			removeOffset()
+			removeOffsetFn()
 
 			if s.Interval > 0 {
 				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
@@ -443,7 +442,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// prometheus node to answer
 	case *parser.Call:
 		logrus.Debugf("call %v %v", n, n.Type())
-		removeOffset()
+		removeOffsetFn()
 
 		var result model.Value
 		var warnings v1.Warnings
@@ -488,7 +487,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			return nil, nil
 		}
 		logrus.Debugf("VectorSelector: %v", n)
-		removeOffset()
+		removeOffsetFn()
 
 		var result model.Value
 		var warnings v1.Warnings

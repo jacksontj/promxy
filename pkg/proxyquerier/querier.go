@@ -40,7 +40,6 @@ func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*l
 	}()
 
 	var result model.Value
-	// TODO: get warnings from lower layers
 	var warnings storage.Warnings
 	var err error
 	// Select() is a combined API call for query/query_range/series.
