@@ -342,6 +342,7 @@ func main() {
 		ScrapeManager: scrapeManager,
 		RuleManager:   ruleManager,
 		Notifier:      notifierManager,
+		LookbackDelta: opts.QueryLookbackDelta,
 
 		RemoteReadConcurrencyLimit: opts.RemoteReadMaxConcurrency,
 
