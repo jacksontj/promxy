@@ -15,7 +15,6 @@ import (
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 )
 
-// TODO: push into lib?
 var (
 	minTime = time.Unix(math.MinInt64/1000+62135596801, 0).UTC()
 	maxTime = time.Unix(math.MaxInt64/1000-62135596801, 999999999).UTC()

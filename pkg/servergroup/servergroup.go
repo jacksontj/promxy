@@ -163,8 +163,7 @@ SYNC_LOOP:
 					if s.Cfg.RemoteRead {
 						u.Path = path.Join(u.Path, s.Cfg.RemoteReadPath)
 						cfg := &remote.ClientConfig{
-							URL: &config_util.URL{u},
-							// TODO: from context?
+							URL:              &config_util.URL{u},
 							HTTPClientConfig: s.Cfg.HTTPConfig.HTTPConfig,
 							Timeout:          model.Duration(time.Minute * 2),
 						}
