@@ -41,6 +41,7 @@ promxy:
       # anti-affinity for merging values in timeseries between hosts in the server_group
       anti_affinity: 10s
       # Controls whether to use remote_read or the prom API for fetching remote RAW data (e.g. matrix selectors)
+      # Note, some prometheus implementations (e.g. [VictoriaMetrics](https://github.com/prometheus/prometheus/issues/4456) don't support remote_read.
       remote_read: true
       # configures the path to send remote read requests to. The default is "api/v1/read"
       remote_read_path: api/v1/read
