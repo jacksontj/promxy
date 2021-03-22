@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -166,7 +167,9 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 	go func() {
 		defer close(stopChan)
 		close(startChan)
-		srv.ListenAndServe()
+		if err := srv.ListenAndServe(); err != nil {
+			fmt.Println("Error listening to", listen, err)
+		}
 	}()
 
 	<-startChan
