@@ -70,7 +70,7 @@ promxy:
           insecure_skip_verify: true
     - static_configs:
         - targets:
-          - localhost:8084
+          - localhost:8085
       labels:
         az: b
       http_client:
@@ -92,7 +92,7 @@ promxy:
           insecure_skip_verify: true
     - static_configs:
         - targets:
-          - localhost:8084
+          - localhost:8085
       labels:
         az: b
       remote_read: true
@@ -241,7 +241,7 @@ func TestEvaluations(t *testing.T) {
 
 				// Create API for the storage engine
 				srv, stopChan := startAPIForTest(test.Storage(), ":8083")
-				srv2, stopChan2 := startAPIForTest(test.Storage(), ":8084")
+				srv2, stopChan2 := startAPIForTest(test.Storage(), ":8085")
 
 				ps := getProxyStorage(psConfig)
 				lStorage := &LayeredStorage{ps, test.Storage()}
