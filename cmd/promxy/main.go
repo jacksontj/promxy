@@ -34,7 +34,6 @@ import (
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/promlog"
-	"github.com/prometheus/common/route"
 	"github.com/prometheus/common/version"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
@@ -369,9 +368,9 @@ func main() {
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(webHandler))
 	webHandler.Ready()
 
-	apiRouter := route.New()
-
-	webHandler.Getv1API().Register(apiRouter.WithPrefix(path.Join(webOptions.RoutePrefix, "/api/v1")))
+	apiPrefix := path.Join(webOptions.RoutePrefix, "/api/v1")
+	// Register API endpoint with correct route prefix
+	webHandler.Getv1API().Register(webHandler.GetRouter().WithPrefix(apiPrefix))
 
 	// Create our router
 	r := httprouter.New()
@@ -381,9 +380,7 @@ func main() {
 	stopping := false
 	r.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Have our fallback rules
-		if strings.HasPrefix(r.URL.Path, path.Join(webOptions.RoutePrefix, "/api")) {
-			apiRouter.ServeHTTP(w, r)
-		} else if strings.HasPrefix(r.URL.Path, path.Join(webOptions.RoutePrefix, "/debug")) {
+		if strings.HasPrefix(r.URL.Path, path.Join(webOptions.RoutePrefix, "/debug")) {
 			http.DefaultServeMux.ServeHTTP(w, r)
 		} else if r.URL.Path == path.Join(webOptions.RoutePrefix, "/-/ready") {
 			if stopping {
