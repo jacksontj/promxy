@@ -486,6 +486,16 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		if n.UnexpandedSeriesSet != nil {
 			return nil, nil
 		}
+
+		// Check if this VectorSelector is below a MatrixSelector.
+		// If we hit this someone is asking for a matrix directly, if so then we don't
+		// have anyway to ask for less-- since this is exactly what they are asking for
+		if len(path) > 0 {
+			if _, ok := path[len(path)-1].(*parser.MatrixSelector); ok {
+				return nil, nil
+			}
+		}
+
 		logrus.Debugf("VectorSelector: %v", n)
 		removeOffsetFn()
 
