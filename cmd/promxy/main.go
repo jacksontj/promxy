@@ -74,10 +74,11 @@ var (
 type cliOpts struct {
 	Version bool `long:"version" short:"v" description:"print out version and exit"`
 
-	BindAddr   string `long:"bind-addr" description:"address for promxy to listen on" default:":8082"`
-	ConfigFile string `long:"config" description:"path to the config file" default:"config.yaml"`
-	LogLevel   string `long:"log-level" description:"Log level" default:"info"`
-	LogFormat  string `long:"log-format" description:"Log format(text|json)" default:"text"`
+	BindAddr         string `long:"bind-addr" description:"address for promxy to listen on" default:":8082"`
+	ConfigFile       string `long:"config" description:"path to the config file" default:"config.yaml"`
+	LogLevel         string `long:"log-level" description:"Log level" default:"info"`
+	LogFormat        string `long:"log-format" description:"Log format(text|json)" default:"text"`
+	LogMaxFormPrefix int    `long:"log-max-form-prefix" description:"Max prefix for form values in log entries" default:"256"`
 
 	WebCORSOriginRegex string        `long:"web.cors.origin" description:"Regex for CORS origin. It is fully anchored." default:".*"`
 	WebReadTimeout     time.Duration `long:"web.read-timeout" description:"Maximum duration before timing out read of the request, and closing idle connections." default:"5m"`
@@ -168,6 +169,8 @@ func main() {
 		fmt.Println("Version", Version)
 		os.Exit(0)
 	}
+
+	logging.SetMaxFormPrefix(opts.LogMaxFormPrefix)
 
 	// Use log level
 	level, err := logrus.ParseLevel(opts.LogLevel)
