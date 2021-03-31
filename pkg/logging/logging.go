@@ -13,7 +13,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-const MaxFormPrefix = 256
+var MaxFormPrefix = 256
+
+func SetMaxFormPrefix(i int) {
+	MaxFormPrefix = i
+}
 
 func FormPrefix(form url.Values) string {
 	var buf strings.Builder
