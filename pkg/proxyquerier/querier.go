@@ -47,7 +47,7 @@ func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*l
 	// data call (query/query_range) and a metadata call (series). For now
 	// the working workaround is to switch based on the hints.
 	// https://github.com/prometheus/prometheus/issues/4057
-	if hints == nil {
+	if hints == nil || hints.Func == "series" {
 		matcherString, err := promhttputil.MatcherToString(matchers)
 		if err != nil {
 			return NewSeriesSet(nil, nil, err)
