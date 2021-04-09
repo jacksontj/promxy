@@ -7,7 +7,9 @@ import (
 // NewSeriesSet returns a SeriesSet for the given series
 func NewSeriesSet(series []storage.Series, warnings storage.Warnings, err error) *SeriesSet {
 	return &SeriesSet{
-		series: series,
+		series:   series,
+		warnings: warnings,
+		err:      err,
 	}
 }
 
