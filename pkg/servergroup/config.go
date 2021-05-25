@@ -161,8 +161,9 @@ type HTTPClientConfig struct {
 // RelativeTimeRangeConfig configures durations relative from "now" to define
 // a servergroup's time range
 type RelativeTimeRangeConfig struct {
-	Start *time.Duration `yaml:"start"`
-	End   *time.Duration `yaml:"end"`
+	Start    *time.Duration `yaml:"start"`
+	End      *time.Duration `yaml:"end"`
+	Truncate bool           `yaml:"truncate"`
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface.
@@ -184,8 +185,9 @@ func (tr *RelativeTimeRangeConfig) validate() error {
 
 // AbsoluteTimeRangeConfig contains absolute times to define a servergroup's time range
 type AbsoluteTimeRangeConfig struct {
-	Start time.Time `yaml:"start"`
-	End   time.Time `yaml:"end"`
+	Start    time.Time `yaml:"start"`
+	End      time.Time `yaml:"end"`
+	Truncate bool      `yaml:"truncate"`
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface.

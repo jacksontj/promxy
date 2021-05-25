@@ -178,17 +178,19 @@ SYNC_LOOP:
 					// Optionally add time range layers
 					if s.Cfg.AbsoluteTimeRangeConfig != nil {
 						apiClient = &promclient.AbsoluteTimeFilter{
-							API:   apiClient,
-							Start: s.Cfg.AbsoluteTimeRangeConfig.Start,
-							End:   s.Cfg.AbsoluteTimeRangeConfig.End,
+							API:      apiClient,
+							Start:    s.Cfg.AbsoluteTimeRangeConfig.Start,
+							End:      s.Cfg.AbsoluteTimeRangeConfig.End,
+							Truncate: s.Cfg.AbsoluteTimeRangeConfig.Truncate,
 						}
 					}
 
 					if s.Cfg.RelativeTimeRangeConfig != nil {
 						apiClient = &promclient.RelativeTimeFilter{
-							API:   apiClient,
-							Start: s.Cfg.RelativeTimeRangeConfig.Start,
-							End:   s.Cfg.RelativeTimeRangeConfig.End,
+							API:      apiClient,
+							Start:    s.Cfg.RelativeTimeRangeConfig.Start,
+							End:      s.Cfg.RelativeTimeRangeConfig.End,
+							Truncate: s.Cfg.RelativeTimeRangeConfig.Truncate,
 						}
 					}
 
