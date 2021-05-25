@@ -99,4 +99,3 @@ be ignored and we'll serve the response anyways) you can do this using the [igno
 
 ## Questions/Bugs/etc.
 Feedback is **greatly** appreciated. If you find a bug, have a feature request, or just have a general question feel free to open up an issue!
-If you prefer a more real-time channel you can also reach out on [#promxy on Freenode](https://webchat.freenode.net/?channels=%23promxy).
