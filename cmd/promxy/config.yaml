@@ -70,6 +70,7 @@ promxy:
       relative_time_range:
         start: -3h
         end: -1h
+        truncate: false
 
       # absolute_time_range defines an absolute time range that this server group contains.
       # this is completely optional and start/end are both optional as well
@@ -78,6 +79,7 @@ promxy:
       absolute_time_range:
         start: '2009-10-10T23:00:00Z'
         end: '2009-10-11T23:00:00Z'
+        truncate: true
 
     # as many additional server groups as you have
     - static_configs:

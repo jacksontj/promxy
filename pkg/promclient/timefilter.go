@@ -13,6 +13,7 @@ import (
 type AbsoluteTimeFilter struct {
 	API
 	Start, End time.Time
+	Truncate   bool
 }
 
 // Query performs a query for the given time.
@@ -30,6 +31,15 @@ func (tf *AbsoluteTimeFilter) QueryRange(ctx context.Context, query string, r v1
 		return nil, nil, nil
 	}
 
+	if tf.Truncate {
+		if r.Start.Before(tf.Start) {
+			r.Start = tf.Start
+		}
+		if r.End.After(tf.End) {
+			r.End = tf.End
+		}
+	}
+
 	return tf.API.QueryRange(ctx, query, r)
 }
 
@@ -38,6 +48,16 @@ func (tf *AbsoluteTimeFilter) Series(ctx context.Context, matches []string, star
 	if (!tf.Start.IsZero() && endTime.Before(tf.Start)) || (!tf.End.IsZero() && startTime.After(tf.End)) {
 		return nil, nil, nil
 	}
+
+	if tf.Truncate {
+		if startTime.Before(tf.Start) {
+			startTime = tf.Start
+		}
+		if endTime.After(tf.End) {
+			endTime = tf.End
+		}
+	}
+
 	return tf.API.Series(ctx, matches, startTime, endTime)
 }
 
@@ -47,6 +67,15 @@ func (tf *AbsoluteTimeFilter) GetValue(ctx context.Context, start, end time.Time
 		return nil, nil, nil
 	}
 
+	if tf.Truncate {
+		if start.Before(tf.Start) {
+			start = tf.Start
+		}
+		if end.After(tf.End) {
+			end = tf.End
+		}
+	}
+
 	return tf.API.GetValue(ctx, start, end, matchers)
 }
 
@@ -54,6 +83,7 @@ func (tf *AbsoluteTimeFilter) GetValue(ctx context.Context, start, end time.Time
 type RelativeTimeFilter struct {
 	API
 	Start, End *time.Duration
+	Truncate   bool
 }
 
 func (tf *RelativeTimeFilter) window() (time.Time, time.Time) {
@@ -87,6 +117,15 @@ func (tf *RelativeTimeFilter) QueryRange(ctx context.Context, query string, r v1
 		return nil, nil, nil
 	}
 
+	if tf.Truncate {
+		if r.Start.Before(tfStart) {
+			r.Start = tfStart
+		}
+		if r.End.After(tfEnd) {
+			r.End = tfEnd
+		}
+	}
+
 	return tf.API.QueryRange(ctx, query, r)
 }
 
@@ -96,6 +135,16 @@ func (tf *RelativeTimeFilter) Series(ctx context.Context, matches []string, star
 	if (!tfStart.IsZero() && endTime.Before(tfStart)) || (!tfEnd.IsZero() && startTime.After(tfEnd)) {
 		return nil, nil, nil
 	}
+
+	if tf.Truncate {
+		if startTime.Before(tfStart) {
+			startTime = tfStart
+		}
+		if endTime.After(tfEnd) {
+			endTime = tfEnd
+		}
+	}
+
 	return tf.API.Series(ctx, matches, startTime, endTime)
 }
 
@@ -104,6 +153,15 @@ func (tf *RelativeTimeFilter) GetValue(ctx context.Context, start, end time.Time
 	tfStart, tfEnd := tf.window()
 	if (!tfStart.IsZero() && end.Before(tfStart)) || (!tfEnd.IsZero() && start.After(tfEnd)) {
 		return nil, nil, nil
+	}
+
+	if tf.Truncate {
+		if start.Before(tfStart) {
+			start = tfStart
+		}
+		if end.After(tfEnd) {
+			end = tfEnd
+		}
 	}
 
 	return tf.API.GetValue(ctx, start, end, matchers)
