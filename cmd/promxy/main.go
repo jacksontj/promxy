@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/jacksontj/promxy/pkg/server"
 	"io"
 	"path"
 	"regexp"
@@ -80,6 +81,7 @@ type cliOpts struct {
 	LogFormat        string `long:"log-format" description:"Log format(text|json)" default:"text"`
 	LogMaxFormPrefix int    `long:"log-max-form-prefix" description:"Max prefix for form values in log entries" default:"256"`
 
+	WebConfigFile      string        `long:"web.config.file" description:"[EXPERIMENTAL] Path to configuration file that can enable TLS or authentication."`
 	WebCORSOriginRegex string        `long:"web.cors.origin" description:"Regex for CORS origin. It is fully anchored." default:".*"`
 	WebReadTimeout     time.Duration `long:"web.read-timeout" description:"Maximum duration before timing out read of the request, and closing idle connections." default:"5m"`
 
@@ -430,33 +432,7 @@ func main() {
 		logrus.Fatalf("Invalid AccessLogDestination: %s", opts.AccessLogDestination)
 	}
 
-	var handler http.Handler
-	if accessLogOut == nil {
-		handler = r
-	} else {
-		switch opts.LogFormat {
-		case "json":
-			handler = logging.NewApacheLoggingHandler(r, logging.LogJsonToWriter(accessLogOut))
-		default:
-			handler = logging.NewApacheLoggingHandler(r, logging.LogToWriter(accessLogOut))
-		}
-	}
-
-	srv := &http.Server{
-		Addr:        opts.BindAddr,
-		Handler:     handler,
-		ReadTimeout: opts.WebReadTimeout,
-	}
-
-	go func() {
-		logrus.Infof("promxy starting")
-		if err := srv.ListenAndServe(); err != nil {
-			if err == http.ErrServerClosed {
-				return
-			}
-			log.Errorf("Error listening: %v", err)
-		}
-	}()
+	srv := server.Placeholder(opts.BindAddr, opts.LogFormat, opts.WebReadTimeout, accessLogOut, r)
 
 	// wait for signals etc.
 	for {
