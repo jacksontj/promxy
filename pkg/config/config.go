@@ -2,6 +2,7 @@ package proxyconfig
 
 import (
 	"fmt"
+	"github.com/prometheus/exporter-toolkit/web"
 	"io/ioutil"
 
 	"github.com/prometheus/prometheus/config"
@@ -44,6 +45,8 @@ type Config struct {
 
 	// Promxy specific configuration -- under its own namespace
 	PromxyConfig `yaml:"promxy"`
+
+	WebConfig web.TLSStruct `yaml:"tls_server_config"`
 }
 
 // PromxyConfig is the configuration for Promxy itself
