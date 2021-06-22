@@ -88,9 +88,11 @@ type cliOpts struct {
 	ExternalURL     string `long:"web.external-url" description:"The URL under which Prometheus is externally reachable (for example, if Prometheus is served via a reverse proxy). Used for generating relative and absolute links back to Prometheus itself. If the URL has a path portion, it will be used to prefix all HTTP endpoints served by Prometheus. If omitted, relevant URL components will be derived automatically."`
 	EnableLifecycle bool   `long:"web.enable-lifecycle" description:"Enable shutdown and reload via HTTP request."`
 
-	QueryTimeout       time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
-	QueryMaxSamples    int           `long:"query.max-samples" description:"Maximum number of samples a single query can load into memory. Note that queries will fail if they would load more samples than this into memory, so this also limits the number of samples a query can return." default:"50000000"`
-	QueryLookbackDelta time.Duration `long:"query.lookback-delta" description:"The maximum lookback duration for retrieving metrics during expression evaluations." default:"5m"`
+	QueryTimeout        time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
+	QueryMaxSamples     int           `long:"query.max-samples" description:"Maximum number of samples a single query can load into memory. Note that queries will fail if they would load more samples than this into memory, so this also limits the number of samples a query can return." default:"50000000"`
+	QueryLookbackDelta  time.Duration `long:"query.lookback-delta" description:"The maximum lookback duration for retrieving metrics during expression evaluations." default:"5m"`
+	QueryMaxConcurrency int           `long:"query.max-concurrency" default:"-1" description:"Maximum number of queries executed concurrently."`
+	LocalStoragePath    string        `long:"storage.tsdb.path" description:"Base path for metrics storage."`
 
 	RemoteReadMaxConcurrency int `long:"remote-read.max-concurrency" description:"Maximum number of concurrent remote read calls." default:"10"`
 
@@ -220,21 +222,6 @@ func main() {
 	reloadables = append(reloadables, ps)
 	proxyStorage = ps
 
-	engine := promql.NewEngine(promql.EngineOpts{
-		Reg:                      prometheus.DefaultRegisterer,
-		Timeout:                  opts.QueryTimeout,
-		MaxSamples:               opts.QueryMaxSamples,
-		NoStepSubqueryIntervalFn: noStepSubqueryInterval.Get,
-		LookbackDelta:            opts.QueryLookbackDelta,
-	})
-	engine.NodeReplacer = ps.NodeReplacer
-
-	externalUrl, err := computeExternalURL(opts.ExternalURL, opts.BindAddr)
-	if err != nil {
-		logrus.Fatalf("Unable to parse external URL %s", "tmp")
-	}
-
-	// Alert notifier
 	logCfg := &promlog.Config{
 		Level:  &promlog.AllowedLevel{},
 		Format: &promlog.AllowedFormat{},
@@ -245,6 +232,30 @@ func main() {
 
 	logger := promlog.New(logCfg)
 
+	engineOpts := promql.EngineOpts{
+		Reg:                      prometheus.DefaultRegisterer,
+		Timeout:                  opts.QueryTimeout,
+		MaxSamples:               opts.QueryMaxSamples,
+		NoStepSubqueryIntervalFn: noStepSubqueryInterval.Get,
+		LookbackDelta:            opts.QueryLookbackDelta,
+	}
+
+	if opts.QueryMaxConcurrency != -1 {
+		if opts.LocalStoragePath == "" {
+			logrus.Fatalf("local storage path must be defined if you wish to enable max query concurrency limits")
+		}
+		engineOpts.ActiveQueryTracker = promql.NewActiveQueryTracker(opts.LocalStoragePath, opts.QueryMaxConcurrency, kitlog.With(logger, "component", "activeQueryTracker"))
+	}
+
+	engine := promql.NewEngine(engineOpts)
+	engine.NodeReplacer = ps.NodeReplacer
+
+	externalUrl, err := computeExternalURL(opts.ExternalURL, opts.BindAddr)
+	if err != nil {
+		logrus.Fatalf("Unable to parse external URL %s", "tmp")
+	}
+
+	// Alert notifier
 	notifierManager := notifier.NewManager(
 		&notifier.Options{
 			Registerer:    prometheus.DefaultRegisterer,
