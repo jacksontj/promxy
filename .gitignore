@@ -1,3 +1,4 @@
 cmd/promxy/promxy
 cmd/remote_write_exporter/remote_write_exporter
 build/*
+.idea

@@ -432,7 +432,7 @@ func main() {
 		logrus.Fatalf("Invalid AccessLogDestination: %s", opts.AccessLogDestination)
 	}
 
-	srv := server.Placeholder(opts.BindAddr, opts.LogFormat, opts.WebReadTimeout, accessLogOut, r)
+	srv := server.Placeholder(opts.BindAddr, opts.LogFormat, opts.WebReadTimeout, accessLogOut, r, nil)
 
 	// wait for signals etc.
 	for {
