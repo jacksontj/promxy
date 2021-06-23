@@ -1,0 +1,4 @@
+cert_file: "testdata/server.crt"
+key_file: "testdata/server.key"
+client_auth_type: "RequireAndVerifyClientCert"
+client_ca_file: "testdata/test-ca.crt"
