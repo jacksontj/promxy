@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func TestServerStartsUp(t *testing.T) {
+func TestUnauthenticatedServerFunctions(t *testing.T) {
 	freePort, err := getFreePort()
 	if err != nil {
 		t.Errorf("could not get a free port to run test: %s", err.Error())
@@ -52,7 +52,7 @@ func TestServerStartsUp(t *testing.T) {
 	server.Close()
 }
 
-func TestServerDoesNotStartupWithInvalidConfig(t *testing.T) {
+func TestAuthenticatedServerDoesNotStartupWithInvalidConfig(t *testing.T) {
 	freePort, err := getFreePort()
 	if err != nil {
 		t.Errorf("could not get a free port to run test: %s", err.Error())
@@ -71,7 +71,7 @@ func TestServerDoesNotStartupWithInvalidConfig(t *testing.T) {
 	}
 }
 
-func TestMutualTLSClientCannotConnectWithoutCerts(t *testing.T) {
+func TestMutualTLSClientCannotConnectToAuthenticatedServerWithoutCerts(t *testing.T) {
 	freePort, err := getFreePort()
 	if err != nil {
 		t.Errorf("could not get a free port to run test: %s", err.Error())
@@ -95,13 +95,13 @@ func TestMutualTLSClientCannotConnectWithoutCerts(t *testing.T) {
 
 	_, err = client.Get(fmt.Sprintf("https://%s/metrics", bindAddr))
 	if err == nil {
-		t.Errorf("could not make request to metrics endpoint: %s", err.Error())
+		t.Errorf("was able to make a request to metrics endpoint when it should no have: %s", err.Error())
 	}
 
 	server.Close()
 }
 
-func TestMutualTLSServerCanConnectWithCerts(t *testing.T) {
+func TestMutualTLSClientCanConnectToAuthenticatedServerWithCerts(t *testing.T) {
 	freePort, err := getFreePort()
 	if err != nil {
 		t.Errorf("could not get a free port to run test: %s", err.Error())
@@ -128,7 +128,7 @@ func TestMutualTLSServerCanConnectWithCerts(t *testing.T) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("an unexpected error occurred: authenticated client was unable to make a request to the authenticated server. Response body: %s", body)
+		t.Errorf("authenticated client was unable to make a request to the authenticated server. Response body: %s", body)
 	}
 
 	if !strings.Contains(string(body), "go_goroutines") {
