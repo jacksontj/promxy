@@ -1,4 +1,4 @@
-cert_file: "testdata/server.crt"
-key_file: "testdata/server.key"
+cert_file: "../../pkg/server/testdata/server.crt"
+key_file: "../../pkg/server/testdata/server.key"
 client_auth_type: "RequireAndVerifyClientCert"
-client_ca_file: "testdata/test-ca.crt"
+client_ca_file: "../../pkg/server/testdata/test-ca.crt"

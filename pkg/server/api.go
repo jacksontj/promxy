@@ -14,7 +14,23 @@ import (
 	"time"
 )
 
-func Placeholder(bindAddr string, logFormat string, webReadTimeout time.Duration, accessLogOut io.Writer, router *httprouter.Router, tlsConfigFile string) (*http.Server, error) {
+func CreateAndStart(bindAddr string, logFormat string, webReadTimeout time.Duration, accessLogOut io.Writer, router *httprouter.Router, tlsConfigFile string) (*http.Server, error) {
+	handler := createHandler(accessLogOut, router, logFormat)
+
+	srv := &http.Server{
+		Addr:        bindAddr,
+		Handler:     handler,
+		ReadTimeout: webReadTimeout,
+	}
+
+	if tlsConfigFile == "" {
+		return createAndStartHTTP(srv)
+	}
+
+	return createAndStartHTTPS(srv, tlsConfigFile)
+}
+
+func createHandler(accessLogOut io.Writer, router *httprouter.Router, logFormat string) http.Handler {
 	var handler http.Handler
 	if accessLogOut == nil {
 		handler = router
@@ -27,37 +43,31 @@ func Placeholder(bindAddr string, logFormat string, webReadTimeout time.Duration
 		}
 	}
 
-	if tlsConfigFile == "" {
-		srv := &http.Server{
-			Addr:        bindAddr,
-			Handler:     handler,
-			TLSConfig:   nil,
-			ReadTimeout: webReadTimeout,
-		}
+	return handler
+}
 
-		go func() {
-			logrus.Infof("promxy starting with HTTP...")
-			if err := srv.ListenAndServe(); err != nil {
-				if err == http.ErrServerClosed {
-					return
-				}
-				log.Errorf("Error listening: %v", err)
+func createAndStartHTTP(srv *http.Server) (*http.Server, error) {
+	srv.TLSConfig = nil
+
+	go func() {
+		logrus.Infof("promxy starting with HTTP...")
+		if err := srv.ListenAndServe(); err != nil {
+			if err == http.ErrServerClosed {
+				return
 			}
-		}()
-		return srv, nil
-	}
+			log.Errorf("Error listening: %v", err)
+		}
+	}()
+	return srv, nil
+}
 
+func createAndStartHTTPS(srv *http.Server, tlsConfigFile string) (*http.Server, error) {
 	tlsConfig, err := parseConfigFile(tlsConfigFile)
 	if err != nil {
 		return nil, err
 	}
 
-	srv := &http.Server{
-		Addr:        bindAddr,
-		Handler:     handler,
-		TLSConfig:   tlsConfig,
-		ReadTimeout: webReadTimeout,
-	}
+	srv.TLSConfig = tlsConfig
 
 	go func() {
 		logrus.Infof("promxy starting with TLS...")

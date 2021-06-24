@@ -1,10 +1,11 @@
 package server
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/exporter-toolkit/web"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -22,7 +23,7 @@ func TestServerStartsUp(t *testing.T) {
 	router := httprouter.New()
 	router.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
 
-	server, err := Placeholder(bindAddr, "text", time.Second*5, nil, router, "")
+	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "")
 	if err != nil {
 		t.Errorf("an error occured during creation of server: %s", err.Error())
 	}
@@ -60,7 +61,7 @@ func TestServerDoesNotStartupWithInvalidConfig(t *testing.T) {
 	router := httprouter.New()
 	router.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
 
-	server, err := Placeholder(bindAddr, "text", time.Second*5, nil, router, "testdata/invalid-tls-server-config.yml")
+	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/invalid-tls-server-config.yml")
 	if err == nil {
 		t.Errorf("server validated an invalid tlsConfig")
 	}
@@ -79,22 +80,22 @@ func TestMutualTLSClientCannotConnectWithoutCerts(t *testing.T) {
 	router := httprouter.New()
 	router.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
 
-	server, err := Placeholder(bindAddr, "text", time.Second*5, nil, router, "testdata/tls-server-config.yml")
+	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/tls-server-config.yml")
 	if err != nil {
 		t.Errorf("an error occured during creation of server: %s", err.Error())
 	}
 
 	client := &http.Client{
-		Transport: &http.Transport{},
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
 	}
 
-	resp, err := client.Get(fmt.Sprintf("http://%s/metrics", bindAddr))
-	if err != nil {
+	_, err = client.Get(fmt.Sprintf("https://%s/metrics", bindAddr))
+	if err == nil {
 		t.Errorf("could not make request to metrics endpoint: %s", err.Error())
-	}
-
-	if resp.StatusCode == http.StatusOK {
-		t.Errorf("unauthenticated client was able to make a request to an authenticated server")
 	}
 
 	server.Close()
@@ -109,30 +110,14 @@ func TestMutualTLSServerCanConnectWithCerts(t *testing.T) {
 	router := httprouter.New()
 	router.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
 
-	server, err := Placeholder(bindAddr, "text", time.Second*5, nil, router, "testdata/tls-server-config.yml")
+	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/tls-server-config.yml")
 	if err != nil {
 		t.Errorf("an error occured during creation of server: %s", err.Error())
 	}
 
+	client := setupAuthenticatedClient(t)
 
-	tlsStruct := &web.TLSStruct{
-		TLSCertPath: "testdata/server.crt",
-		TLSKeyPath:  "testdata/server.key",
-		ClientAuth:  "RequireAndVerifyClientCert",
-		ClientCAs:   "testdata/test-ca.crt",
-	}
-	tlsConfig, err := web.ConfigToTLSConfig(tlsStruct)
-	if err != nil {
-		t.Errorf("an unexpected error occurred translating the tlsStruct to a tlsConfig: %s", err)
-	}
-
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig,
-		},
-	}
-
-	resp, err := client.Get(fmt.Sprintf("http://%s/metrics", bindAddr))
+	resp, err := client.Get(fmt.Sprintf("https://%s/metrics", bindAddr))
 	if err != nil {
 		t.Errorf("could not make request to metrics endpoint: %s", err.Error())
 	}
@@ -164,4 +149,31 @@ func getFreePort() (int, error) {
 	}
 	defer l.Close()
 	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
+func setupAuthenticatedClient(t *testing.T) *http.Client {
+	caCert, err := ioutil.ReadFile("testdata/test-ca.crt")
+	if err != nil {
+		t.Errorf("could not read ca certificate: %s", err)
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	clientCert, err := tls.LoadX509KeyPair("testdata/client.crt", "testdata/client.key")
+	if err != nil {
+		t.Errorf("could not create keypair from file: %s", err)
+	}
+
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				Certificates:                []tls.Certificate{clientCert},
+				RootCAs:                     caCertPool,
+				ServerName:                  "localhost",
+				InsecureSkipVerify:          false,
+				MinVersion:                  tls.VersionTLS12,
+				MaxVersion:                  tls.VersionTLS13,
+			},
+		},
+	}
 }
