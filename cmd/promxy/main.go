@@ -432,7 +432,7 @@ func main() {
 		logrus.Fatalf("Invalid AccessLogDestination: %s", opts.AccessLogDestination)
 	}
 
-	srv, err := server.Placeholder(opts.BindAddr, opts.LogFormat, opts.WebReadTimeout, accessLogOut, r, opts.WebConfigFile)
+	srv, err := server.CreateAndStart(opts.BindAddr, opts.LogFormat, opts.WebReadTimeout, accessLogOut, r, opts.WebConfigFile)
 	if err != nil {
 		logrus.Fatalf("Error creating server: %v", err)
 	}
