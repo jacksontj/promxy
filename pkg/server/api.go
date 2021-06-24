@@ -36,7 +36,7 @@ func Placeholder(bindAddr string, logFormat string, webReadTimeout time.Duration
 		}
 
 		go func() {
-			logrus.Infof("promxy starting")
+			logrus.Infof("promxy starting with HTTP...")
 			if err := srv.ListenAndServe(); err != nil {
 				if err == http.ErrServerClosed {
 					return
@@ -60,8 +60,8 @@ func Placeholder(bindAddr string, logFormat string, webReadTimeout time.Duration
 	}
 
 	go func() {
-		logrus.Infof("promxy starting")
-		if err := srv.ListenAndServe(); err != nil {
+		logrus.Infof("promxy starting with TLS...")
+		if err := srv.ListenAndServeTLS("", ""); err != nil {
 			if err == http.ErrServerClosed {
 				return
 			}
