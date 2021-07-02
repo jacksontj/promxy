@@ -32,6 +32,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/prometheus/pkg/value"
 	"github.com/prometheus/prometheus/prompb"
 )
 
@@ -40,6 +41,7 @@ var opts struct {
 	WritePath     string        `long:"write-path" description:"url path" default:"/receive"`
 	WriteTextPath string        `long:"write-text-path" description:"url path" default:"/receive_text"`
 	MetricsPath   string        `long:"metrics-path" description:"url path" default:"/metrics"`
+	DropStale     bool          `long:"drop-stale" description:"drop metrics that are written with StaleNaN"`
 	TTL           time.Duration `long:"metric-ttl" description:"how long until we TTL things out of the map" required:"true"`
 }
 
@@ -113,7 +115,11 @@ func main() {
 			l.Lock()
 			// If it doesn't exist, or the sample is newer
 			if currentSample, ok := m[metric.String()]; !ok || sample.Timestamp > currentSample.Timestamp {
-				m[metric.String()] = sample
+				if opts.DropStale && value.IsStaleNaN(sample.Value) {
+					delete(m, metric.String())
+				} else {
+					m[metric.String()] = sample
+				}
 			}
 			l.Unlock()
 		}
@@ -141,9 +147,13 @@ func main() {
 				l.Lock()
 				// If it doesn't exist, or the sample is newer
 				if currentSample, ok := m[vecSample.Metric.String()]; !ok || int64(vecSample.Timestamp) > currentSample.Timestamp {
-					m[vecSample.Metric.String()] = &prompb.Sample{
-						Value:     float64(vecSample.Value),
-						Timestamp: int64(vecSample.Timestamp),
+					if opts.DropStale && value.IsStaleNaN(float64(vecSample.Value)) {
+						delete(m, vecSample.Metric.String())
+					} else {
+						m[vecSample.Metric.String()] = &prompb.Sample{
+							Value:     float64(vecSample.Value),
+							Timestamp: int64(vecSample.Timestamp),
+						}
 					}
 				}
 				l.Unlock()
