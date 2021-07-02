@@ -14,7 +14,7 @@ require (
 	github.com/prometheus/client_golang v1.9.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.15.0
-	github.com/prometheus/exporter-toolkit v0.5.1 // indirect
+	github.com/prometheus/exporter-toolkit v0.5.1
 	github.com/prometheus/prometheus v1.8.1-0.20200513230854-c784807932c2
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.6.1

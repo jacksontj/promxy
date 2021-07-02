@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/jacksontj/promxy/pkg/server"
 	"io"
 	"path"
 	"regexp"
+
+	"github.com/jacksontj/promxy/pkg/server"
 
 	"go.uber.org/atomic"
 	"k8s.io/klog"

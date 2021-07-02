@@ -4,14 +4,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/julienschmidt/httprouter"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/julienschmidt/httprouter"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func TestUnauthenticatedServerFunctions(t *testing.T) {
@@ -167,12 +168,12 @@ func setupAuthenticatedClient(t *testing.T) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				Certificates:                []tls.Certificate{clientCert},
-				RootCAs:                     caCertPool,
-				ServerName:                  "localhost",
-				InsecureSkipVerify:          false,
-				MinVersion:                  tls.VersionTLS12,
-				MaxVersion:                  tls.VersionTLS13,
+				Certificates:       []tls.Certificate{clientCert},
+				RootCAs:            caCertPool,
+				ServerName:         "localhost",
+				InsecureSkipVerify: false,
+				MinVersion:         tls.VersionTLS12,
+				MaxVersion:         tls.VersionTLS13,
 			},
 		},
 	}
