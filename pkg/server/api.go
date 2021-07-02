@@ -2,16 +2,18 @@ package server
 
 import (
 	"crypto/tls"
-	"github.com/jacksontj/promxy/pkg/logging"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"time"
+
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/exporter-toolkit/web"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
-	"io"
-	"io/ioutil"
-	"net/http"
-	"time"
+
+	"github.com/jacksontj/promxy/pkg/logging"
 )
 
 func CreateAndStart(bindAddr string, logFormat string, webReadTimeout time.Duration, accessLogOut io.Writer, router *httprouter.Router, tlsConfigFile string) (*http.Server, error) {

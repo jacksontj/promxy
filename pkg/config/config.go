@@ -2,8 +2,9 @@ package proxyconfig
 
 import (
 	"fmt"
-	"github.com/prometheus/exporter-toolkit/web"
 	"io/ioutil"
+
+	"github.com/prometheus/exporter-toolkit/web"
 
 	"github.com/prometheus/prometheus/config"
 

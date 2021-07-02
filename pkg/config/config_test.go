@@ -28,13 +28,13 @@ tls_server_config:
 	}
 
 	if cfg.WebConfig.TLSCertPath != "server.crt" {
-		t.Errorf("Invalid TLSKeypath. Expected 'server.crt', Got '%s'", cfg.WebConfig.TLSCertPath )
+		t.Errorf("Invalid TLSKeypath. Expected 'server.crt', Got '%s'", cfg.WebConfig.TLSCertPath)
 	}
 	if cfg.WebConfig.TLSKeyPath != "server.key" {
 		t.Errorf("Invalid TLSCertPath. Expected 'server.key', Got '%s'", cfg.WebConfig.TLSKeyPath)
 	}
 	if cfg.WebConfig.ClientAuth != "VerifyClientCertIfGiven" {
-		t.Errorf("Invalid ClientAuth. Expected 'VerifyClientCertIfGiven', Got '%s'", cfg.WebConfig.ClientAuth )
+		t.Errorf("Invalid ClientAuth. Expected 'VerifyClientCertIfGiven', Got '%s'", cfg.WebConfig.ClientAuth)
 	}
 	if cfg.WebConfig.ClientCAs != "tls-ca-chain.pem" {
 		t.Errorf("Invalid ClientCAs. Expected 'tls-ca-chain.pem', Got '%s'", cfg.WebConfig.ClientCAs)
