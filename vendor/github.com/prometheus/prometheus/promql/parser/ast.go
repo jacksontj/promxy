@@ -126,10 +126,18 @@ type MatrixSelector struct {
 
 // SubqueryExpr represents a subquery.
 type SubqueryExpr struct {
-	Expr   Expr
-	Range  time.Duration
-	Offset time.Duration
-	Step   time.Duration
+	Expr  Expr
+	Range time.Duration
+	// OriginalOffset is the actual offset that was set in the query.
+	// This never changes.
+	OriginalOffset time.Duration
+	// Offset is the offset used during the query execution
+	// which is calculated using the original offset, at modifier time,
+	// eval time, and subquery offsets in the AST tree.
+	Offset     time.Duration
+	Timestamp  *int64
+	StartOrEnd ItemType // Set when @ is used with start() or end()
+	Step       time.Duration
 
 	EndPos Pos
 }
@@ -163,10 +171,29 @@ type UnaryExpr struct {
 	StartPos Pos
 }
 
+// StepInvariantExpr represents a query which evaluates to the same result
+// irrespective of the evaluation time given the raw samples from TSDB remain unchanged.
+// Currently this is only used for engine optimisations and the parser does not produce this.
+type StepInvariantExpr struct {
+	Expr Expr
+}
+
+func (e *StepInvariantExpr) String() string { return e.Expr.String() }
+
+func (e *StepInvariantExpr) PositionRange() PositionRange { return e.Expr.PositionRange() }
+
 // VectorSelector represents a Vector selection.
 type VectorSelector struct {
-	Name          string
+	Name string
+	// OriginalOffset is the actual offset that was set in the query.
+	// This never changes.
+	OriginalOffset time.Duration
+	// Offset is the offset used during the query execution
+	// which is calculated using the original offset, at modifier time,
+	// eval time, and subquery offsets in the AST tree.
 	Offset        time.Duration
+	Timestamp     *int64
+	StartOrEnd    ItemType // Set when @ is used with start() or end()
 	LabelMatchers []*labels.Matcher
 	LookbackDelta time.Duration
 
@@ -213,17 +240,19 @@ func (e *BinaryExpr) Type() ValueType {
 	}
 	return ValueTypeVector
 }
+func (e *StepInvariantExpr) Type() ValueType { return e.Expr.Type() }
 
-func (*AggregateExpr) PromQLExpr()  {}
-func (*BinaryExpr) PromQLExpr()     {}
-func (*Call) PromQLExpr()           {}
-func (*MatrixSelector) PromQLExpr() {}
-func (*SubqueryExpr) PromQLExpr()   {}
-func (*NumberLiteral) PromQLExpr()  {}
-func (*ParenExpr) PromQLExpr()      {}
-func (*StringLiteral) PromQLExpr()  {}
-func (*UnaryExpr) PromQLExpr()      {}
-func (*VectorSelector) PromQLExpr() {}
+func (*AggregateExpr) PromQLExpr()     {}
+func (*BinaryExpr) PromQLExpr()        {}
+func (*Call) PromQLExpr()              {}
+func (*MatrixSelector) PromQLExpr()    {}
+func (*SubqueryExpr) PromQLExpr()      {}
+func (*NumberLiteral) PromQLExpr()     {}
+func (*ParenExpr) PromQLExpr()         {}
+func (*StringLiteral) PromQLExpr()     {}
+func (*UnaryExpr) PromQLExpr()         {}
+func (*VectorSelector) PromQLExpr()    {}
+func (*StepInvariantExpr) PromQLExpr() {}
 
 // VectorMatchCardinality describes the cardinality relationship
 // of two Vectors in a binary operation.
@@ -332,6 +361,18 @@ func Walk(ctx context.Context, v Visitor, s *EvalStmt, node Node, path []Node, n
 	return node, err
 }
 
+func ExtractSelectors(expr Expr) [][]*labels.Matcher {
+	var selectors [][]*labels.Matcher
+	Inspect(context.TODO(), &EvalStmt{Expr: expr}, func(node Node, _ []Node) error {
+		vs, ok := node.(*VectorSelector)
+		if ok {
+			selectors = append(selectors, vs.LabelMatchers)
+		}
+		return nil
+	}, nil)
+	return selectors
+}
+
 type inspector func(Node, []Node) error
 
 func (f inspector) Visit(node Node, path []Node) (Visitor, error) {
@@ -435,6 +476,8 @@ func Children(node Node) []Node {
 		return []Node{n.Expr}
 	case *MatrixSelector:
 		return []Node{n.VectorSelector}
+	case *StepInvariantExpr:
+		return []Node{n.Expr}
 	case *NumberLiteral, *StringLiteral, *VectorSelector:
 		// nothing to do
 		return []Node{}

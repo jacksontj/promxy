@@ -7,6 +7,8 @@ import (
 	"path"
 	"regexp"
 
+	"github.com/google/martian/log"
+
 	"github.com/jacksontj/promxy/pkg/server"
 
 	"go.uber.org/atomic"
@@ -33,7 +35,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/version"

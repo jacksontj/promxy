@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/julienschmidt/httprouter"
-	"github.com/prometheus/common/log"
 	"github.com/prometheus/exporter-toolkit/web"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/appengine/log"
 	"gopkg.in/yaml.v2"
 
 	"github.com/jacksontj/promxy/pkg/logging"
