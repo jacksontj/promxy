@@ -90,14 +90,14 @@ func (h *ProxyQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
-			"name": name,
+			"name":     name,
 			"matchers": matchers,
-			"took": time.Since(start),
+			"took":     time.Since(start),
 		}).Debug("LabelValues")
 	}()
 
 	var matchersStrings []string
-	if len(matchers ) > 0 {
+	if len(matchers) > 0 {
 		s, err := promhttputil.MatcherToString(matchers)
 		if err != nil {
 			return nil, nil, err
