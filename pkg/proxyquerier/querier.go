@@ -86,16 +86,26 @@ func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*l
 }
 
 // LabelValues returns all potential values for a label name.
-func (h *ProxyQuerier) LabelValues(name string) ([]string, storage.Warnings, error) {
+func (h *ProxyQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
-			"name": name,
-			"took": time.Since(start),
+			"name":     name,
+			"matchers": matchers,
+			"took":     time.Since(start),
 		}).Debug("LabelValues")
 	}()
 
-	result, w, err := h.Client.LabelValues(h.Ctx, name)
+	var matchersStrings []string
+	if len(matchers) > 0 {
+		s, err := promhttputil.MatcherToString(matchers)
+		if err != nil {
+			return nil, nil, err
+		}
+		matchersStrings = []string{s}
+	}
+
+	result, w, err := h.Client.LabelValues(h.Ctx, name, matchersStrings)
 	warnings := promhttputil.WarningsConvert(w)
 	if err != nil {
 		return nil, warnings, errors.Cause(err)
@@ -110,7 +120,7 @@ func (h *ProxyQuerier) LabelValues(name string) ([]string, storage.Warnings, err
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (h *ProxyQuerier) LabelNames() ([]string, storage.Warnings, error) {
+func (h *ProxyQuerier) LabelNames(matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
@@ -118,7 +128,16 @@ func (h *ProxyQuerier) LabelNames() ([]string, storage.Warnings, error) {
 		}).Debug("LabelNames")
 	}()
 
-	v, w, err := h.Client.LabelNames(h.Ctx)
+	var matchersStrings []string
+	if len(matchers) > 0 {
+		s, err := promhttputil.MatcherToString(matchers)
+		if err != nil {
+			return nil, nil, err
+		}
+		matchersStrings = []string{s}
+	}
+
+	v, w, err := h.Client.LabelNames(h.Ctx, matchersStrings)
 	return v, promhttputil.WarningsConvert(w), err
 }
 

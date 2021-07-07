@@ -65,17 +65,11 @@ promxy:
           - localhost:8083
       labels:
         az: a
-      http_client:
-        tls_config:
-          insecure_skip_verify: true
     - static_configs:
         - targets:
           - localhost:8085
       labels:
         az: b
-      http_client:
-        tls_config:
-          insecure_skip_verify: true
 `
 
 const rawDoublePSConfigRR = `
@@ -87,18 +81,12 @@ promxy:
       labels:
         az: a
       remote_read: true
-      http_client:
-        tls_config:
-          insecure_skip_verify: true
     - static_configs:
         - targets:
           - localhost:8085
       labels:
         az: b
       remote_read: true
-      http_client:
-        tls_config:
-          insecure_skip_verify: true
 `
 
 func getProxyStorage(cfg string) *proxystorage.ProxyStorage {
@@ -129,10 +117,14 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 
 	api := v1.NewAPI(
 		promql.NewEngine(promql.EngineOpts{
-			Timeout:    10 * time.Minute,
-			MaxSamples: 50000000,
+			Timeout:                  10 * time.Minute,
+			MaxSamples:               50000000,
+			NoStepSubqueryIntervalFn: func(int64) int64 { return (1 * time.Minute).Milliseconds() },
+			EnableAtModifier:         true,
 		}),
 		s.(storage.SampleAndChunkQueryable),
+		nil, //appendable
+		nil, // exemplarQueryable
 		nil, //factoryTr
 		nil, //factoryAr
 		cfgFunc,
@@ -144,7 +136,7 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 		}, // global URL options
 		readyFunc, // ready
 		nil,       // local storage
-		"",        //tsdb dir
+		"",        // tsdb dir
 		false,     // enable admin API
 		nil,       // logger
 		nil,       // FactoryRr
@@ -153,8 +145,9 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 		1048576,   // RemoteReadBytesInFrame
 		nil,       // CORSOrigin
 		nil,       // runtimeInfo
-		nil,       // versionInfo
+		nil,       // buildInfo
 		nil,       // gatherer
+		nil,       // registerer
 	)
 
 	apiRouter := route.New()
@@ -167,7 +160,7 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 	go func() {
 		defer close(stopChan)
 		close(startChan)
-		if err := srv.ListenAndServe(); err != nil {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			fmt.Println("Error listening to", listen, err)
 		}
 	}()

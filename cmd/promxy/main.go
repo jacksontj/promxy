@@ -33,7 +33,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/version"
@@ -319,7 +318,7 @@ func main() {
 			}
 			files = append(files, fs...)
 		}
-		if err := ruleManager.Update(time.Duration(cfg.GlobalConfig.EvaluationInterval), files, cfg.GlobalConfig.ExternalLabels); err != nil {
+		if err := ruleManager.Update(time.Duration(cfg.GlobalConfig.EvaluationInterval), files, cfg.GlobalConfig.ExternalLabels, externalUrl.String()); err != nil {
 			return err
 		}
 
@@ -341,7 +340,7 @@ func main() {
 	}}))
 
 	// We need an empty scrape manager, simply to make the API not panic and error out
-	scrapeManager := scrape.NewManager(kitlog.With(logger, "component", "scrape manager"), nil)
+	scrapeManager := scrape.NewManager(nil, kitlog.With(logger, "component", "scrape manager"), nil)
 
 	webOptions := &web.Options{
 		Registerer:    prometheus.DefaultRegisterer,
@@ -442,9 +441,9 @@ func main() {
 	for {
 		select {
 		case rc := <-webHandler.Reload():
-			log.Infof("Reloading config")
+			logrus.Infof("Reloading config")
 			if err := reloadConfig(noStepSubqueryInterval, reloadables...); err != nil {
-				log.Errorf("Error reloading config: %s", err)
+				logrus.Errorf("Error reloading config: %s", err)
 				rc <- err
 			} else {
 				rc <- nil
@@ -452,12 +451,12 @@ func main() {
 		case sig := <-sigs:
 			switch sig {
 			case syscall.SIGHUP:
-				log.Infof("Reloading config")
+				logrus.Infof("Reloading config")
 				if err := reloadConfig(noStepSubqueryInterval, reloadables...); err != nil {
-					log.Errorf("Error reloading config: %s", err)
+					logrus.Errorf("Error reloading config: %s", err)
 				}
 			case syscall.SIGTERM, syscall.SIGINT:
-				log.Info("promxy received exit signal, starting graceful shutdown")
+				logrus.Info("promxy received exit signal, starting graceful shutdown")
 
 				// Stop all services we are running
 				stopping = true        // start failing healthchecks
@@ -465,10 +464,10 @@ func main() {
 				ruleManager.Stop()     // Stop rule manager
 
 				if opts.ShutdownDelay > 0 {
-					log.Infof("promxy delaying shutdown by %v", opts.ShutdownDelay)
+					logrus.Infof("promxy delaying shutdown by %v", opts.ShutdownDelay)
 					time.Sleep(opts.ShutdownDelay)
 				}
-				log.Infof("promxy exiting with timeout: %v", opts.ShutdownTimeout)
+				logrus.Infof("promxy exiting with timeout: %v", opts.ShutdownTimeout)
 				defer cancel()
 				if opts.ShutdownTimeout > 0 {
 					ctx, cancel = context.WithTimeout(ctx, opts.ShutdownTimeout)
@@ -477,7 +476,7 @@ func main() {
 				srv.Shutdown(ctx)
 				return
 			default:
-				log.Errorf("Uncaught signal: %v", sig)
+				logrus.Errorf("Uncaught signal: %v", sig)
 			}
 
 		}

@@ -15,6 +15,7 @@ package remote
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -79,15 +80,15 @@ func (q *querier) Select(sortSeries bool, p *storage.SelectHints, matchers ...*l
 }
 
 // LabelValues implements storage.Querier and is a noop.
-func (q *querier) LabelValues(name string) ([]string, storage.Warnings, error) {
+func (q *querier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
 	// TODO implement?
-	return nil, nil, nil
+	return nil, nil, fmt.Errorf("not implemented")
 }
 
 // LabelNames implements storage.Querier and is a noop.
-func (q *querier) LabelNames() ([]string, storage.Warnings, error) {
+func (q *querier) LabelNames(matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
 	// TODO implement?
-	return nil, nil, nil
+	return nil, nil, fmt.Errorf("not implemented")
 }
 
 // Close implements storage.Querier and is a noop.

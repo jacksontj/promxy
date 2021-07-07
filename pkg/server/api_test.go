@@ -35,20 +35,20 @@ func TestUnauthenticatedServerFunctions(t *testing.T) {
 
 	resp, err := client.Get(fmt.Sprintf("http://%s/metrics", bindAddr))
 	if err != nil {
-		t.Errorf("could not make request to metrics endpoint: %s", err.Error())
+		t.Fatalf("could not make request to metrics endpoint: %s", err.Error())
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		t.Errorf("could not read response body: %s", err.Error())
+		t.Fatalf("could not read response body: %s", err.Error())
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("an unexpected error occurred: unauthenticed client was unable to make a request to the unauthenticated server. Response body: %s", body)
+		t.Fatalf("an unexpected error occurred: unauthenticed client was unable to make a request to the unauthenticated server. Response body: %s", body)
 	}
 
 	if !strings.Contains(string(body), "go_goroutines") {
-		t.Errorf("could not find metric name 'go_goroutines' in response")
+		t.Fatalf("could not find metric name 'go_goroutines' in response")
 	}
 	server.Close()
 }

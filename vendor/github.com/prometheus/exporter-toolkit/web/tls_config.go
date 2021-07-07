@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
 	config_util "github.com/prometheus/common/config"
 	"gopkg.in/yaml.v2"
@@ -154,7 +154,7 @@ func ConfigToTLSConfig(c *TLSStruct) (*tls.Config, error) {
 	switch c.ClientAuth {
 	case "RequestClientCert":
 		cfg.ClientAuth = tls.RequestClientCert
-	case "RequireClientCert":
+	case "RequireAnyClientCert", "RequireClientCert": // Preserved for backwards compatibility.
 		cfg.ClientAuth = tls.RequireAnyClientCert
 	case "VerifyClientCertIfGiven":
 		cfg.ClientAuth = tls.VerifyClientCertIfGiven

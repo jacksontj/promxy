@@ -58,6 +58,29 @@ func NewUnorderedMemPostings() *MemPostings {
 	}
 }
 
+// Symbols returns an iterator over all unique name and value strings, in order.
+func (p *MemPostings) Symbols() StringIter {
+	p.mtx.RLock()
+
+	// Add all the strings to a map to de-duplicate.
+	symbols := make(map[string]struct{}, 512)
+	for n, e := range p.m {
+		symbols[n] = struct{}{}
+		for v := range e {
+			symbols[v] = struct{}{}
+		}
+	}
+	p.mtx.RUnlock()
+
+	res := make([]string, 0, len(symbols))
+	for k := range symbols {
+		res = append(res, k)
+	}
+
+	sort.Strings(res)
+	return NewStringListIter(res)
+}
+
 // SortedKeys returns a list of sorted label keys of the postings.
 func (p *MemPostings) SortedKeys() []labels.Label {
 	p.mtx.RLock()
@@ -115,6 +138,7 @@ type PostingsStats struct {
 	CardinalityLabelStats   []Stat
 	LabelValueStats         []Stat
 	LabelValuePairsStats    []Stat
+	NumLabelPairs           int
 }
 
 // Stats calculates the cardinality statistics from postings.
@@ -128,6 +152,7 @@ func (p *MemPostings) Stats(label string) *PostingsStats {
 	labels := &maxHeap{}
 	labelValueLength := &maxHeap{}
 	labelValuePairs := &maxHeap{}
+	numLabelPairs := 0
 
 	metrics.init(maxNumOfRecords)
 	labels.init(maxNumOfRecords)
@@ -139,6 +164,7 @@ func (p *MemPostings) Stats(label string) *PostingsStats {
 			continue
 		}
 		labels.push(Stat{Name: n, Count: uint64(len(e))})
+		numLabelPairs += len(e)
 		size = 0
 		for name, values := range e {
 			if n == label {
@@ -157,6 +183,7 @@ func (p *MemPostings) Stats(label string) *PostingsStats {
 		CardinalityLabelStats:   labels.get(),
 		LabelValueStats:         labelValueLength.get(),
 		LabelValuePairsStats:    labelValuePairs.get(),
+		NumLabelPairs:           numLabelPairs,
 	}
 }
 

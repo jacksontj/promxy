@@ -18,8 +18,10 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
+	"github.com/prometheus/prometheus/util/strutil"
+
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
 	apiv1 "k8s.io/api/core/v1"
@@ -199,6 +201,8 @@ func endpointsSourceFromNamespaceAndName(namespace, name string) string {
 }
 
 const (
+	endpointsLabelPrefix           = metaLabelPrefix + "endpoints_label_"
+	endpointsLabelPresentPrefix    = metaLabelPrefix + "endpoints_labelpresent_"
 	endpointsNameLabel             = metaLabelPrefix + "endpoints_name"
 	endpointNodeName               = metaLabelPrefix + "endpoint_node_name"
 	endpointHostname               = metaLabelPrefix + "endpoint_hostname"
@@ -218,6 +222,12 @@ func (e *Endpoints) buildEndpoints(eps *apiv1.Endpoints) *targetgroup.Group {
 		endpointsNameLabel: lv(eps.Name),
 	}
 	e.addServiceLabels(eps.Namespace, eps.Name, tg)
+	// Add endpoints labels metadata.
+	for k, v := range eps.Labels {
+		ln := strutil.SanitizeLabelName(k)
+		tg.Labels[model.LabelName(endpointsLabelPrefix+ln)] = lv(v)
+		tg.Labels[model.LabelName(endpointsLabelPresentPrefix+ln)] = presentValue
+	}
 
 	type podEntry struct {
 		pod          *apiv1.Pod
