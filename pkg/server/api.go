@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/julienschmidt/httprouter"
-	"github.com/prometheus/common/log"
 	"github.com/prometheus/exporter-toolkit/web"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -57,7 +56,7 @@ func createAndStartHTTP(srv *http.Server) (*http.Server, error) {
 			if err == http.ErrServerClosed {
 				return
 			}
-			log.Errorf("Error listening: %v", err)
+			logrus.Errorf("Error listening: %v", err)
 		}
 	}()
 	return srv, nil
@@ -77,7 +76,7 @@ func createAndStartHTTPS(srv *http.Server, tlsConfigFile string) (*http.Server, 
 			if err == http.ErrServerClosed {
 				return
 			}
-			log.Errorf("Error listening: %v", err)
+			logrus.Errorf("Error listening: %v", err)
 		}
 	}()
 	return srv, nil

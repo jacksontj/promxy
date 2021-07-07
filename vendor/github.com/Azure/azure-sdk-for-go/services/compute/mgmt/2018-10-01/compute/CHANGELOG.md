@@ -1,25 +1,44 @@
-Generated from https://github.com/Azure/azure-rest-api-specs/tree/3c764635e7d442b3e74caf593029fcd440b3ef82
+# Change History
 
-Code generator @microsoft.azure/autorest.go@~2.1.161
+## Additive Changes
 
-## Breaking Changes
+### New Funcs
 
-- Function `NewContainerServiceListResultPage` parameter(s) have been changed from `(func(context.Context, ContainerServiceListResult) (ContainerServiceListResult, error))` to `(ContainerServiceListResult, func(context.Context, ContainerServiceListResult) (ContainerServiceListResult, error))`
-- Function `NewVirtualMachineScaleSetExtensionListResultPage` parameter(s) have been changed from `(func(context.Context, VirtualMachineScaleSetExtensionListResult) (VirtualMachineScaleSetExtensionListResult, error))` to `(VirtualMachineScaleSetExtensionListResult, func(context.Context, VirtualMachineScaleSetExtensionListResult) (VirtualMachineScaleSetExtensionListResult, error))`
-- Function `NewGalleryImageVersionListPage` parameter(s) have been changed from `(func(context.Context, GalleryImageVersionList) (GalleryImageVersionList, error))` to `(GalleryImageVersionList, func(context.Context, GalleryImageVersionList) (GalleryImageVersionList, error))`
-- Function `NewVirtualMachineScaleSetListResultPage` parameter(s) have been changed from `(func(context.Context, VirtualMachineScaleSetListResult) (VirtualMachineScaleSetListResult, error))` to `(VirtualMachineScaleSetListResult, func(context.Context, VirtualMachineScaleSetListResult) (VirtualMachineScaleSetListResult, error))`
-- Function `NewProximityPlacementGroupListResultPage` parameter(s) have been changed from `(func(context.Context, ProximityPlacementGroupListResult) (ProximityPlacementGroupListResult, error))` to `(ProximityPlacementGroupListResult, func(context.Context, ProximityPlacementGroupListResult) (ProximityPlacementGroupListResult, error))`
-- Function `NewResourceSkusResultPage` parameter(s) have been changed from `(func(context.Context, ResourceSkusResult) (ResourceSkusResult, error))` to `(ResourceSkusResult, func(context.Context, ResourceSkusResult) (ResourceSkusResult, error))`
-- Function `NewVirtualMachineScaleSetListOSUpgradeHistoryPage` parameter(s) have been changed from `(func(context.Context, VirtualMachineScaleSetListOSUpgradeHistory) (VirtualMachineScaleSetListOSUpgradeHistory, error))` to `(VirtualMachineScaleSetListOSUpgradeHistory, func(context.Context, VirtualMachineScaleSetListOSUpgradeHistory) (VirtualMachineScaleSetListOSUpgradeHistory, error))`
-- Function `NewVirtualMachineScaleSetListWithLinkResultPage` parameter(s) have been changed from `(func(context.Context, VirtualMachineScaleSetListWithLinkResult) (VirtualMachineScaleSetListWithLinkResult, error))` to `(VirtualMachineScaleSetListWithLinkResult, func(context.Context, VirtualMachineScaleSetListWithLinkResult) (VirtualMachineScaleSetListWithLinkResult, error))`
-- Function `NewGalleryImageListPage` parameter(s) have been changed from `(func(context.Context, GalleryImageList) (GalleryImageList, error))` to `(GalleryImageList, func(context.Context, GalleryImageList) (GalleryImageList, error))`
-- Function `NewVirtualMachineListResultPage` parameter(s) have been changed from `(func(context.Context, VirtualMachineListResult) (VirtualMachineListResult, error))` to `(VirtualMachineListResult, func(context.Context, VirtualMachineListResult) (VirtualMachineListResult, error))`
-- Function `NewVirtualMachineScaleSetListSkusResultPage` parameter(s) have been changed from `(func(context.Context, VirtualMachineScaleSetListSkusResult) (VirtualMachineScaleSetListSkusResult, error))` to `(VirtualMachineScaleSetListSkusResult, func(context.Context, VirtualMachineScaleSetListSkusResult) (VirtualMachineScaleSetListSkusResult, error))`
-- Function `NewDiskListPage` parameter(s) have been changed from `(func(context.Context, DiskList) (DiskList, error))` to `(DiskList, func(context.Context, DiskList) (DiskList, error))`
-- Function `NewVirtualMachineScaleSetVMListResultPage` parameter(s) have been changed from `(func(context.Context, VirtualMachineScaleSetVMListResult) (VirtualMachineScaleSetVMListResult, error))` to `(VirtualMachineScaleSetVMListResult, func(context.Context, VirtualMachineScaleSetVMListResult) (VirtualMachineScaleSetVMListResult, error))`
-- Function `NewImageListResultPage` parameter(s) have been changed from `(func(context.Context, ImageListResult) (ImageListResult, error))` to `(ImageListResult, func(context.Context, ImageListResult) (ImageListResult, error))`
-- Function `NewRunCommandListResultPage` parameter(s) have been changed from `(func(context.Context, RunCommandListResult) (RunCommandListResult, error))` to `(RunCommandListResult, func(context.Context, RunCommandListResult) (RunCommandListResult, error))`
-- Function `NewGalleryListPage` parameter(s) have been changed from `(func(context.Context, GalleryList) (GalleryList, error))` to `(GalleryList, func(context.Context, GalleryList) (GalleryList, error))`
-- Function `NewListUsagesResultPage` parameter(s) have been changed from `(func(context.Context, ListUsagesResult) (ListUsagesResult, error))` to `(ListUsagesResult, func(context.Context, ListUsagesResult) (ListUsagesResult, error))`
-- Function `NewSnapshotListPage` parameter(s) have been changed from `(func(context.Context, SnapshotList) (SnapshotList, error))` to `(SnapshotList, func(context.Context, SnapshotList) (SnapshotList, error))`
-- Function `NewAvailabilitySetListResultPage` parameter(s) have been changed from `(func(context.Context, AvailabilitySetListResult) (AvailabilitySetListResult, error))` to `(AvailabilitySetListResult, func(context.Context, AvailabilitySetListResult) (AvailabilitySetListResult, error))`
+1. AccessURI.MarshalJSON() ([]byte, error)
+1. BootDiagnosticsInstanceView.MarshalJSON() ([]byte, error)
+1. DataDiskImage.MarshalJSON() ([]byte, error)
+1. GalleryDataDiskImage.MarshalJSON() ([]byte, error)
+1. GalleryDiskImage.MarshalJSON() ([]byte, error)
+1. GalleryIdentifier.MarshalJSON() ([]byte, error)
+1. GalleryImageVersionStorageProfile.MarshalJSON() ([]byte, error)
+1. GalleryOSDiskImage.MarshalJSON() ([]byte, error)
+1. LogAnalyticsOperationResult.MarshalJSON() ([]byte, error)
+1. LogAnalyticsOutput.MarshalJSON() ([]byte, error)
+1. OperationListResult.MarshalJSON() ([]byte, error)
+1. OperationValueDisplay.MarshalJSON() ([]byte, error)
+1. RecoveryWalkResponse.MarshalJSON() ([]byte, error)
+1. RegionalReplicationStatus.MarshalJSON() ([]byte, error)
+1. ReplicationStatus.MarshalJSON() ([]byte, error)
+1. ResourceSku.MarshalJSON() ([]byte, error)
+1. ResourceSkuCapabilities.MarshalJSON() ([]byte, error)
+1. ResourceSkuCapacity.MarshalJSON() ([]byte, error)
+1. ResourceSkuCosts.MarshalJSON() ([]byte, error)
+1. ResourceSkuLocationInfo.MarshalJSON() ([]byte, error)
+1. ResourceSkuRestrictionInfo.MarshalJSON() ([]byte, error)
+1. ResourceSkuRestrictions.MarshalJSON() ([]byte, error)
+1. RollbackStatusInfo.MarshalJSON() ([]byte, error)
+1. RollingUpgradeProgressInfo.MarshalJSON() ([]byte, error)
+1. RollingUpgradeRunningStatus.MarshalJSON() ([]byte, error)
+1. RollingUpgradeStatusInfoProperties.MarshalJSON() ([]byte, error)
+1. SubResourceReadOnly.MarshalJSON() ([]byte, error)
+1. UpgradeOperationHistoricalStatusInfo.MarshalJSON() ([]byte, error)
+1. UpgradeOperationHistoricalStatusInfoProperties.MarshalJSON() ([]byte, error)
+1. UpgradeOperationHistoryStatus.MarshalJSON() ([]byte, error)
+1. VirtualMachineHealthStatus.MarshalJSON() ([]byte, error)
+1. VirtualMachineIdentityUserAssignedIdentitiesValue.MarshalJSON() ([]byte, error)
+1. VirtualMachineScaleSetIdentityUserAssignedIdentitiesValue.MarshalJSON() ([]byte, error)
+1. VirtualMachineScaleSetInstanceViewStatusesSummary.MarshalJSON() ([]byte, error)
+1. VirtualMachineScaleSetSku.MarshalJSON() ([]byte, error)
+1. VirtualMachineScaleSetSkuCapacity.MarshalJSON() ([]byte, error)
+1. VirtualMachineScaleSetVMExtensionsSummary.MarshalJSON() ([]byte, error)
+1. VirtualMachineStatusCodeCount.MarshalJSON() ([]byte, error)

@@ -182,6 +182,10 @@ func (p *ProxyStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (stor
 	return nil, errors.New("not implemented")
 }
 
+func (p *ProxyStorage) WALReplayStatus() (tsdb.WALReplayStatus, error) {
+	return tsdb.WALReplayStatus{}, errors.New("not implemented")
+}
+
 // Implement web.LocalStorage
 func (p *ProxyStorage) CleanTombstones() (err error)                         { return nil }
 func (p *ProxyStorage) Delete(mint, maxt int64, ms ...*labels.Matcher) error { return nil }
@@ -409,7 +413,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 				series[i] = &proxyquerier.Series{iterator}
 			}
 
-			ret := &parser.VectorSelector{Offset: offset}
+			ret := &parser.VectorSelector{OriginalOffset: offset, Offset: offset}
 			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
 
 			// Replace with sum(count_values()) BY (label)
@@ -444,7 +448,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 				series[i] = &proxyquerier.Series{iterator}
 			}
 
-			ret := &parser.VectorSelector{Offset: offset}
+			ret := &parser.VectorSelector{OriginalOffset: offset, Offset: offset}
 			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
 			n.Expr = ret
 
@@ -480,7 +484,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			series[i] = &proxyquerier.Series{iterator}
 		}
 
-		ret := &parser.VectorSelector{Offset: offset}
+		ret := &parser.VectorSelector{OriginalOffset: offset, Offset: offset}
 		ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
 
 		// the "scalar()" function is a bit tricky. It can return a scalar or a vector.
@@ -495,6 +499,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// If we are simply fetching a Vector then we can fetch the data using the same step that
 	// the query came in as (reducing the amount of data we need to fetch)
 	case *parser.VectorSelector:
+		if n.Timestamp != nil {
+			return nil, nil
+		}
 		// If the vector selector already has the data we can skip
 		if n.UnexpandedSeriesSet != nil {
 			return nil, nil

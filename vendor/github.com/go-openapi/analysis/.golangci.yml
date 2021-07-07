@@ -42,3 +42,8 @@ linters:
     - godot
     - gci
     - dogsled
+    - paralleltest
+    - tparallel
+    - thelper
+    - ifshort
+    - forbidigo

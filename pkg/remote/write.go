@@ -14,7 +14,10 @@
 package remote
 
 import (
+	"fmt"
+
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/pkg/exemplar"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/storage"
 )
@@ -25,7 +28,7 @@ func (s *Storage) Appender() (storage.Appender, error) {
 }
 
 // Add implements storage.Appender.
-func (s *Storage) Add(l labels.Labels, t int64, v float64) (uint64, error) {
+func (s *Storage) Append(ref uint64, l labels.Labels, t int64, v float64) (uint64, error) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	for _, q := range s.queues {
@@ -40,9 +43,8 @@ func (s *Storage) Add(l labels.Labels, t int64, v float64) (uint64, error) {
 	return 0, nil
 }
 
-// AddFast implements storage.Appender.
-func (s *Storage) AddFast(_ uint64, t int64, v float64) error {
-	return storage.ErrNotFound
+func (s *Storage) AppendExemplar(ref uint64, l labels.Labels, e exemplar.Exemplar) (uint64, error) {
+	return 0, fmt.Errorf("not supported")
 }
 
 // Commit implements storage.Appender.

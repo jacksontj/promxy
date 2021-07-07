@@ -14,23 +14,23 @@ import (
 type recoverAPI struct{ A API }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (api *recoverAPI) LabelNames(ctx context.Context) (v []string, w v1.Warnings, err error) {
+func (api *recoverAPI) LabelNames(ctx context.Context, matchers []string) (v []string, w v1.Warnings, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
 		}
 	}()
-	return api.A.LabelNames(ctx)
+	return api.A.LabelNames(ctx, matchers)
 }
 
 // LabelValues performs a query for the values of the given label.
-func (api *recoverAPI) LabelValues(ctx context.Context, label string) (v model.LabelValues, w v1.Warnings, err error) {
+func (api *recoverAPI) LabelValues(ctx context.Context, label string, matchers []string) (v model.LabelValues, w v1.Warnings, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
 		}
 	}()
-	return api.A.LabelValues(ctx, label)
+	return api.A.LabelValues(ctx, label, matchers)
 }
 
 // Query performs a query for the given time.

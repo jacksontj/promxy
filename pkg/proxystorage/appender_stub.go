@@ -1,9 +1,11 @@
 package proxystorage
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/prometheus/prometheus/pkg/exemplar"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/sirupsen/logrus"
 )
@@ -15,7 +17,7 @@ type appenderStub struct{}
 var appenderLock = sync.Mutex{}
 var appenderWarningTime time.Time
 
-func (a *appenderStub) Add(l labels.Labels, t int64, v float64) (uint64, error) {
+func (a *appenderStub) Append(ref uint64, l labels.Labels, t int64, v float64) (uint64, error) {
 	appenderLock.Lock()
 	now := time.Now()
 	if now.Sub(appenderWarningTime) > time.Minute {
@@ -27,9 +29,8 @@ func (a *appenderStub) Add(l labels.Labels, t int64, v float64) (uint64, error) 
 	return 0, nil
 }
 
-func (a *appenderStub) AddFast(ref uint64, t int64, v float64) error {
-	_, err := a.Add(nil, t, v)
-	return err
+func (a *appenderStub) AppendExemplar(ref uint64, l labels.Labels, e exemplar.Exemplar) (uint64, error) {
+	return 0, fmt.Errorf("not Implemented")
 }
 
 // Commit submits the collected samples and purges the batch.

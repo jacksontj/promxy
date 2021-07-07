@@ -38,3 +38,5 @@ linters:
     - tparallel
     - nestif
     - godot
+    - tparallel
+    - paralleltest

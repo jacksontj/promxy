@@ -76,8 +76,6 @@ func (rule *RecordingRule) Labels() labels.Labels {
 func (rule *RecordingRule) Eval(ctx context.Context, ts time.Time, query QueryFunc, _ *url.URL) (promql.Vector, error) {
 	vector, err := query(ctx, rule.vector.String(), ts)
 	if err != nil {
-		rule.SetHealth(HealthBad)
-		rule.SetLastError(err)
 		return nil, err
 	}
 	// Override the metric name and labels.
@@ -98,14 +96,9 @@ func (rule *RecordingRule) Eval(ctx context.Context, ts time.Time, query QueryFu
 	// Check that the rule does not produce identical metrics after applying
 	// labels.
 	if vector.ContainsSameLabelset() {
-		err = fmt.Errorf("vector contains metrics with the same labelset after applying rule labels")
-		rule.SetHealth(HealthBad)
-		rule.SetLastError(err)
-		return nil, err
+		return nil, fmt.Errorf("vector contains metrics with the same labelset after applying rule labels")
 	}
 
-	rule.SetHealth(HealthGood)
-	rule.SetLastError(err)
 	return vector, nil
 }
 

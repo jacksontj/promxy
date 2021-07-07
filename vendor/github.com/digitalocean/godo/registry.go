@@ -18,7 +18,7 @@ const (
 
 // RegistryService is an interface for interfacing with the Registry endpoints
 // of the DigitalOcean API.
-// See: https://developers.digitalocean.com/documentation/v2#registry
+// See: https://docs.digitalocean.com/reference/api/api-reference/#tag/Container-Registry
 type RegistryService interface {
 	Create(context.Context, *RegistryCreateRequest) (*Registry, *Response, error)
 	Get(context.Context) (*Registry, *Response, error)
@@ -59,8 +59,10 @@ type RegistryDockerCredentialsRequest struct {
 
 // Registry represents a registry.
 type Registry struct {
-	Name      string    `json:"name,omitempty"`
-	CreatedAt time.Time `json:"created_at,omitempty"`
+	Name                       string    `json:"name,omitempty"`
+	StorageUsageBytes          uint64    `json:"storage_usage_bytes,omitempty"`
+	StorageUsageBytesUpdatedAt time.Time `json:"storage_usage_bytes_updated_at,omitempty"`
+	CreatedAt                  time.Time `json:"created_at,omitempty"`
 }
 
 // Repository represents a repository

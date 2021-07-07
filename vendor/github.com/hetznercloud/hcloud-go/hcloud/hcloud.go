@@ -2,4 +2,4 @@
 package hcloud
 
 // Version is the library's version following Semantic Versioning.
-const Version = "1.23.1"
+const Version = "1.32.0"

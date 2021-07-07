@@ -24,6 +24,7 @@ type Server struct {
 	Labels          map[string]string  `json:"labels"`
 	Volumes         []int              `json:"volumes"`
 	PrimaryDiskSize int                `json:"primary_disk_size"`
+	PlacementGroup  *PlacementGroup    `json:"placement_group"`
 }
 
 // ServerProtection defines the schema of a server's resource protection.
@@ -38,6 +39,7 @@ type ServerPublicNet struct {
 	IPv4        ServerPublicNetIPv4 `json:"ipv4"`
 	IPv6        ServerPublicNetIPv6 `json:"ipv6"`
 	FloatingIPs []int               `json:"floating_ips"`
+	Firewalls   []ServerFirewall    `json:"firewalls"`
 }
 
 // ServerPublicNetIPv4 defines the schema of a server's public
@@ -63,6 +65,13 @@ type ServerPublicNetIPv6DNSPtr struct {
 	DNSPtr string `json:"dns_ptr"`
 }
 
+// ServerFirewall defines the schema of a Server's Firewalls on
+// a certain network interface.
+type ServerFirewall struct {
+	ID     int    `json:"id"`
+	Status string `json:"status"`
+}
+
 // ServerPrivateNet defines the schema of a server's private network information.
 type ServerPrivateNet struct {
 	Network    int      `json:"network"`
@@ -86,18 +95,25 @@ type ServerListResponse struct {
 // ServerCreateRequest defines the schema for the request to
 // create a server.
 type ServerCreateRequest struct {
-	Name             string             `json:"name"`
-	ServerType       interface{}        `json:"server_type"` // int or string
-	Image            interface{}        `json:"image"`       // int or string
-	SSHKeys          []int              `json:"ssh_keys,omitempty"`
-	Location         string             `json:"location,omitempty"`
-	Datacenter       string             `json:"datacenter,omitempty"`
-	UserData         string             `json:"user_data,omitempty"`
-	StartAfterCreate *bool              `json:"start_after_create,omitempty"`
-	Labels           *map[string]string `json:"labels,omitempty"`
-	Automount        *bool              `json:"automount,omitempty"`
-	Volumes          []int              `json:"volumes,omitempty"`
-	Networks         []int              `json:"networks,omitempty"`
+	Name             string                  `json:"name"`
+	ServerType       interface{}             `json:"server_type"` // int or string
+	Image            interface{}             `json:"image"`       // int or string
+	SSHKeys          []int                   `json:"ssh_keys,omitempty"`
+	Location         string                  `json:"location,omitempty"`
+	Datacenter       string                  `json:"datacenter,omitempty"`
+	UserData         string                  `json:"user_data,omitempty"`
+	StartAfterCreate *bool                   `json:"start_after_create,omitempty"`
+	Labels           *map[string]string      `json:"labels,omitempty"`
+	Automount        *bool                   `json:"automount,omitempty"`
+	Volumes          []int                   `json:"volumes,omitempty"`
+	Networks         []int                   `json:"networks,omitempty"`
+	Firewalls        []ServerCreateFirewalls `json:"firewalls,omitempty"`
+	PlacementGroup   int                     `json:"placement_group,omitempty"`
+}
+
+// ServerCreateFirewall defines which Firewalls to apply when creating a Server.
+type ServerCreateFirewalls struct {
+	Firewall int `json:"firewall"`
 }
 
 // ServerCreateResponse defines the schema of the response when
@@ -380,4 +396,22 @@ type ServerGetMetricsResponse struct {
 // ServerTimeSeriesVals contains the values for a Server time series.
 type ServerTimeSeriesVals struct {
 	Values []interface{} `json:"values"`
+}
+
+// ServerActionAddToPlacementGroupRequest defines the schema for the request to
+// add a server to a placement group.
+type ServerActionAddToPlacementGroupRequest struct {
+	PlacementGroup int `json:"placement_group"`
+}
+
+// ServerActionAddToPlacementGroupResponse defines the schema of the response when
+// creating an add_to_placement_group server action.
+type ServerActionAddToPlacementGroupResponse struct {
+	Action Action `json:"action"`
+}
+
+// ServerActionRemoveFromPlacementGroupResponse defines the schema of the response when
+// creating a remove_from_placement_group server action.
+type ServerActionRemoveFromPlacementGroupResponse struct {
+	Action Action `json:"action"`
 }

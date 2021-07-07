@@ -17,14 +17,14 @@ type IgnoreErrorAPI struct {
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (n *IgnoreErrorAPI) LabelNames(ctx context.Context) ([]string, v1.Warnings, error) {
-	v, w, _ := n.A.LabelNames(ctx)
+func (n *IgnoreErrorAPI) LabelNames(ctx context.Context, matchers []string) ([]string, v1.Warnings, error) {
+	v, w, _ := n.A.LabelNames(ctx, matchers)
 	return v, w, nil
 }
 
 // LabelValues performs a query for the values of the given label.
-func (n *IgnoreErrorAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
-	v, w, _ := n.A.LabelValues(ctx, label)
+func (n *IgnoreErrorAPI) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
+	v, w, _ := n.A.LabelValues(ctx, label, matchers)
 
 	return v, w, nil
 }
