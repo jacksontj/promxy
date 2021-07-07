@@ -28,12 +28,12 @@ type PromAPIV1 struct {
 
 // LabelNames returns all the unique label names present in the block in sorted order.
 func (p *PromAPIV1) LabelNames(ctx context.Context) ([]string, v1.Warnings, error) {
-	return p.API.LabelNames(ctx, minTime, maxTime)
+	return p.API.LabelNames(ctx, nil, minTime, maxTime)
 }
 
 // LabelValues performs a query for the values of the given label.
-func (p *PromAPIV1) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
-	return p.API.LabelValues(ctx, label, minTime, maxTime)
+func (p *PromAPIV1) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
+	return p.API.LabelValues(ctx, label, matchers, minTime, maxTime)
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range

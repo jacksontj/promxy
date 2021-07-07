@@ -268,9 +268,9 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	// If a bearer token is provided, create a round tripper that will set the
 	// Authorization header correctly on each request.
 	if len(cfg.HTTPConfig.HTTPConfig.BearerToken) > 0 {
-		rt = config_util.NewBearerAuthRoundTripper(cfg.HTTPConfig.HTTPConfig.BearerToken, rt)
+		rt = config_util.NewAuthorizationCredentialsRoundTripper("Bearer", cfg.HTTPConfig.HTTPConfig.BearerToken, rt)
 	} else if len(cfg.HTTPConfig.HTTPConfig.BearerTokenFile) > 0 {
-		rt = config_util.NewBearerAuthFileRoundTripper(cfg.HTTPConfig.HTTPConfig.BearerTokenFile, rt)
+		rt = config_util.NewAuthorizationCredentialsFileRoundTripper("Bearer", cfg.HTTPConfig.HTTPConfig.BearerTokenFile, rt)
 	}
 
 	if cfg.HTTPConfig.HTTPConfig.BasicAuth != nil {
@@ -310,8 +310,8 @@ func (s *ServerGroup) QueryRange(ctx context.Context, query string, r v1.Range) 
 }
 
 // LabelValues performs a query for the values of the given label.
-func (s *ServerGroup) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
-	return s.State().apiClient.LabelValues(ctx, label)
+func (s *ServerGroup) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
+	return s.State().apiClient.LabelValues(ctx, label, matchers)
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.

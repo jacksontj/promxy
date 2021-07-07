@@ -79,7 +79,7 @@ func (q *querier) Select(sortSeries bool, p *storage.SelectHints, matchers ...*l
 }
 
 // LabelValues implements storage.Querier and is a noop.
-func (q *querier) LabelValues(name string) ([]string, storage.Warnings, error) {
+func (q *querier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
 	// TODO implement?
 	return nil, nil, nil
 }

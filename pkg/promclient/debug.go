@@ -40,7 +40,7 @@ func (d *DebugAPI) LabelNames(ctx context.Context) ([]string, v1.Warnings, error
 }
 
 // LabelValues performs a query for the values of the given label.
-func (d *DebugAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
+func (d *DebugAPI) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
 	fields := logrus.Fields{
 		"api":   "LabelValues",
 		"label": label,
@@ -48,7 +48,7 @@ func (d *DebugAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 	logrus.WithFields(fields).Debug(d.PrefixMessage)
 
 	s := time.Now()
-	v, w, err := d.API.LabelValues(ctx, label)
+	v, w, err := d.API.LabelValues(ctx, label, matchers)
 	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {

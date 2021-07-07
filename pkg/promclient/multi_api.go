@@ -107,7 +107,7 @@ func (m *MultiAPI) recordMetric(i int, api, status string, took float64) {
 }
 
 // LabelValues performs a query for the values of the given label.
-func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
+func (m *MultiAPI) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
 
@@ -126,7 +126,7 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API, label string) {
 			start := time.Now()
-			result, w, err := api.LabelValues(childContext, label)
+			result, w, err := api.LabelValues(childContext, label, matchers)
 			took := time.Since(start)
 			if err != nil {
 				m.recordMetric(i, "label_values", "error", took.Seconds())

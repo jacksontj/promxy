@@ -14,13 +14,13 @@ import (
 type recoverAPI struct{ API }
 
 // LabelValues performs a query for the values of the given label.
-func (api *recoverAPI) LabelValues(ctx context.Context, label string) (v model.LabelValues, w v1.Warnings, err error) {
+func (api *recoverAPI) LabelValues(ctx context.Context, label string, matchers []string) (v model.LabelValues, w v1.Warnings, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
 		}
 	}()
-	return api.API.LabelValues(ctx, label)
+	return api.API.LabelValues(ctx, label, matchers)
 }
 
 // Query performs a query for the given time.

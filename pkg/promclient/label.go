@@ -80,8 +80,8 @@ func (c *AddLabelClient) LabelNames(ctx context.Context) ([]string, v1.Warnings,
 }
 
 // LabelValues performs a query for the values of the given label.
-func (c *AddLabelClient) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
-	val, w, err := c.API.LabelValues(ctx, label)
+func (c *AddLabelClient) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
+	val, w, err := c.API.LabelValues(ctx, label, matchers)
 	if err != nil {
 		return nil, w, err
 	}

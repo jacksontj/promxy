@@ -14,7 +14,7 @@ type API interface {
 	// LabelNames returns all the unique label names present in the block in sorted order.
 	LabelNames(ctx context.Context) ([]string, v1.Warnings, error)
 	// LabelValues performs a query for the values of the given label.
-	LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error)
+	LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error)
 	// Query performs a query for the given time.
 	Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error)
 	// QueryRange performs a query for the given range.
