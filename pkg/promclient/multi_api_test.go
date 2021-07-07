@@ -27,7 +27,7 @@ func (s *stubAPI) LabelNames(ctx context.Context) ([]string, v1.Warnings, error)
 }
 
 // LabelValues performs a query for the values of the given label.
-func (s *stubAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
+func (s *stubAPI) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
 	return s.labelValues(), nil, nil
 }
 
@@ -71,11 +71,11 @@ func (s *errorAPI) LabelNames(ctx context.Context) ([]string, v1.Warnings, error
 }
 
 // LabelValues performs a query for the values of the given label.
-func (s *errorAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
+func (s *errorAPI) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
 	if s.err != nil {
 		return nil, nil, s.err
 	}
-	return s.LabelValues(ctx, label)
+	return s.LabelValues(ctx, label, matchers)
 }
 
 // Query performs a query for the given time.
@@ -376,7 +376,7 @@ func TestMultiAPIMerging(t *testing.T) {
 			})
 
 			t.Run("LabelValues", func(t *testing.T) {
-				v, _, err := test.a.LabelValues(context.TODO(), "a")
+				v, _, err := test.a.LabelValues(context.TODO(), "a", nil)
 				if err != nil != test.err {
 					if test.err {
 						t.Fatalf("missing expected err")
