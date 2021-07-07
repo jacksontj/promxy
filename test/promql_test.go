@@ -133,6 +133,8 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 			MaxSamples: 50000000,
 		}),
 		s.(storage.SampleAndChunkQueryable),
+		nil, //appendable
+		nil, // exemplarQueryable
 		nil, //factoryTr
 		nil, //factoryAr
 		cfgFunc,
@@ -153,8 +155,9 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 		1048576,   // RemoteReadBytesInFrame
 		nil,       // CORSOrigin
 		nil,       // runtimeInfo
-		nil,       // versionInfo
+		nil,       // buildInfo
 		nil,       // gatherer
+		nil,       // registerer
 	)
 
 	apiRouter := route.New()
