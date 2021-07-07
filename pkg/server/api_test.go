@@ -18,7 +18,7 @@ import (
 func TestUnauthenticatedServerFunctions(t *testing.T) {
 	freePort, err := getFreePort()
 	if err != nil {
-		t.Errorf("could not get a free port to run test: %s", err.Error())
+		t.Fatalf("could not get a free port to run test: %s", err.Error())
 	}
 	bindAddr := fmt.Sprintf("localhost:%d", freePort)
 	router := httprouter.New()
@@ -26,7 +26,7 @@ func TestUnauthenticatedServerFunctions(t *testing.T) {
 
 	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "")
 	if err != nil {
-		t.Errorf("an error occured during creation of server: %s", err.Error())
+		t.Fatalf("an error occured during creation of server: %s", err.Error())
 	}
 
 	client := &http.Client{
@@ -56,7 +56,7 @@ func TestUnauthenticatedServerFunctions(t *testing.T) {
 func TestAuthenticatedServerDoesNotStartupWithInvalidConfig(t *testing.T) {
 	freePort, err := getFreePort()
 	if err != nil {
-		t.Errorf("could not get a free port to run test: %s", err.Error())
+		t.Fatalf("could not get a free port to run test: %s", err.Error())
 	}
 	bindAddr := fmt.Sprintf("localhost:%d", freePort)
 	router := httprouter.New()
@@ -64,7 +64,7 @@ func TestAuthenticatedServerDoesNotStartupWithInvalidConfig(t *testing.T) {
 
 	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/invalid-tls-server-config.yml")
 	if err == nil {
-		t.Errorf("server validated an invalid tlsConfig")
+		t.Fatalf("server validated an invalid tlsConfig")
 	}
 
 	if server != nil {
@@ -75,7 +75,7 @@ func TestAuthenticatedServerDoesNotStartupWithInvalidConfig(t *testing.T) {
 func TestMutualTLSClientCannotConnectToAuthenticatedServerWithoutCerts(t *testing.T) {
 	freePort, err := getFreePort()
 	if err != nil {
-		t.Errorf("could not get a free port to run test: %s", err.Error())
+		t.Fatalf("could not get a free port to run test: %s", err.Error())
 	}
 	bindAddr := fmt.Sprintf("localhost:%d", freePort)
 	router := httprouter.New()
@@ -83,7 +83,7 @@ func TestMutualTLSClientCannotConnectToAuthenticatedServerWithoutCerts(t *testin
 
 	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/tls-server-config.yml")
 	if err != nil {
-		t.Errorf("an error occured during creation of server: %s", err.Error())
+		t.Fatalf("an error occured during creation of server: %s", err.Error())
 	}
 
 	client := &http.Client{
@@ -96,7 +96,7 @@ func TestMutualTLSClientCannotConnectToAuthenticatedServerWithoutCerts(t *testin
 
 	_, err = client.Get(fmt.Sprintf("https://%s/metrics", bindAddr))
 	if err == nil {
-		t.Errorf("was able to make a request to metrics endpoint when it should no have: %s", err.Error())
+		t.Fatalf("was able to make a request to metrics endpoint when it should no have: %s", err.Error())
 	}
 
 	server.Close()
@@ -105,7 +105,7 @@ func TestMutualTLSClientCannotConnectToAuthenticatedServerWithoutCerts(t *testin
 func TestMutualTLSClientCanConnectToAuthenticatedServerWithCerts(t *testing.T) {
 	freePort, err := getFreePort()
 	if err != nil {
-		t.Errorf("could not get a free port to run test: %s", err.Error())
+		t.Fatalf("could not get a free port to run test: %s", err.Error())
 	}
 	bindAddr := fmt.Sprintf("localhost:%d", freePort)
 	router := httprouter.New()
@@ -113,27 +113,27 @@ func TestMutualTLSClientCanConnectToAuthenticatedServerWithCerts(t *testing.T) {
 
 	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/tls-server-config.yml")
 	if err != nil {
-		t.Errorf("an error occured during creation of server: %s", err.Error())
+		t.Fatalf("an error occured during creation of server: %s", err.Error())
 	}
 
 	client := setupAuthenticatedClient(t)
 
 	resp, err := client.Get(fmt.Sprintf("https://%s/metrics", bindAddr))
 	if err != nil {
-		t.Errorf("could not make request to metrics endpoint: %s", err.Error())
+		t.Fatalf("could not make request to metrics endpoint: %s", err.Error())
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		t.Errorf("could not read response body: %s", err.Error())
+		t.Fatalf("could not read response body: %s", err.Error())
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("authenticated client was unable to make a request to the authenticated server. Response body: %s", body)
+		t.Fatalf("authenticated client was unable to make a request to the authenticated server. Response body: %s", body)
 	}
 
 	if !strings.Contains(string(body), "go_goroutines") {
-		t.Errorf("could not find metric name 'go_goroutines' in response")
+		t.Fatalf("could not find metric name 'go_goroutines' in response")
 	}
 	server.Close()
 }
@@ -155,14 +155,14 @@ func getFreePort() (int, error) {
 func setupAuthenticatedClient(t *testing.T) *http.Client {
 	caCert, err := ioutil.ReadFile("testdata/test-ca.crt")
 	if err != nil {
-		t.Errorf("could not read ca certificate: %s", err)
+		t.Fatalf("could not read ca certificate: %s", err)
 	}
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
 
 	clientCert, err := tls.LoadX509KeyPair("testdata/client.crt", "testdata/client.key")
 	if err != nil {
-		t.Errorf("could not create keypair from file: %s", err)
+		t.Fatalf("could not create keypair from file: %s", err)
 	}
 
 	return &http.Client{
