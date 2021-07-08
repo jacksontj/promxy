@@ -44,7 +44,7 @@ func (s *Storage) Append(ref uint64, l labels.Labels, t int64, v float64) (uint6
 }
 
 func (s *Storage) AppendExemplar(ref uint64, l labels.Labels, e exemplar.Exemplar) (uint64, error) {
-	return 0, fmt.Errorf("Not supported")
+	return 0, fmt.Errorf("not supported")
 }
 
 // Commit implements storage.Appender.

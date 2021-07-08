@@ -30,7 +30,7 @@ func (a *appenderStub) Append(ref uint64, l labels.Labels, t int64, v float64) (
 }
 
 func (a *appenderStub) AppendExemplar(ref uint64, l labels.Labels, e exemplar.Exemplar) (uint64, error) {
-	return 0, fmt.Errorf("Not Implemented")
+	return 0, fmt.Errorf("not Implemented")
 }
 
 // Commit submits the collected samples and purges the batch.
