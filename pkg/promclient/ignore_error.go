@@ -16,6 +16,12 @@ type IgnoreErrorAPI struct {
 	API
 }
 
+// LabelNames returns all the unique label names present in the block in sorted order.
+func (n *IgnoreErrorAPI) LabelNames(ctx context.Context) ([]string, v1.Warnings, error) {
+	v, w, _ := n.API.LabelNames(ctx)
+	return v, w, nil
+}
+
 // LabelValues performs a query for the values of the given label.
 func (n *IgnoreErrorAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
 	v, w, _ := n.API.LabelValues(ctx, label)
