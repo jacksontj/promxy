@@ -13,53 +13,53 @@ import (
 // be used with all the regular error merging logic and effectively have its errors
 // not considered
 type IgnoreErrorAPI struct {
-	API
+	A API
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
 func (n *IgnoreErrorAPI) LabelNames(ctx context.Context) ([]string, v1.Warnings, error) {
-	v, w, _ := n.API.LabelNames(ctx)
+	v, w, _ := n.A.LabelNames(ctx)
 	return v, w, nil
 }
 
 // LabelValues performs a query for the values of the given label.
 func (n *IgnoreErrorAPI) LabelValues(ctx context.Context, label string) (model.LabelValues, v1.Warnings, error) {
-	v, w, _ := n.API.LabelValues(ctx, label)
+	v, w, _ := n.A.LabelValues(ctx, label)
 
 	return v, w, nil
 }
 
 // Query performs a query for the given time.
 func (n *IgnoreErrorAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
-	v, w, _ := n.API.Query(ctx, query, ts)
+	v, w, _ := n.A.Query(ctx, query, ts)
 
 	return v, w, nil
 }
 
 // QueryRange performs a query for the given range.
 func (n *IgnoreErrorAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
-	v, w, _ := n.API.QueryRange(ctx, query, r)
+	v, w, _ := n.A.QueryRange(ctx, query, r)
 
 	return v, w, nil
 }
 
 // Series finds series by label matchers.
 func (n *IgnoreErrorAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
-	v, w, _ := n.API.Series(ctx, matches, startTime, endTime)
+	v, w, _ := n.A.Series(ctx, matches, startTime, endTime)
 
 	return v, w, nil
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
 func (n *IgnoreErrorAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
-	v, w, _ := n.API.GetValue(ctx, start, end, matchers)
+	v, w, _ := n.A.GetValue(ctx, start, end, matchers)
 
 	return v, w, nil
 }
 
 // Key returns a labelset used to determine other api clients that are the "same"
 func (n *IgnoreErrorAPI) Key() model.LabelSet {
-	if apiLabels, ok := n.API.(APILabels); ok {
+	if apiLabels, ok := n.A.(APILabels); ok {
 		return apiLabels.Key()
 	}
 	return nil

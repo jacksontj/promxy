@@ -12,7 +12,7 @@ import (
 
 // DebugAPI simply logs debug lines for the given API with the given prefix
 type DebugAPI struct {
-	API
+	A             API
 	PrefixMessage string
 }
 
@@ -24,7 +24,7 @@ func (d *DebugAPI) LabelNames(ctx context.Context) ([]string, v1.Warnings, error
 	logrus.WithFields(fields).Debug(d.PrefixMessage)
 
 	s := time.Now()
-	v, w, err := d.API.LabelNames(ctx)
+	v, w, err := d.A.LabelNames(ctx)
 	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {
@@ -48,7 +48,7 @@ func (d *DebugAPI) LabelValues(ctx context.Context, label string) (model.LabelVa
 	logrus.WithFields(fields).Debug(d.PrefixMessage)
 
 	s := time.Now()
-	v, w, err := d.API.LabelValues(ctx, label)
+	v, w, err := d.A.LabelValues(ctx, label)
 	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {
@@ -73,7 +73,7 @@ func (d *DebugAPI) Query(ctx context.Context, query string, ts time.Time) (model
 	logrus.WithFields(fields).Debug(d.PrefixMessage)
 
 	s := time.Now()
-	v, w, err := d.API.Query(ctx, query, ts)
+	v, w, err := d.A.Query(ctx, query, ts)
 	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {
@@ -98,7 +98,7 @@ func (d *DebugAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 	logrus.WithFields(fields).Debug(d.PrefixMessage)
 
 	s := time.Now()
-	v, w, err := d.API.QueryRange(ctx, query, r)
+	v, w, err := d.A.QueryRange(ctx, query, r)
 	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {
@@ -124,7 +124,7 @@ func (d *DebugAPI) Series(ctx context.Context, matches []string, startTime time.
 	logrus.WithFields(fields).Debug(d.PrefixMessage)
 
 	s := time.Now()
-	v, w, err := d.API.Series(ctx, matches, startTime, endTime)
+	v, w, err := d.A.Series(ctx, matches, startTime, endTime)
 	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {
@@ -150,7 +150,7 @@ func (d *DebugAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 	logrus.WithFields(fields).Debug(d.PrefixMessage)
 
 	s := time.Now()
-	v, w, err := d.API.GetValue(ctx, start, end, matchers)
+	v, w, err := d.A.GetValue(ctx, start, end, matchers)
 	fields["took"] = time.Since(s)
 
 	if logrus.GetLevel() > logrus.DebugLevel {

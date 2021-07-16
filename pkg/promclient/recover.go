@@ -11,7 +11,17 @@ import (
 
 // recoverAPI simply recovers all panics and returns them as errors
 // this is used for testing
-type recoverAPI struct{ API }
+type recoverAPI struct{ A API }
+
+// LabelNames returns all the unique label names present in the block in sorted order.
+func (api *recoverAPI) LabelNames(ctx context.Context) (v []string, w v1.Warnings, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+	return api.A.LabelNames(ctx)
+}
 
 // LabelValues performs a query for the values of the given label.
 func (api *recoverAPI) LabelValues(ctx context.Context, label string) (v model.LabelValues, w v1.Warnings, err error) {
@@ -20,7 +30,7 @@ func (api *recoverAPI) LabelValues(ctx context.Context, label string) (v model.L
 			err = r.(error)
 		}
 	}()
-	return api.API.LabelValues(ctx, label)
+	return api.A.LabelValues(ctx, label)
 }
 
 // Query performs a query for the given time.
@@ -30,7 +40,7 @@ func (api *recoverAPI) Query(ctx context.Context, query string, ts time.Time) (v
 			err = r.(error)
 		}
 	}()
-	return api.API.Query(ctx, query, ts)
+	return api.A.Query(ctx, query, ts)
 }
 
 // QueryRange performs a query for the given range.
@@ -40,7 +50,7 @@ func (api *recoverAPI) QueryRange(ctx context.Context, query string, r v1.Range)
 			err = r.(error)
 		}
 	}()
-	return api.API.QueryRange(ctx, query, r)
+	return api.A.QueryRange(ctx, query, r)
 }
 
 // Series finds series by label matchers.
@@ -50,7 +60,7 @@ func (api *recoverAPI) Series(ctx context.Context, matches []string, startTime t
 			err = r.(error)
 		}
 	}()
-	return api.API.Series(ctx, matches, startTime, endTime)
+	return api.A.Series(ctx, matches, startTime, endTime)
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
@@ -60,5 +70,5 @@ func (api *recoverAPI) GetValue(ctx context.Context, start, end time.Time, match
 			err = r.(error)
 		}
 	}()
-	return api.API.GetValue(ctx, start, end, matchers)
+	return api.A.GetValue(ctx, start, end, matchers)
 }
