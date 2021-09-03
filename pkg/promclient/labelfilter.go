@@ -1,13 +1,23 @@
 package promclient
 
 import (
+	"sync"
+
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 )
 
+func NewLabelFilterVisitor(ls model.LabelSet) *LabelFilterVisitor {
+	return &LabelFilterVisitor{
+		ls:          ls,
+		filterMatch: true,
+	}
+}
+
 // LabelFilterVisitor implements the parser.Visitor interface to filter selectors based on a labelstet
 type LabelFilterVisitor struct {
+	l           sync.Mutex
 	ls          model.LabelSet
 	filterMatch bool
 }
@@ -23,7 +33,9 @@ func (l *LabelFilterVisitor) Visit(node parser.Node, path []parser.Node) (w pars
 		}
 
 		filteredMatchers, ok := FilterMatchers(l.ls, nodeTyped.LabelMatchers)
+		l.l.Lock()
 		l.filterMatch = l.filterMatch && ok
+		l.l.Unlock()
 
 		if ok {
 			nodeTyped.LabelMatchers = filteredMatchers
@@ -38,7 +50,9 @@ func (l *LabelFilterVisitor) Visit(node parser.Node, path []parser.Node) (w pars
 		}
 
 		filteredMatchers, ok := FilterMatchers(l.ls, nodeTyped.VectorSelector.(*parser.VectorSelector).LabelMatchers)
+		l.l.Lock()
 		l.filterMatch = l.filterMatch && ok
+		l.l.Unlock()
 
 		if ok {
 			nodeTyped.VectorSelector.(*parser.VectorSelector).LabelMatchers = filteredMatchers
