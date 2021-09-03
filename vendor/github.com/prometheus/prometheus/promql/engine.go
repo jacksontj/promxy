@@ -486,7 +486,7 @@ func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *parser.Eval
 	}
 	defer querier.Close()
 
-	if err := ng.populateSeries(querier, s); err != nil {
+	if err := ng.populateSeries(ctx, querier, s); err != nil {
 		prepareSpanTimer.Finish()
 		return nil, nil, err
 	}
@@ -598,7 +598,10 @@ func (ng *Engine) subqueryOffsetRange(path []parser.Node) (time.Duration, time.D
 
 func (ng *Engine) findMinTime(s *parser.EvalStmt) time.Time {
 	var maxOffset time.Duration
+	l := sync.Mutex{}
 	parser.Inspect(context.TODO(), s, func(node parser.Node, path []parser.Node) error {
+	    l.Lock()
+	    defer l.Unlock()
 		subqOffset, subqRange := ng.subqueryOffsetRange(path)
 		switch n := node.(type) {
 		case *parser.VectorSelector:
@@ -621,14 +624,14 @@ func (ng *Engine) findMinTime(s *parser.EvalStmt) time.Time {
 	return s.Start.Add(-maxOffset)
 }
 
-func (ng *Engine) populateSeries(querier storage.Querier, s *parser.EvalStmt) error {
+func (ng *Engine) populateSeries(ctx context.Context, querier storage.Querier, s *parser.EvalStmt) error {
 	// Whenever a MatrixSelector is evaluated, evalRange is set to the corresponding range.
 	// The evaluation of the VectorSelector inside then evaluates the given range and unsets
 	// the variable.
 	var evalRange time.Duration
 	l := sync.Mutex{}
 
-	n, err := parser.Inspect(context.TODO(), s, func(node parser.Node, path []parser.Node) error {
+	n, err := parser.Inspect(ctx, s, func(node parser.Node, path []parser.Node) error {
 		l.Lock()
 		defer l.Unlock()
 		switch n := node.(type) {

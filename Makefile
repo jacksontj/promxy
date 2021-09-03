@@ -39,3 +39,8 @@ testlocal-build:
 vendor:
 	GO111MODULE=on $(GO) mod tidy
 	GO111MODULE=on $(GO) mod vendor
+
+.PHONY: update-prom-fork
+update-prom-fork:
+	GO111MODULE=on $(GO) mod edit -replace github.com/prometheus/prometheus=github.com/jacksontj/prometheus@release-2.24_fork_promxy
+	$(MAKE) vendor
