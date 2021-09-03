@@ -102,7 +102,7 @@ func (c *AddLabelClient) Query(ctx context.Context, query string, ts time.Time) 
 	}
 
 	// Walk the expression, to filter out any LabelMatchers that match etc.
-	filterVisitor := &LabelFilterVisitor{c.Labels, true}
+	filterVisitor := NewLabelFilterVisitor(c.Labels)
 	if _, err := parser.Walk(ctx, filterVisitor, &parser.EvalStmt{Expr: e}, e, nil, nil); err != nil {
 		return nil, nil, err
 	}
@@ -129,7 +129,7 @@ func (c *AddLabelClient) QueryRange(ctx context.Context, query string, r v1.Rang
 	}
 
 	// Walk the expression, to filter out any LabelMatchers that match etc.
-	filterVisitor := &LabelFilterVisitor{c.Labels, true}
+	filterVisitor := NewLabelFilterVisitor(c.Labels)
 	if _, err := parser.Walk(ctx, filterVisitor, &parser.EvalStmt{Expr: e}, e, nil, nil); err != nil {
 		return nil, nil, err
 	}
@@ -160,7 +160,7 @@ func (c *AddLabelClient) Series(ctx context.Context, matches []string, startTime
 		}
 
 		// Walk the expression, to filter out any LabelMatchers that match etc.
-		filterVisitor := &LabelFilterVisitor{c.Labels, true}
+		filterVisitor := NewLabelFilterVisitor(c.Labels)
 		if _, err := parser.Walk(ctx, filterVisitor, &parser.EvalStmt{Expr: e}, e, nil, nil); err != nil {
 			return nil, nil, err
 		}
