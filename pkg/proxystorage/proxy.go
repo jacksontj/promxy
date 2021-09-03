@@ -208,6 +208,11 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		return ok
 	}
 
+	isVectorSelector := func(node parser.Node) bool {
+		_, ok := node.(*parser.VectorSelector)
+		return ok
+	}
+
 	// If we are a child of a subquery; we just skip replacement (since it already did a nodereplacer for those)
 	for _, n := range path {
 		if isSubQuery(n) {
@@ -219,8 +224,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// rules around combining). We'll skip this node and let a lower layer take this on
 	aggFinder := &BooleanFinder{Func: isAgg}
 	offsetFinder := &OffsetFinder{}
+	vecFinder := &BooleanFinder{Func: isVectorSelector}
 
-	visitor := NewMultiVisitor([]parser.Visitor{aggFinder, offsetFinder})
+	visitor := NewMultiVisitor([]parser.Visitor{aggFinder, offsetFinder, vecFinder})
 
 	if _, err := parser.Walk(ctx, visitor, s, node, nil, nil); err != nil {
 		return nil, err
@@ -231,6 +237,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		if !((isAgg(node) || isSubQuery(node)) && aggFinder.Found == 1) {
 			return nil, nil
 		}
+	}
+
+	// If there is more than 1 vector selector here and we are not a subquery
+	// we can't combine as we don't know if those 2 selectors will for-sure
+	// land on the same node
+	if vecFinder.Found > 1 && !isSubQuery(node) {
+		return nil, nil
 	}
 
 	// If the tree below us is not all the same offset, then we can't do anything below -- we'll need
