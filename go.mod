@@ -24,7 +24,7 @@ require (
 	k8s.io/klog v1.0.0
 )
 
-replace github.com/prometheus/prometheus => github.com/jacksontj/prometheus v1.8.1-0.20210607230612-c0ce2f93f417
+replace github.com/prometheus/prometheus => github.com/jacksontj/prometheus v1.8.1-0.20210816231554-929ddf93a7db
 
 replace github.com/golang/glog => github.com/kubermatic/glog-gokit v0.0.0-20181129151237-8ab7e4c2d352
 
