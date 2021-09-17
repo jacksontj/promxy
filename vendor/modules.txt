@@ -330,7 +330,7 @@ github.com/prometheus/exporter-toolkit/web
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
-# github.com/prometheus/prometheus v1.8.2-0.20210707132820-dc8f50559534 => github.com/jacksontj/prometheus v1.8.1-0.20210917170830-f997f07279d9
+# github.com/prometheus/prometheus v1.8.2-0.20210707132820-dc8f50559534 => github.com/jacksontj/prometheus v1.8.1-0.20210917180120-0c8fa0a92ce8
 github.com/prometheus/prometheus/config
 github.com/prometheus/prometheus/discovery
 github.com/prometheus/prometheus/discovery/aws
