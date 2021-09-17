@@ -15,7 +15,6 @@ package parser
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -334,26 +333,12 @@ func Walk(ctx context.Context, v Visitor, s *EvalStmt, node Node, path []Node, n
 	}
 	path = append(path, node)
 
-	// We parallelize the execution of children
-	wg := &sync.WaitGroup{}
-	children := Children(node)
-	errs := make([]error, len(children))
-	for i, e := range children {
-		wg.Add(1)
-		go func(i int, e Node) {
-			defer wg.Done()
-			if childNode, childErr := Walk(ctx, v, s, e, append([]Node{}, path...), nr); err != nil {
-				errs[i] = childErr
-			} else {
-				SetChild(node, i, childNode)
-			}
-		}(i, e)
-	}
-	wg.Wait()
-	// If there was an error we return the first one
-	for _, err := range errs {
-		if err != nil {
+	// TODO: parallel execution of children
+	for i, e := range Children(node) {
+		if childNode, err := Walk(ctx, v, s, e, path, nr); err != nil {
 			return node, err
+		} else {
+			SetChild(node, i, childNode)
 		}
 	}
 
@@ -433,8 +418,6 @@ func SetChild(node Node, i int, child Node) {
 	case *StepInvariantExpr:
 		n.Expr = child.(Expr)
 	case *NumberLiteral, *StringLiteral, *VectorSelector:
-	default:
-		panic(errors.Errorf("promql.Children: unhandled node type %T", node))
 	}
 }
 
