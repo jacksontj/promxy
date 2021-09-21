@@ -15,6 +15,7 @@ package parser
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -333,13 +334,32 @@ func Walk(ctx context.Context, v Visitor, s *EvalStmt, node Node, path []Node, n
 	}
 	path = append(path, node)
 
-	// TODO: parallel execution of children
-	for i, e := range Children(node) {
-		if childNode, err := Walk(ctx, v, s, e, path, nr); err != nil {
+	// We parallelize the execution of children
+	wg := &sync.WaitGroup{}
+	children := Children(node)
+	newChildren := make([]Node, len(children))
+	errs := make([]error, len(children))
+	for i, e := range children {
+		wg.Add(1)
+		go func(i int, e Node) {
+			defer wg.Done()
+			if childNode, childErr := Walk(ctx, v, s, e, append([]Node{}, path...), nr); err != nil {
+				errs[i] = childErr
+			} else {
+    			newChildren[i] = childNode
+			}
+		}(i, e)
+	}
+	wg.Wait()
+	// If there was an error we return the first one
+	for _, err := range errs {
+		if err != nil {
 			return node, err
-		} else {
-			SetChild(node, i, childNode)
 		}
+	}
+	
+	for i, childNode := range newChildren {
+		SetChild(node, i, childNode)
 	}
 
 	_, err = v.Visit(nil, nil)
@@ -348,10 +368,13 @@ func Walk(ctx context.Context, v Visitor, s *EvalStmt, node Node, path []Node, n
 
 func ExtractSelectors(expr Expr) [][]*labels.Matcher {
 	var selectors [][]*labels.Matcher
+	var l sync.Mutex
 	Inspect(context.TODO(), &EvalStmt{Expr: expr}, func(node Node, _ []Node) error {
 		vs, ok := node.(*VectorSelector)
 		if ok {
+    	    l.Lock()
 			selectors = append(selectors, vs.LabelMatchers)
+			l.Unlock()
 		}
 		return nil
 	}, nil)
