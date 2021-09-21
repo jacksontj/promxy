@@ -33,6 +33,7 @@ func TestUnauthenticatedServerFunctions(t *testing.T) {
 		Transport: &http.Transport{},
 	}
 
+	time.Sleep(time.Millisecond * 5)
 	resp, err := client.Get(fmt.Sprintf("http://%s/metrics", bindAddr))
 	if err != nil {
 		t.Fatalf("could not make request to metrics endpoint: %s", err.Error())
