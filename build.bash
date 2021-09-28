@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-VERSION=`git describe --tags --dirty`
+: "${VERSION:=`git describe --tags --dirty`}"
 
 package=$1
 destination=$2
