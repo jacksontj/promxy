@@ -56,6 +56,8 @@ jobs:
     #    uses a compiled language
 
     - run: |
+        go version
+        ls
         cd cmd/promxy && CGO_ENABLED=0 go build -mod=vendor -tags netgo,builtinassets
 
     - name: Perform CodeQL Analysis
