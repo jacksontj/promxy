@@ -56,9 +56,7 @@ jobs:
     #    uses a compiled language
 
     - run: |
-        echo `pwd`
-        ls
-        VERSION=codeql make release
+        cd cmd/promxy && CGO_ENABLED=0 go build -mod=vendor -tags netgo,builtinassets
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
