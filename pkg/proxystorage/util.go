@@ -56,20 +56,20 @@ func (o *OffsetFinder) Visit(node parser.Node, _ []parser.Node) (parser.Visitor,
 	switch n := node.(type) {
 	case *parser.SubqueryExpr:
 		if !o.Found {
-			o.Offset = n.Offset
+			o.Offset = n.OriginalOffset
 			o.Found = true
 		} else {
-			if n.Offset != o.Offset {
-				o.Error = fmt.Errorf("mismatched offsets %v %v", n.Offset, o.Offset)
+			if n.OriginalOffset != o.Offset {
+				o.Error = fmt.Errorf("mismatched offsets %v %v", n.OriginalOffset, o.Offset)
 			}
 		}
 	case *parser.VectorSelector:
 		if !o.Found {
-			o.Offset = n.Offset
+			o.Offset = n.OriginalOffset
 			o.Found = true
 		} else {
-			if n.Offset != o.Offset {
-				o.Error = fmt.Errorf("mismatched offsets %v %v", n.Offset, o.Offset)
+			if n.OriginalOffset != o.Offset {
+				o.Error = fmt.Errorf("mismatched offsets %v %v", n.OriginalOffset, o.Offset)
 			}
 		}
 	}
@@ -88,7 +88,7 @@ type OffsetRemover struct{}
 func (o *OffsetRemover) Visit(node parser.Node, _ []parser.Node) (parser.Visitor, error) {
 	switch n := node.(type) {
 	case *parser.VectorSelector:
-		n.Offset = 0
+		n.OriginalOffset = 0
 	}
 	return o, nil
 }
