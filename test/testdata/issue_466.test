@@ -1,0 +1,7 @@
+load 5m
+	calculate_rate_window		0+80x10
+
+# Test for https://github.com/jacksontj/promxy/issues/466
+eval instant at 50m (calculate_rate_window offset 5m) * scalar(sum(calculate_rate_window) * 0)
+	{az="a"} 0
+	{az="b"} 0
