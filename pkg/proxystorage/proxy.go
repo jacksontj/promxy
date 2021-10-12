@@ -413,7 +413,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 				series[i] = &proxyquerier.Series{iterator}
 			}
 
-			ret := &parser.VectorSelector{OriginalOffset: offset, Offset: offset}
+			ret := &parser.VectorSelector{OriginalOffset: offset}
 			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
 
 			// Replace with sum(count_values()) BY (label)
@@ -448,7 +448,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 				series[i] = &proxyquerier.Series{iterator}
 			}
 
-			ret := &parser.VectorSelector{OriginalOffset: offset, Offset: offset}
+			ret := &parser.VectorSelector{OriginalOffset: offset}
 			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
 			n.Expr = ret
 
@@ -484,7 +484,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			series[i] = &proxyquerier.Series{iterator}
 		}
 
-		ret := &parser.VectorSelector{OriginalOffset: offset, Offset: offset}
+		ret := &parser.VectorSelector{OriginalOffset: offset}
 		ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
 
 		// the "scalar()" function is a bit tricky. It can return a scalar or a vector.
@@ -542,7 +542,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		for i, iterator := range iterators {
 			series[i] = &proxyquerier.Series{iterator}
 		}
-		n.Offset = offset
+		n.OriginalOffset = offset
 		n.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
 
 	// If we hit this someone is asking for a matrix directly, if so then we don't
