@@ -217,6 +217,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		return ok
 	}
 
+	hasTimestamp := func(node parser.Node) bool {
+		if vs, ok := node.(*parser.VectorSelector); ok {
+			return vs.Timestamp != nil
+		}
+		return false
+	}
+
 	// If we are a child of a subquery; we just skip replacement (since it already did a nodereplacer for those)
 	for _, n := range path {
 		if isSubQuery(n) {
@@ -229,8 +236,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	aggFinder := &BooleanFinder{Func: isAgg}
 	offsetFinder := &OffsetFinder{}
 	vecFinder := &BooleanFinder{Func: isVectorSelector}
+	timestampFinder := &BooleanFinder{Func: hasTimestamp}
 
-	visitor := NewMultiVisitor([]parser.Visitor{aggFinder, offsetFinder, vecFinder})
+	visitor := NewMultiVisitor([]parser.Visitor{aggFinder, offsetFinder, vecFinder, timestampFinder})
 
 	if _, err := parser.Walk(ctx, visitor, s, node, nil, nil); err != nil {
 		return nil, err
@@ -247,6 +255,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// we can't combine as we don't know if those 2 selectors will for-sure
 	// land on the same node
 	if vecFinder.Found > 1 && !isSubQuery(node) {
+		return nil, nil
+	}
+
+	// If the subtree has an at modifier (e.g. "@ 500") we don't currently support those so we'll skip
+	// this is only enabled in the promql engine for tests, but if we want to support this generally we'll
+	// have to fix this
+	if timestampFinder.Found > 0 {
 		return nil, nil
 	}
 
