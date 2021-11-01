@@ -58,8 +58,8 @@ func (c *AddLabelClient) Key() model.LabelSet {
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (c *AddLabelClient) LabelNames(ctx context.Context, matchers []string) ([]string, v1.Warnings, error) {
-	l, w, err := c.API.LabelNames(ctx, matchers)
+func (c *AddLabelClient) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
+	l, w, err := c.API.LabelNames(ctx, matchers, startTime, endTime)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -80,8 +80,8 @@ func (c *AddLabelClient) LabelNames(ctx context.Context, matchers []string) ([]s
 }
 
 // LabelValues performs a query for the values of the given label.
-func (c *AddLabelClient) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
-	val, w, err := c.API.LabelValues(ctx, label, matchers)
+func (c *AddLabelClient) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
+	val, w, err := c.API.LabelValues(ctx, label, matchers, startTime, endTime)
 	if err != nil {
 		return nil, w, err
 	}

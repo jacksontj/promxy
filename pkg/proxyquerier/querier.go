@@ -105,7 +105,7 @@ func (h *ProxyQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]
 		matchersStrings = []string{s}
 	}
 
-	result, w, err := h.Client.LabelValues(h.Ctx, name, matchersStrings)
+	result, w, err := h.Client.LabelValues(h.Ctx, name, matchersStrings, h.Start, h.End)
 	warnings := promhttputil.WarningsConvert(w)
 	if err != nil {
 		return nil, warnings, errors.Cause(err)
@@ -137,7 +137,7 @@ func (h *ProxyQuerier) LabelNames(matchers ...*labels.Matcher) ([]string, storag
 		matchersStrings = []string{s}
 	}
 
-	v, w, err := h.Client.LabelNames(h.Ctx, matchersStrings)
+	v, w, err := h.Client.LabelNames(h.Ctx, matchersStrings, h.Start, h.End)
 	return v, promhttputil.WarningsConvert(w), err
 }
 
