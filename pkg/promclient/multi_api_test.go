@@ -22,12 +22,12 @@ type stubAPI struct {
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (s *stubAPI) LabelNames(ctx context.Context, matchers []string) ([]string, v1.Warnings, error) {
+func (s *stubAPI) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
 	return s.labelNames(), nil, nil
 }
 
 // LabelValues performs a query for the values of the given label.
-func (s *stubAPI) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
+func (s *stubAPI) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
 	return s.labelValues(), nil, nil
 }
 
@@ -63,19 +63,19 @@ func (s *errorAPI) Key() model.LabelSet {
 	return nil
 }
 
-func (s *errorAPI) LabelNames(ctx context.Context, matchers []string) ([]string, v1.Warnings, error) {
+func (s *errorAPI) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
 	if s.err != nil {
 		return nil, nil, s.err
 	}
-	return s.LabelNames(ctx, matchers)
+	return s.LabelNames(ctx, matchers, startTime, endTime)
 }
 
 // LabelValues performs a query for the values of the given label.
-func (s *errorAPI) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
+func (s *errorAPI) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
 	if s.err != nil {
 		return nil, nil, s.err
 	}
-	return s.LabelValues(ctx, label, matchers)
+	return s.LabelValues(ctx, label, matchers, startTime, endTime)
 }
 
 // Query performs a query for the given time.
@@ -350,7 +350,7 @@ func TestMultiAPIMerging(t *testing.T) {
 	for i, test := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Run("LabelNames", func(t *testing.T) {
-				v, _, err := test.a.LabelNames(context.TODO(), nil)
+				v, _, err := test.a.LabelNames(context.TODO(), nil, time.Time{}, time.Time{})
 				if err != nil != test.err {
 					if test.err {
 						t.Fatalf("missing expected err")
@@ -376,7 +376,7 @@ func TestMultiAPIMerging(t *testing.T) {
 			})
 
 			t.Run("LabelValues", func(t *testing.T) {
-				v, _, err := test.a.LabelValues(context.TODO(), "a", nil)
+				v, _, err := test.a.LabelValues(context.TODO(), "a", nil, time.Time{}, time.Time{})
 				if err != nil != test.err {
 					if test.err {
 						t.Fatalf("missing expected err")

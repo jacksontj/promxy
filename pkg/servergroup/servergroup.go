@@ -310,13 +310,13 @@ func (s *ServerGroup) QueryRange(ctx context.Context, query string, r v1.Range) 
 }
 
 // LabelValues performs a query for the values of the given label.
-func (s *ServerGroup) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
-	return s.State().apiClient.LabelValues(ctx, label, matchers)
+func (s *ServerGroup) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
+	return s.State().apiClient.LabelValues(ctx, label, matchers, startTime, endTime)
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (s *ServerGroup) LabelNames(ctx context.Context, matchers []string) ([]string, v1.Warnings, error) {
-	return s.State().apiClient.LabelNames(ctx, matchers)
+func (s *ServerGroup) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
+	return s.State().apiClient.LabelNames(ctx, matchers, startTime, endTime)
 }
 
 // Series finds series by label matchers.

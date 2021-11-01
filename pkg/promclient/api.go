@@ -3,7 +3,6 @@ package promclient
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -15,11 +14,6 @@ import (
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 )
 
-var (
-	minTime = time.Unix(math.MinInt64/1000+62135596801, 0).UTC()
-	maxTime = time.Unix(math.MaxInt64/1000-62135596801, 999999999).UTC()
-)
-
 // PromAPIV1 implements our internal API interface using *only* the v1 HTTP API
 // Simply wraps the prom API to fullfil our internal API interface
 type PromAPIV1 struct {
@@ -27,13 +21,13 @@ type PromAPIV1 struct {
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (p *PromAPIV1) LabelNames(ctx context.Context, matchers []string) ([]string, v1.Warnings, error) {
-	return p.API.LabelNames(ctx, matchers, minTime, maxTime)
+func (p *PromAPIV1) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
+	return p.API.LabelNames(ctx, matchers, startTime, endTime)
 }
 
 // LabelValues performs a query for the values of the given label.
-func (p *PromAPIV1) LabelValues(ctx context.Context, label string, matchers []string) (model.LabelValues, v1.Warnings, error) {
-	return p.API.LabelValues(ctx, label, matchers, minTime, maxTime)
+func (p *PromAPIV1) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
+	return p.API.LabelValues(ctx, label, matchers, startTime, endTime)
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
