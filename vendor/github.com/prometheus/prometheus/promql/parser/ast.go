@@ -15,6 +15,7 @@ package parser
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -348,10 +349,13 @@ func Walk(ctx context.Context, v Visitor, s *EvalStmt, node Node, path []Node, n
 
 func ExtractSelectors(expr Expr) [][]*labels.Matcher {
 	var selectors [][]*labels.Matcher
+	var l sync.Mutex
 	Inspect(context.TODO(), &EvalStmt{Expr: expr}, func(node Node, _ []Node) error {
 		vs, ok := node.(*VectorSelector)
 		if ok {
+			l.Lock()
 			selectors = append(selectors, vs.LabelMatchers)
+			l.Unlock()
 		}
 		return nil
 	}, nil)

@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -52,7 +53,7 @@ var testStartTime = time.Unix(0, 0).UTC()
 
 type testStorageSet struct {
 	storage.Storage
-    storage.ExemplarStorage
+	storage.ExemplarStorage
 }
 
 // Test is a sequence of read and write commands that are run
@@ -467,10 +468,13 @@ func atModifierTestCases(exprStr string, evalTime time.Time) ([]atModifierTestCa
 	ts := timestamp.FromTime(evalTime)
 
 	containsNonStepInvariant := false
+	var l sync.Mutex
 	// Setting the @ timestamp for all selectors to be evalTime.
 	// If there is a subquery, then the selectors inside it don't get the @ timestamp.
 	// If any selector already has the @ timestamp set, then it is untouched.
-	parser.Inspect(context.TODO(),  &parser.EvalStmt{Expr: expr}, func(node parser.Node, path []parser.Node) error {
+	parser.Inspect(context.TODO(), &parser.EvalStmt{Expr: expr}, func(node parser.Node, path []parser.Node) error {
+		l.Lock()
+		defer l.Unlock()
 		_, _, subqTs := subqueryTimes(path)
 		if subqTs != nil {
 			// There is a subquery with timestamp in the path,
