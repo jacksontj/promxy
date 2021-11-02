@@ -182,6 +182,10 @@ func (p *ProxyStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (stor
 	return nil, errors.New("not implemented")
 }
 
+func (p *ProxyStorage) ExemplarQuerier(ctx context.Context) (storage.ExemplarQuerier, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (p *ProxyStorage) WALReplayStatus() (tsdb.WALReplayStatus, error) {
 	return tsdb.WALReplayStatus{}, errors.New("not implemented")
 }

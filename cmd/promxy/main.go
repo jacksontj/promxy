@@ -343,16 +343,17 @@ func main() {
 	scrapeManager := scrape.NewManager(nil, kitlog.With(logger, "component", "scrape manager"), nil)
 
 	webOptions := &web.Options{
-		Registerer:    prometheus.DefaultRegisterer,
-		Gatherer:      prometheus.DefaultGatherer,
-		Context:       ctx,
-		Storage:       proxyStorage,
-		LocalStorage:  ps,
-		QueryEngine:   engine,
-		ScrapeManager: scrapeManager,
-		RuleManager:   ruleManager,
-		Notifier:      notifierManager,
-		LookbackDelta: opts.QueryLookbackDelta,
+		Registerer:      prometheus.DefaultRegisterer,
+		Gatherer:        prometheus.DefaultGatherer,
+		Context:         ctx,
+		Storage:         proxyStorage,
+		LocalStorage:    ps,
+		ExemplarStorage: ps,
+		QueryEngine:     engine,
+		ScrapeManager:   scrapeManager,
+		RuleManager:     ruleManager,
+		Notifier:        notifierManager,
+		LookbackDelta:   opts.QueryLookbackDelta,
 
 		RemoteReadConcurrencyLimit: opts.RemoteReadMaxConcurrency,
 
