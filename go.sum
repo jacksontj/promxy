@@ -779,8 +779,8 @@ github.com/influxdata/roaring v0.4.13-0.20180809181101-fc520f41fab6/go.mod h1:bS
 github.com/influxdata/tdigest v0.0.2-0.20210216194612-fc98d27c9e8b/go.mod h1:Z0kXnxzbTC2qrx4NaIzYkE1k66+6oEDQTvL95hQFh5Y=
 github.com/influxdata/usage-client v0.0.0-20160829180054-6d3895376368/go.mod h1:Wbbw6tYNvwa5dlB6304Sd+82Z3f7PmVZHVKU637d4po=
 github.com/j-keck/arping v0.0.0-20160618110441-2cf9dc699c56/go.mod h1:ymszkNOg6tORTn+6F6j+Jc8TOr5osrynvN6ivFWZ2GA=
-github.com/jacksontj/prometheus v1.8.1-0.20211101202829-02ea5c0e357f h1:GGdZ3ju6hny96GqIeFXEa/uDkFNTM6znW7eNwN+rN1c=
-github.com/jacksontj/prometheus v1.8.1-0.20211101202829-02ea5c0e357f/go.mod h1:02eURgmH1YsgJ2TtWNUGMQMCnLxmtHH9nOgvYxIjGAo=
+github.com/jacksontj/prometheus v1.8.1-0.20211110171435-7f3ca7a64301 h1:UwG9izR17qk2snZyBuUo/sd+w/9f+NhYE41pIMBgDGw=
+github.com/jacksontj/prometheus v1.8.1-0.20211110171435-7f3ca7a64301/go.mod h1:02eURgmH1YsgJ2TtWNUGMQMCnLxmtHH9nOgvYxIjGAo=
 github.com/jessevdk/go-flags v1.5.0 h1:1jKYvbxEjfUl0fmqTCOfonvskHHXMjBySTLW4y9LFvc=
 github.com/jessevdk/go-flags v1.5.0/go.mod h1:Fw0T6WPc1dYxT4mKEZRfG5kJhaTDP9pj1c2EWnYs/m4=
 github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
