@@ -1,0 +1,6 @@
+name: promxy
+version: 0.0.1
+appVersion: 0.0.1
+description: Prometheus proxy to combine multiple prometheuses
+maintainers: []
+engine: gotpl

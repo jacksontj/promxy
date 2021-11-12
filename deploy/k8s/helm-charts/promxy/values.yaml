@@ -1,0 +1,95 @@
+replicaCount: 1
+
+# ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+deployment:
+  enabled: true
+  # ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
+  strategy: {}
+   # rollingUpdate:
+   #  maxSurge: 25%
+   #  maxUnavailable: 25%
+   # type: RollingUpdate
+
+image:
+  repository: quay.io/jacksontj/promxy
+  tag: "master" # rewrites Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+podDisruptionBudget:
+  enabled: false
+  # minAvailable: 1
+  # maxUnavailable: 1
+  labels: {}
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:
+
+hpa:
+  enabled: false
+
+verticalAutoscaler:
+  enabled: false
+  # updateMode: "Auto"
+  # containerPolicies:
+  # - containerName: 'promxy'
+  #   minAllowed:
+  #     cpu: "250m"
+  #     memory: "100Mi"
+  #   maxAllowed:
+  #     cpu: "2000m"
+  #     memory: "2048Mi"
+  # - containerName: "promxy-server-configmap-reload"
+  #   mode: "Off"
+
+service:
+  type: ClusterIP
+  enabled: true
+  servicePort: 8082
+  annotations: {}
+  extraLabels: {}
+  clusterIP: ""
+  externalIPs: []
+  loadBalancerIP: ""
+  loadBalancerSourceRanges: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+extraArgs:
+  log-level: "info"
+
+# use existing configmap if specified
+# otherwise .config values will be used
+configMap: ""
+
+config:
+    ##
+    ## Regular prometheus configuration
+    ##
+    global:
+      evaluation_interval: 5s
+      external_labels:
+        source: promxy
+    # remote_write configuration is used by promxy as its local Appender, meaning all
+    # metrics promxy would "write" (not export) would be sent to this. Examples
+    # of this include: recording rules, metrics on alerting rules, etc.
+    remote_write:
+      - url: http://localhost:8083/receive
+    ##
+    ### Promxy configuration
+    ##
+    promxy:
+      server_groups:
+      - kubernetes_sd_configs:
+        - role: pod
