@@ -1,0 +1,20 @@
+{{- if .Values.verticalAutoscaler.enabled -}}
+apiVersion: autoscaling.k8s.io/v1beta2
+kind: VerticalPodAutoscaler
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+    {{- if .Values.extraLabels}}
+    {{ toYaml .Values.extraLabels | nindent 4 }}
+    {{- end}}
+  name: {{ template "chart.fullname" . }}-vpa
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: {{ template "chart.fullname" . }}
+  updatePolicy:
+    updateMode: {{ .Values.verticalAutoscaler.updateMode | default "Off" | quote }}
+  resourcePolicy:
+    containerPolicies: {{ .Values.verticalAutoscaler.containerPolicies | default list | toYaml | trim | nindent 4 }}
+{{- end -}} {{/* if .Values.verticalAutoscaler.enabled */}}
