@@ -23,6 +23,7 @@ import (
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/sirupsen/logrus"
 
+	"github.com/jacksontj/promxy/pkg/middleware"
 	"github.com/jacksontj/promxy/pkg/promclient"
 	//	sd_config "github.com/prometheus/prometheus/discovery/config"
 )
@@ -95,6 +96,14 @@ func (s *ServerGroup) Cancel() {
 	s.ctxCancel()
 }
 
+// RoundTrip allows us to intercept and mutate downstream HTTP requests at the transport level
+func (s *ServerGroup) RoundTrip(r *http.Request) (*http.Response, error) {
+	for k, v := range middleware.GetHeaders(r.Context()) {
+		r.Header.Set(k, v)
+	}
+	return s.client.Transport.RoundTrip(r)
+}
+
 // Sync updates the targets from our discovery manager
 func (s *ServerGroup) Sync() {
 	syncCh := s.targetManager.SyncCh()
@@ -148,7 +157,7 @@ SYNC_LOOP:
 
 					targets = append(targets, u.Host)
 
-					client, err := api.NewClient(api.Config{Address: u.String(), RoundTripper: s.client.Transport})
+					client, err := api.NewClient(api.Config{Address: u.String(), RoundTripper: s})
 					if err != nil {
 						panic(err) // TODO: shouldn't be possible? If this happens I guess we log and skip?
 					}

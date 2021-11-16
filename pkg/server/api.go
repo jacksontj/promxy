@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/exporter-toolkit/web"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -15,7 +14,7 @@ import (
 	"github.com/jacksontj/promxy/pkg/logging"
 )
 
-func CreateAndStart(bindAddr string, logFormat string, webReadTimeout time.Duration, accessLogOut io.Writer, router *httprouter.Router, tlsConfigFile string) (*http.Server, error) {
+func CreateAndStart(bindAddr string, logFormat string, webReadTimeout time.Duration, accessLogOut io.Writer, router http.Handler, tlsConfigFile string) (*http.Server, error) {
 	handler := createHandler(accessLogOut, router, logFormat)
 
 	srv := &http.Server{
@@ -31,7 +30,7 @@ func CreateAndStart(bindAddr string, logFormat string, webReadTimeout time.Durat
 	return createAndStartHTTPS(srv, tlsConfigFile)
 }
 
-func createHandler(accessLogOut io.Writer, router *httprouter.Router, logFormat string) http.Handler {
+func createHandler(accessLogOut io.Writer, router http.Handler, logFormat string) http.Handler {
 	var handler http.Handler
 	if accessLogOut == nil {
 		handler = router
