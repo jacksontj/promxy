@@ -7,6 +7,7 @@ import (
 	"path"
 	"regexp"
 
+	"github.com/jacksontj/promxy/pkg/middleware"
 	"github.com/jacksontj/promxy/pkg/server"
 
 	"go.uber.org/atomic"
@@ -85,7 +86,8 @@ type cliOpts struct {
 	WebCORSOriginRegex string        `long:"web.cors.origin" description:"Regex for CORS origin. It is fully anchored." default:".*"`
 	WebReadTimeout     time.Duration `long:"web.read-timeout" description:"Maximum duration before timing out read of the request, and closing idle connections." default:"5m"`
 
-	MetricsPath string `long:"metrics-path" description:"URL path for the prometheus metrics endpoint." default:"/metrics"`
+	MetricsPath  string   `long:"metrics-path" description:"URL path for the prometheus metrics endpoint." default:"/metrics"`
+	ProxyHeaders []string `long:"proxy-headers" env:"PROXY_HEADERS" description:"a list of headers to proxy to downstream servergroups."`
 
 	ExternalURL     string `long:"web.external-url" description:"The URL under which Prometheus is externally reachable (for example, if Prometheus is served via a reverse proxy). Used for generating relative and absolute links back to Prometheus itself. If the URL has a path portion, it will be used to prefix all HTTP endpoints served by Prometheus. If omitted, relevant URL components will be derived automatically."`
 	EnableLifecycle bool   `long:"web.enable-lifecycle" description:"Enable shutdown and reload via HTTP request."`
@@ -433,7 +435,7 @@ func main() {
 		logrus.Fatalf("Invalid AccessLogDestination: %s", opts.AccessLogDestination)
 	}
 
-	srv, err := server.CreateAndStart(opts.BindAddr, opts.LogFormat, opts.WebReadTimeout, accessLogOut, r, opts.WebConfigFile)
+	srv, err := server.CreateAndStart(opts.BindAddr, opts.LogFormat, opts.WebReadTimeout, accessLogOut, middleware.NewProxyHeaders(r, opts.ProxyHeaders), opts.WebConfigFile)
 	if err != nil {
 		logrus.Fatalf("Error creating server: %v", err)
 	}
