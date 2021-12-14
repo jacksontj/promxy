@@ -25,10 +25,11 @@ can have a single source and you can have globally aggregated promql queries.
 ## Quickstart
 Release binaries are available on the [releases](https://github.com/jacksontj/promxy/releases) page.
 
-If you are interested in hacking on promxy (or just running your own build), you can install via `go get`:
+If you are interested in hacking on promxy (or just running your own build), you can clone and build`:
 
 ```
-go get -u github.com/jacksontj/promxy/cmd/promxy
+git clone git@github.com:jacksontj/promxy.git
+cd promxy/cmd/promxy && go build
 ```
 
 An example configuration file is available in the [repo](https://github.com/jacksontj/promxy/blob/master/cmd/promxy/config.yaml).
