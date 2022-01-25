@@ -478,6 +478,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// prometheus node to answer
 	case *parser.Call:
 		logrus.Debugf("call %v %v", n, n.Type())
+
+		// the functions of sort() and sort_desc() need whole results to calculate.
+		if n.Func.Name == "sort" || n.Func.Name == "sort_desc" {
+			return n, nil
+		}
+
 		removeOffsetFn()
 
 		var result model.Value
