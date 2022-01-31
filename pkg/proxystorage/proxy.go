@@ -513,6 +513,16 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			n.Args[0] = ret
 			return nil, nil
 		}
+
+		// the functions of sort() and sort_desc() need whole results to calculate.
+		switch n.Func.Name {
+		case "sort", "sort_desc":
+			return &parser.Call{
+				Func: n.Func,
+				Args: []parser.Expr{ret},
+			}, nil
+		}
+
 		return ret, nil
 
 	// If we are simply fetching a Vector then we can fetch the data using the same step that
