@@ -480,6 +480,15 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		logrus.Debugf("call %v %v", n, n.Type())
 		removeOffsetFn()
 
+		// if we faced absent() function in a call, then let's call subquery without it
+		// and apply it only on result
+		if n.Func.Name == "absent" {
+			return &parser.Call{
+				Func: n.Func,
+				Args: n.Args,
+			}, nil
+		}
+
 		var result model.Value
 		var warnings v1.Warnings
 		var err error
