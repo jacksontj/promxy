@@ -270,6 +270,7 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 		// 5 minutes is typically above the maximum sane scrape interval. So we can
 		// use keepalive for all configurations.
 		IdleConnTimeout:       5 * time.Minute,
+		ResponseHeaderTimeout: cfg.HTTPConfig.ResponseHeaderTimeout,
 		DialContext:           (&net.Dialer{Timeout: cfg.HTTPConfig.DialTimeout}).DialContext,
 		ResponseHeaderTimeout: cfg.Timeout,
 	}

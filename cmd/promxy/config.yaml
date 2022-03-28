@@ -60,6 +60,9 @@ promxy:
         # dial_timeout controls how long promxy will wait for a connection to the downstream
         # the default is 200ms.
         dial_timeout: 1s
+        # response_header_timeout controls how long promxy will wait for headers from a downstream
+        # this does not include the time required to read the response body
+        response_header_timeout: 10s
         tls_config:
           insecure_skip_verify: true
 

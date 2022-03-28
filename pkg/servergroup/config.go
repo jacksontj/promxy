@@ -154,8 +154,9 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // HTTPClientConfig extends prometheus' HTTPClientConfig
 type HTTPClientConfig struct {
-	DialTimeout time.Duration                `yaml:"dial_timeout"`
-	HTTPConfig  config_util.HTTPClientConfig `yaml:",inline"`
+	DialTimeout           time.Duration                `yaml:"dial_timeout"`
+	ResponseHeaderTimeout time.Duration                `yaml:"response_header_timeout"`
+	HTTPConfig            config_util.HTTPClientConfig `yaml:",inline"`
 }
 
 // RelativeTimeRangeConfig configures durations relative from "now" to define
