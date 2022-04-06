@@ -61,7 +61,7 @@ func (p *proxyStorageState) Cancel(n *proxyStorageState) {
 			sg.Cancel()
 		}
 	}
-	// We call close if the new one is nil, or if the appanders don't match
+	// We call close if the new one is nil, or if the appenders don't match
 	if n == nil || p.appender != n.appender {
 		if p.appenderCloser != nil {
 			p.appenderCloser()
@@ -145,7 +145,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 
 	newState.Ready()        // Wait for the newstate to be ready
 	p.state.Store(newState) // Store the new state
-	if oldState != nil && oldState.appender != newState.appender {
+	if oldState != nil {
 		oldState.Cancel(newState) // Cancel the old one
 	}
 
