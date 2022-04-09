@@ -58,6 +58,17 @@ service:
   loadBalancerIP: ""
   loadBalancerSourceRanges: []
 
+ingress:
+  enabled: false
+  ingressClassName: nginx
+  annotations: {}
+  extraLabels: {}
+  path: /
+  pathType: Prefix
+  hosts:
+    - example.com
+  tls: []
+
 resources:
   requests:
     cpu: 100m
