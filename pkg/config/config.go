@@ -10,6 +10,8 @@ import (
 
 	"github.com/jacksontj/promxy/pkg/servergroup"
 
+	"github.com/prometheus/common/sigv4"
+
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -54,4 +56,5 @@ type Config struct {
 type PromxyConfig struct {
 	// Config for each of the server groups promxy is configured to aggregate
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
+	SigV4Config  *sigv4.SigV4Config    `yaml:"sigv4,omitempty"`
 }

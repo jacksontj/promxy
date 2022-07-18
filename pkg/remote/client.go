@@ -26,7 +26,9 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/common/sigv4"
 	"github.com/prometheus/common/version"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/prometheus/prompb"
@@ -49,6 +51,7 @@ type ClientConfig struct {
 	URL              *config_util.URL
 	Timeout          model.Duration
 	HTTPClientConfig config_util.HTTPClientConfig
+	SigV4Config      *sigv4.SigV4Config
 }
 
 // NewClient creates a new Client.
@@ -57,6 +60,19 @@ func NewClient(index int, conf *ClientConfig) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	t := httpClient.Transport
+
+	if conf.SigV4Config != nil {
+		t, err = sigv4.NewSigV4RoundTripper(conf.SigV4Config, httpClient.Transport)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(conf.Headers) > 0 {
+		t = newInjectHeadersRoundTripper(conf.Headers, t)
+	}
+	httpClient.Transport = otelhttp.NewTransport(t)
 
 	return &Client{
 		index:   index,
