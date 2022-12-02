@@ -17,12 +17,25 @@ package web
 
 import (
 	"encoding/hex"
+	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/go-kit/log"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// extraHTTPHeaders is a map of HTTP headers that can be added to HTTP
+// responses.
+// This is private on purpose to ensure consistency in the Prometheus ecosystem.
+var extraHTTPHeaders = map[string][]string{
+	"Strict-Transport-Security": nil,
+	"X-Content-Type-Options":    {"nosniff"},
+	"X-Frame-Options":           {"deny", "sameorigin"},
+	"X-XSS-Protection":          nil,
+	"Content-Security-Policy":   nil,
+}
 
 func validateUsers(configPath string) error {
 	c, err := getConfig(configPath)
@@ -40,7 +53,29 @@ func validateUsers(configPath string) error {
 	return nil
 }
 
-type userAuthRoundtrip struct {
+// validateHeaderConfig checks that the provided header configuration is correct.
+// It does not check the validity of all the values, only the ones which are
+// well-defined enumerations.
+func validateHeaderConfig(headers map[string]string) error {
+HeadersLoop:
+	for k, v := range headers {
+		values, ok := extraHTTPHeaders[k]
+		if !ok {
+			return fmt.Errorf("HTTP header %q can not be configured", k)
+		}
+		for _, allowedValue := range values {
+			if v == allowedValue {
+				continue HeadersLoop
+			}
+		}
+		if len(values) > 0 {
+			return fmt.Errorf("invalid value for %s. Expected one of: %q, but got: %q", k, values, v)
+		}
+	}
+	return nil
+}
+
+type webHandler struct {
 	tlsConfigPath string
 	handler       http.Handler
 	logger        log.Logger
@@ -50,12 +85,17 @@ type userAuthRoundtrip struct {
 	bcryptMtx sync.Mutex
 }
 
-func (u *userAuthRoundtrip) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (u *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c, err := getConfig(u.tlsConfigPath)
 	if err != nil {
 		u.logger.Log("msg", "Unable to parse configuration", "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
+	}
+
+	// Configure http headers.
+	for k, v := range c.HTTPConfig.Header {
+		w.Header().Set(k, v)
 	}
 
 	if len(c.Users) == 0 {
@@ -74,7 +114,12 @@ func (u *userAuthRoundtrip) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			hashedPassword = "$2y$10$QOauhQNbBCuQDKes6eFzPeMqBSjb7Mr5DUmpZ/VcEd00UAV/LDeSi"
 		}
 
-		cacheKey := hex.EncodeToString(append(append([]byte(user), []byte(hashedPassword)...), []byte(pass)...))
+		cacheKey := strings.Join(
+			[]string{
+				hex.EncodeToString([]byte(user)),
+				hex.EncodeToString([]byte(hashedPassword)),
+				hex.EncodeToString([]byte(pass)),
+			}, ":")
 		authOk, ok := u.cache.get(cacheKey)
 
 		if !ok {
@@ -83,7 +128,7 @@ func (u *userAuthRoundtrip) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(pass))
 			u.bcryptMtx.Unlock()
 
-			authOk = err == nil
+			authOk = validUser && err == nil
 			u.cache.set(cacheKey, authOk)
 		}
 
