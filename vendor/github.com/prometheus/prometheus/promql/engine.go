@@ -1897,6 +1897,9 @@ func (ev *evaluator) VectorBinop(op parser.ItemType, lhs, rhs Vector, matching *
 	if matching.Card == parser.CardManyToMany {
 		panic("many-to-many only allowed for set operators")
 	}
+	if len(lhs) == 0 || len(rhs) == 0 {
+		return nil // Short-circuit: nothing is going to match.
+	}
 	sigf := enh.signatureFunc(matching.On, matching.MatchingLabels...)
 
 	// The control flow below handles one-to-one or many-to-one matching.
