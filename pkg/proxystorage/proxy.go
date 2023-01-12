@@ -303,7 +303,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		// Not all Aggregation functions are composable, so we'll do what we can
 		switch n.Op {
 		// All "reentrant" cases (meaning they can be done repeatedly and the outcome doesn't change)
-		case parser.SUM, parser.MIN, parser.MAX, parser.TOPK, parser.BOTTOMK:
+		case parser.SUM, parser.MIN, parser.MAX, parser.TOPK, parser.BOTTOMK, parser.GROUP:
 			removeOffsetFn()
 
 			if s.Interval > 0 {
