@@ -108,6 +108,9 @@ type cliOpts struct {
 
 	ShutdownDelay   time.Duration `long:"http.shutdown-delay" description:"time to wait before shutting down the http server, this allows for a grace period for upstreams (e.g. LoadBalancers) to discover the new stopping status through healthchecks" default:"10s"`
 	ShutdownTimeout time.Duration `long:"http.shutdown-timeout" description:"max time to wait for a graceful shutdown of the HTTP server" default:"60s"`
+
+	EnableNegativeOffset bool `long:"features.negative-offset" description:"Enable negative offset feature in Prometheus engine"`
+	EnableAtModifier     bool `long:"features.at-modifier" description:"Enable @ (at) modifier in queries"`
 }
 
 func (c *cliOpts) ToFlags() map[string]string {
@@ -249,6 +252,14 @@ func main() {
 			logrus.Fatalf("local storage path must be defined if you wish to enable max query concurrency limits")
 		}
 		engineOpts.ActiveQueryTracker = promql.NewActiveQueryTracker(opts.LocalStoragePath, opts.QueryMaxConcurrency, kitlog.With(logger, "component", "activeQueryTracker"))
+	}
+
+	if opts.EnableNegativeOffset {
+		engineOpts.EnableNegativeOffset = true
+	}
+
+	if opts.EnableAtModifier {
+		engineOpts.EnableAtModifier = true
 	}
 
 	engine := promql.NewEngine(engineOpts)
