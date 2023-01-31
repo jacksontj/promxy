@@ -61,6 +61,9 @@ type Config struct {
 	// Labels is a set of labels that will be added to all metrics retrieved
 	// from this server group
 	Labels model.LabelSet `json:"labels"`
+	// LabelReplaces is a mapping used to map a set of labels in the query to different labels
+	// and add the label to the result too
+	LabelReplaces map[string]string `yaml:"label_replaces"`
 	// RelabelConfigs are similar in function and identical in configuration as prometheus'
 	// relabel config for scrape jobs. The difference here being that the source labels
 	// you can pull from are from the downstream servergroup target and the labels you are

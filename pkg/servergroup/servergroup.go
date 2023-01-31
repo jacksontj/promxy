@@ -214,6 +214,11 @@ SYNC_LOOP:
 					// Add labels
 					apiClient = &promclient.AddLabelClient{apiClient, modelLabelSet.Merge(s.Cfg.Labels)}
 
+					// Replace lables
+					if s.Cfg.LabelReplaces != nil {
+						apiClient = &promclient.LabelReplaceClient{apiClient, s.Cfg.LabelReplaces}
+					}
+
 					// If debug logging is enabled, wrap the client with a debugAPI client
 					// Since these are called in the reverse order of what we add, we want
 					// to make sure that this is the last wrap of the client
