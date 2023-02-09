@@ -155,6 +155,12 @@ github.com/docker/go-units
 # github.com/edsrzf/mmap-go v1.0.0
 ## explicit
 github.com/edsrzf/mmap-go
+# github.com/emirpasic/gods v1.18.1
+## explicit; go 1.2
+github.com/emirpasic/gods/containers
+github.com/emirpasic/gods/sets
+github.com/emirpasic/gods/sets/hashset
+github.com/emirpasic/gods/utils
 # github.com/envoyproxy/go-control-plane v0.9.9
 ## explicit; go 1.11
 github.com/envoyproxy/go-control-plane/envoy/annotations

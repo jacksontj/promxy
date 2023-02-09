@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/Azure/go-autorest/autorest v0.11.20
+	github.com/emirpasic/gods v1.18.1
 	github.com/go-kit/kit v0.10.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b

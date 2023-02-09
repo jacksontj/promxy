@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/timestamp"
@@ -24,12 +25,24 @@ import (
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
+	"github.com/jacksontj/promxy/pkg/metricsfilter"
 	"github.com/jacksontj/promxy/pkg/promclient"
 	"github.com/jacksontj/promxy/pkg/proxyquerier"
 	"github.com/jacksontj/promxy/pkg/servergroup"
 )
 
 const MetricNameWorkaroundLabel = "__name"
+
+var (
+	promxyRequestsFiltered = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "promxy_metrics_filter_requests_total",
+		Help: "Amount of calls that have been filtered out by metric name",
+	})
+	promxyMetricsFilterAmount = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "promxy_metrics_filter_names_amount",
+		Help: "Amount of metrics names to be allowed on filtering",
+	})
+)
 
 type proxyStorageState struct {
 	sgs            []*servergroup.ServerGroup
@@ -38,6 +51,12 @@ type proxyStorageState struct {
 	remoteStorage  *remote.Storage
 	appender       storage.Appender
 	appenderCloser func() error
+	metricsAllowed *metricsfilter.MetricsAllowed
+}
+
+func init() {
+	prometheus.MustRegister(promxyRequestsFiltered)
+	prometheus.MustRegister(promxyMetricsFilterAmount)
 }
 
 // Ready blocks until all servergroups are ready
@@ -143,7 +162,19 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		newState.appender = &appenderStub{}
 	}
 
-	newState.Ready()        // Wait for the newstate to be ready
+	newState.Ready() // Wait for the newstate to be ready
+
+	// fetch labels if metrics filtering feature is enabled
+	if newState.cfg.MetricsFilteringFeature {
+		// update labels
+		// ignore waring and errors as it would means that backends potentially not ready
+		// which could be fine in some cases. Reload will help to fix it
+		metric_names, _, _ := newState.client.LabelValues(context.Background(), "__name__", nil, time.Now(), time.Now())
+		newState.metricsAllowed = metricsfilter.NewMetricAllowed()
+		newState.metricsAllowed.Update(&metric_names)
+		promxyMetricsFilterAmount.Set(float64(metric_names.Len()))
+	}
+
 	p.state.Store(newState) // Store the new state
 	if oldState != nil && oldState.appender != newState.appender {
 		oldState.Cancel(newState) // Cancel the old one
@@ -202,10 +233,11 @@ func (p *ProxyStorage) Stats(statsByLabelName string) (*tsdb.Stats, error) {
 // chunks of the query, farming them out to prometheus hosts, then stitching the results back together.
 // An example would be a sum, we can sum multiple sums and come up with the same result -- so we do.
 // There are a few ground rules for this:
-//      - Children cannot be AggregateExpr: aggregates have their own combining logic, so its not safe to send a subquery with additional aggregations
-//      - offsets within the subtree must match: if they don't then we'll get mismatched data, so we wait until we are far enough down the tree that they converge
-//      - Don't reduce accuracy/granularity: the intention of this is to get the correct data faster, meaning correctness overrules speed.
+//   - Children cannot be AggregateExpr: aggregates have their own combining logic, so its not safe to send a subquery with additional aggregations
+//   - offsets within the subtree must match: if they don't then we'll get mismatched data, so we wait until we are far enough down the tree that they converge
+//   - Don't reduce accuracy/granularity: the intention of this is to get the correct data faster, meaning correctness overrules speed.
 func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, node parser.Node, path []parser.Node) (parser.Node, error) {
+
 	isAgg := func(node parser.Node) bool {
 		_, ok := node.(*parser.AggregateExpr)
 		return ok
@@ -299,6 +331,15 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		var result model.Value
 		var warnings v1.Warnings
 		var err error
+
+		// check that metrics is allowed to be queried
+		if state.cfg.MetricsFilteringFeature {
+			if !p.GetState().metricsAllowed.Contains(n.Expr.String()) {
+				logrus.Debugf("Ignoring metric name %s", n.Expr.String())
+				promxyRequestsFiltered.Inc()
+				return nil, errors.New("metric " + n.Expr.String() + " is not supported by backend")
+			}
+		}
 
 		// Not all Aggregation functions are composable, so we'll do what we can
 		switch n.Op {
@@ -551,6 +592,16 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		var result model.Value
 		var warnings v1.Warnings
 		var err error
+
+		// check that metric is allowed to be queried
+		if state.cfg.MetricsFilteringFeature {
+			if !p.GetState().metricsAllowed.Contains(n.String()) {
+				logrus.Debugf("Ignoring metric name %s", n.String())
+				promxyRequestsFiltered.Inc()
+				return nil, errors.New("metric " + n.String() + " is not supported by backend")
+			}
+		}
+
 		if s.Interval > 0 {
 			n.LookbackDelta = s.Interval - time.Duration(1)
 			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{

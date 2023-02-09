@@ -54,4 +54,6 @@ type Config struct {
 type PromxyConfig struct {
 	// Config for each of the server groups promxy is configured to aggregate
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
+	// parameter to control filtering feature
+	MetricsFilteringFeature bool `yaml:"metrics_filtering"`
 }
