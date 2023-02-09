@@ -29,6 +29,10 @@ remote_write:
 ### Promxy configuration
 ##
 promxy:
+  # metrics_filtering option enable filtering by metric name collected and merged from all backends
+  # The main purpose is not send over requests with metric name which backend doesn't have and responce/fail sooner
+  # It could be useful if query Cloud Prometheus like GCP one, which could charge you on every API call
+  metrics_filtering: false
   server_groups:
     # All upstream prometheus service discovery mechanisms are supported with the same
     # markup, all defined in https://github.com/prometheus/prometheus/blob/master/discovery/config/config.go#L33

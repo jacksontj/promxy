@@ -35,11 +35,11 @@ const MetricNameWorkaroundLabel = "__name"
 
 var (
 	promxyRequestsFiltered = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "promxy_metrics_filter_requests_total",
+		Name: "promxy_filtered_requests_total",
 		Help: "Amount of calls that have been filtered out by metric name",
 	})
 	promxyMetricsFilterAmount = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "promxy_metrics_filter_names_amount",
+		Name: "promxy_metrics_names_in_filter",
 		Help: "Amount of metrics names to be allowed on filtering",
 	})
 )
