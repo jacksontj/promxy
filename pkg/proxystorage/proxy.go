@@ -238,6 +238,28 @@ func (p *ProxyStorage) Stats(statsByLabelName string) (*tsdb.Stats, error) {
 //   - Don't reduce accuracy/granularity: the intention of this is to get the correct data faster, meaning correctness overrules speed.
 func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, node parser.Node, path []parser.Node) (parser.Node, error) {
 
+	st := p.GetState()
+	// check that metrics is allowed to be queried
+	if st.cfg.MetricsFilteringFeature {
+
+		ast, _ := parser.ParseExpr(node.String())
+		lab := parser.ExtractSelectors(ast)
+
+		for _, i := range lab {
+			for _, j := range i {
+				if j.Name == "__name__" {
+					//					fmt.Println(j.Name, j.Value)
+					if !p.GetState().metricsAllowed.Contains(j.Value) {
+						logrus.Debugf("Ignoring metric name %s", j.Value)
+						promxyRequestsFiltered.Inc()
+						return nil, errors.New("metric " + j.Value + " is not supported by backend")
+					}
+				}
+			}
+		}
+
+	}
+
 	isAgg := func(node parser.Node) bool {
 		_, ok := node.(*parser.AggregateExpr)
 		return ok
@@ -320,7 +342,6 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		_, err := parser.Walk(ctx, &OffsetRemover{}, s, node, nil, nil)
 		return err
 	}
-
 	state := p.GetState()
 	switch n := node.(type) {
 	// Some AggregateExprs can be composed (meaning they are "reentrant". If the aggregation op
@@ -331,16 +352,16 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		var result model.Value
 		var warnings v1.Warnings
 		var err error
-
-		// check that metrics is allowed to be queried
-		if state.cfg.MetricsFilteringFeature {
-			if !p.GetState().metricsAllowed.Contains(n.Expr.String()) {
-				logrus.Debugf("Ignoring metric name %s", n.Expr.String())
-				promxyRequestsFiltered.Inc()
-				return nil, errors.New("metric " + n.Expr.String() + " is not supported by backend")
+		/*
+			// check that metrics is allowed to be queried
+			if state.cfg.MetricsFilteringFeature {
+				if !p.GetState().metricsAllowed.Contains(n.Expr.String()) {
+					logrus.Debugf("Ignoring metric name %s", n.Expr.String())
+					promxyRequestsFiltered.Inc()
+					return nil, errors.New("metric " + n.Expr.String() + " is not supported by backend")
+				}
 			}
-		}
-
+		*/
 		// Not all Aggregation functions are composable, so we'll do what we can
 		switch n.Op {
 		// All "reentrant" cases (meaning they can be done repeatedly and the outcome doesn't change)
@@ -592,16 +613,16 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		var result model.Value
 		var warnings v1.Warnings
 		var err error
-
-		// check that metric is allowed to be queried
-		if state.cfg.MetricsFilteringFeature {
-			if !p.GetState().metricsAllowed.Contains(n.String()) {
-				logrus.Debugf("Ignoring metric name %s", n.String())
-				promxyRequestsFiltered.Inc()
-				return nil, errors.New("metric " + n.String() + " is not supported by backend")
+		/*
+			// check that metric is allowed to be queried
+			if state.cfg.MetricsFilteringFeature {
+				if !p.GetState().metricsAllowed.Contains(n.String()) {
+					logrus.Debugf("Ignoring metric name %s", n.String())
+					promxyRequestsFiltered.Inc()
+					return nil, errors.New("metric " + n.String() + " is not supported by backend")
+				}
 			}
-		}
-
+		*/
 		if s.Interval > 0 {
 			n.LookbackDelta = s.Interval - time.Duration(1)
 			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
