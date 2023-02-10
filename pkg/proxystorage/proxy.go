@@ -243,6 +243,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	if st.cfg.MetricsFilteringFeature {
 
 		ast, _ := parser.ParseExpr(node.String())
+		fmt.Println("AST: ", ast)
 		lab := parser.ExtractSelectors(ast)
 
 		for _, i := range lab {
