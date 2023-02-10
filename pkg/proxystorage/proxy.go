@@ -243,17 +243,18 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	if st.cfg.MetricsFilteringFeature {
 
 		ast, _ := parser.ParseExpr(node.String())
-		fmt.Println("AST: ", ast)
-		lab := parser.ExtractSelectors(ast)
+		if ast != nil {
+			lab := parser.ExtractSelectors(ast)
 
-		for _, i := range lab {
-			for _, j := range i {
-				if j.Name == "__name__" {
-					//					fmt.Println(j.Name, j.Value)
-					if !p.GetState().metricsAllowed.Contains(j.Value) {
-						logrus.Debugf("Ignoring metric name %s", j.Value)
-						promxyRequestsFiltered.Inc()
-						return nil, errors.New("metric " + j.Value + " is not supported by backend")
+			for _, i := range lab {
+				for _, j := range i {
+					if j.Name == "__name__" {
+						//					fmt.Println(j.Name, j.Value)
+						if !p.GetState().metricsAllowed.Contains(j.Value) {
+							logrus.Debugf("Ignoring metric name %s", j.Value)
+							promxyRequestsFiltered.Inc()
+							return nil, errors.New("metric " + j.Value + " is not supported by backend")
+						}
 					}
 				}
 			}
