@@ -32,7 +32,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/prometheus/pkg/value"
+	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/prompb"
 )
 
