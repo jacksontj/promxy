@@ -20,30 +20,33 @@ const (
 
 // LKECluster represents a LKECluster object
 type LKECluster struct {
-	ID         int              `json:"id"`
-	Created    *time.Time       `json:"-"`
-	Updated    *time.Time       `json:"-"`
-	Label      string           `json:"label"`
-	Region     string           `json:"region"`
-	Status     LKEClusterStatus `json:"status"`
-	K8sVersion string           `json:"k8s_version"`
-	Tags       []string         `json:"tags"`
+	ID           int                    `json:"id"`
+	Created      *time.Time             `json:"-"`
+	Updated      *time.Time             `json:"-"`
+	Label        string                 `json:"label"`
+	Region       string                 `json:"region"`
+	Status       LKEClusterStatus       `json:"status"`
+	K8sVersion   string                 `json:"k8s_version"`
+	Tags         []string               `json:"tags"`
+	ControlPlane LKEClusterControlPlane `json:"control_plane"`
 }
 
 // LKEClusterCreateOptions fields are those accepted by CreateLKECluster
 type LKEClusterCreateOptions struct {
-	NodePools  []LKEClusterPoolCreateOptions `json:"node_pools"`
-	Label      string                        `json:"label"`
-	Region     string                        `json:"region"`
-	K8sVersion string                        `json:"k8s_version"`
-	Tags       []string                      `json:"tags,omitempty"`
+	NodePools    []LKENodePoolCreateOptions `json:"node_pools"`
+	Label        string                     `json:"label"`
+	Region       string                     `json:"region"`
+	K8sVersion   string                     `json:"k8s_version"`
+	Tags         []string                   `json:"tags,omitempty"`
+	ControlPlane *LKEClusterControlPlane    `json:"control_plane,omitempty"`
 }
 
 // LKEClusterUpdateOptions fields are those accepted by UpdateLKECluster
 type LKEClusterUpdateOptions struct {
-	K8sVersion string    `json:"k8s_version,omitempty"`
-	Label      string    `json:"label,omitempty"`
-	Tags       *[]string `json:"tags,omitempty"`
+	K8sVersion   string                  `json:"k8s_version,omitempty"`
+	Label        string                  `json:"label,omitempty"`
+	Tags         *[]string               `json:"tags,omitempty"`
+	ControlPlane *LKEClusterControlPlane `json:"control_plane,omitempty"`
 }
 
 // LKEClusterAPIEndpoint fields are those returned by ListLKEClusterAPIEndpoints
@@ -54,6 +57,16 @@ type LKEClusterAPIEndpoint struct {
 // LKEClusterKubeconfig fields are those returned by GetLKEClusterKubeconfig
 type LKEClusterKubeconfig struct {
 	KubeConfig string `json:"kubeconfig"`
+}
+
+// LKEClusterDashboard fields are those returned by GetLKEClusterDashboard
+type LKEClusterDashboard struct {
+	URL string `json:"url"`
+}
+
+// LKEClusterControlPlane fields contained within the `control_plane` attribute of an LKE cluster.
+type LKEClusterControlPlane struct {
+	HighAvailability bool `json:"high_availability"`
 }
 
 // LKEVersion fields are those returned by GetLKEVersion
@@ -89,6 +102,7 @@ func (i LKECluster) GetCreateOptions() (o LKEClusterCreateOptions) {
 	o.Region = i.Region
 	o.K8sVersion = i.K8sVersion
 	o.Tags = i.Tags
+	o.ControlPlane = &i.ControlPlane
 	// @TODO copy NodePools?
 	return
 }
@@ -98,6 +112,7 @@ func (i LKECluster) GetUpdateOptions() (o LKEClusterUpdateOptions) {
 	o.K8sVersion = i.K8sVersion
 	o.Label = i.Label
 	o.Tags = &i.Tags
+	o.ControlPlane = &i.ControlPlane
 	return
 }
 
@@ -270,6 +285,20 @@ func (c *Client) GetLKEClusterKubeconfig(ctx context.Context, id int) (*LKEClust
 		return nil, err
 	}
 	return r.Result().(*LKEClusterKubeconfig), nil
+}
+
+// GetLKEClusterDashboard gets information about the dashboard for an LKE cluster
+func (c *Client) GetLKEClusterDashboard(ctx context.Context, id int) (*LKEClusterDashboard, error) {
+	e, err := c.LKEClusters.Endpoint()
+	if err != nil {
+		return nil, err
+	}
+	e = fmt.Sprintf("%s/%d/dashboard", e, id)
+	r, err := coupleAPIErrors(c.R(ctx).SetResult(&LKEClusterDashboard{}).Get(e))
+	if err != nil {
+		return nil, err
+	}
+	return r.Result().(*LKEClusterDashboard), nil
 }
 
 // RecycleLKEClusterNodes recycles all nodes in all pools of the specified LKE Cluster.

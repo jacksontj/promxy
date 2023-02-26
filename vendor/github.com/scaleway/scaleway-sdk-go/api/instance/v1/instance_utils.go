@@ -103,10 +103,13 @@ type AttachVolumeResponse struct {
 
 // volumesToVolumeTemplates converts a map of *Volume to a map of *VolumeTemplate
 // so it can be used in a UpdateServer request
-func volumesToVolumeTemplates(volumes map[string]*Volume) map[string]*VolumeTemplate {
-	volumeTemplates := map[string]*VolumeTemplate{}
+func volumesToVolumeTemplates(volumes map[string]*VolumeServer) map[string]*VolumeServerTemplate {
+	volumeTemplates := map[string]*VolumeServerTemplate{}
 	for key, volume := range volumes {
-		volumeTemplates[key] = &VolumeTemplate{ID: volume.ID, Name: volume.Name}
+		volumeTemplates[key] = &VolumeServerTemplate{
+			ID:   volume.ID,
+			Name: volume.Name,
+		}
 	}
 	return volumeTemplates
 }
@@ -136,7 +139,7 @@ func (s *API) AttachVolume(req *AttachVolumeRequest, opts ...scw.RequestOption) 
 	for i := 0; i <= len(volumes); i++ {
 		key := fmt.Sprintf("%d", i)
 		if _, ok := newVolumes[key]; !ok {
-			newVolumes[key] = &VolumeTemplate{
+			newVolumes[key] = &VolumeServerTemplate{
 				ID: req.VolumeID,
 				// name is ignored on this PATCH
 				Name: req.VolumeID,

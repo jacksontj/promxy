@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	libraryVersion = "1.65.0"
+	libraryVersion = "1.81.0"
 	defaultBaseURL = "https://api.digitalocean.com/"
 	userAgent      = "godo/" + libraryVersion
 	mediaType      = "application/json"
@@ -64,6 +64,8 @@ type Client struct {
 	Sizes             SizesService
 	FloatingIPs       FloatingIPsService
 	FloatingIPActions FloatingIPActionsService
+	ReservedIPs       ReservedIPsService
+	ReservedIPActions ReservedIPActionsService
 	Snapshots         SnapshotsService
 	Storage           StorageService
 	StorageActions    StorageActionsService
@@ -97,6 +99,20 @@ type ListOptions struct {
 
 	// For paginated result sets, the number of results to include per page.
 	PerPage int `url:"per_page,omitempty"`
+}
+
+// TokenListOptions specifies the optional parameters to various List methods that support token pagination.
+type TokenListOptions struct {
+	// For paginated result sets, page of results to retrieve.
+	Page int `url:"page,omitempty"`
+
+	// For paginated result sets, the number of results to include per page.
+	PerPage int `url:"per_page,omitempty"`
+
+	// For paginated result sets which support tokens, the token provided by the last set
+	// of results in order to retrieve the next set of results. This is expected to be faster
+	// than incrementing or decrementing the page number.
+	Token string `url:"page_token,omitempty"`
 }
 
 // Response is a DigitalOcean response. This wraps the standard http.Response returned from DigitalOcean.
@@ -205,6 +221,8 @@ func NewClient(httpClient *http.Client) *Client {
 	c.Firewalls = &FirewallsServiceOp{client: c}
 	c.FloatingIPs = &FloatingIPsServiceOp{client: c}
 	c.FloatingIPActions = &FloatingIPActionsServiceOp{client: c}
+	c.ReservedIPs = &ReservedIPsServiceOp{client: c}
+	c.ReservedIPActions = &ReservedIPActionsServiceOp{client: c}
 	c.Images = &ImagesServiceOp{client: c}
 	c.ImageActions = &ImageActionsServiceOp{client: c}
 	c.Invoices = &InvoicesServiceOp{client: c}
@@ -369,7 +387,7 @@ func (c *Client) Do(ctx context.Context, req *http.Request, v interface{}) (*Res
 
 	defer func() {
 		// Ensure the response body is fully read and closed
-		// before we reconnect, so that we reuse the same TCPconnection.
+		// before we reconnect, so that we reuse the same TCPConnection.
 		// Close the previous response's body. But read at least some of
 		// the body so if it's small the underlying TCP connection will be
 		// re-used. No need to check for errors: if it fails, the Transport

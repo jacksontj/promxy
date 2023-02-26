@@ -19,11 +19,23 @@ import (
 )
 
 var mimeTypes = map[string]string{
-	".js":  "application/javascript",
-	".css": "text/css",
-	".png": "image/png",
-	".jpg": "image/jpeg",
-	".gif": "image/gif",
+	".cjs":   "application/javascript",
+	".css":   "text/css",
+	".eot":   "font/eot",
+	".gif":   "image/gif",
+	".ico":   "image/x-icon",
+	".jpg":   "image/jpeg",
+	".js":    "application/javascript",
+	".json":  "application/json",
+	".less":  "text/plain",
+	".map":   "application/json",
+	".otf":   "font/otf",
+	".png":   "image/png",
+	".svg":   "image/svg+xml",
+	".ttf":   "font/ttf",
+	".txt":   "text/plain",
+	".woff":  "font/woff",
+	".woff2": "font/woff2",
 }
 
 func StaticFileServer(root http.FileSystem) http.Handler {

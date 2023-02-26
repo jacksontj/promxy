@@ -154,6 +154,7 @@ type Database struct {
 	CreatedAt          time.Time                  `json:"created_at,omitempty"`
 	PrivateNetworkUUID string                     `json:"private_network_uuid,omitempty"`
 	Tags               []string                   `json:"tags,omitempty"`
+	ProjectID          string                     `json:"project_id,omitempty"`
 }
 
 // DatabaseCA represents a database ca.
@@ -217,6 +218,7 @@ type DatabaseCreateRequest struct {
 	PrivateNetworkUUID string                 `json:"private_network_uuid"`
 	Tags               []string               `json:"tags,omitempty"`
 	BackupRestore      *DatabaseBackupRestore `json:"backup_restore,omitempty"`
+	ProjectID          string                 `json:"project_id"`
 }
 
 // DatabaseResizeRequest can be used to initiate a database resize operation.
@@ -239,7 +241,7 @@ type DatabaseUpdateMaintenanceRequest struct {
 
 // DatabaseDB represents an engine-specific database created within a database cluster. For SQL
 // databases like PostgreSQL or MySQL, a "DB" refers to a database created on the RDBMS. For instance,
-// a PostgreSQL database server can contain many database schemas, each with it's own settings, access
+// a PostgreSQL database server can contain many database schemas, each with its own settings, access
 // permissions and data. ListDBs will return all databases present on the server.
 type DatabaseDB struct {
 	Name string `json:"name"`

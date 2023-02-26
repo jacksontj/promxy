@@ -14,6 +14,7 @@
 package tsdb
 
 import (
+	"math"
 	"sync"
 )
 
@@ -39,8 +40,13 @@ func (i *isolationState) Close() {
 	i.prev.next = i.next
 }
 
+func (i *isolationState) IsolationDisabled() bool {
+	return i.isolation.disabled
+}
+
 type isolationAppender struct {
 	appendID uint64
+	minTime  int64
 	prev     *isolationAppender
 	next     *isolationAppender
 }
@@ -63,9 +69,11 @@ type isolation struct {
 	readMtx sync.RWMutex
 	// All current in use isolationStates. This is a doubly-linked list.
 	readsOpen *isolationState
+	// If true, writes are not tracked while reads are still tracked.
+	disabled bool
 }
 
-func newIsolation() *isolation {
+func newIsolation(disabled bool) *isolation {
 	isoState := &isolationState{}
 	isoState.next = isoState
 	isoState.prev = isoState
@@ -78,6 +86,7 @@ func newIsolation() *isolation {
 		appendsOpen:     map[uint64]*isolationAppender{},
 		appendsOpenList: appender,
 		readsOpen:       isoState,
+		disabled:        disabled,
 		appendersPool:   sync.Pool{New: func() interface{} { return &isolationAppender{} }},
 	}
 }
@@ -85,12 +94,20 @@ func newIsolation() *isolation {
 // lowWatermark returns the appendID below which we no longer need to track
 // which appends were from which appendID.
 func (i *isolation) lowWatermark() uint64 {
+	if i.disabled {
+		return 0
+	}
+
 	i.appendMtx.RLock() // Take appendMtx first.
 	defer i.appendMtx.RUnlock()
 	return i.lowWatermarkLocked()
 }
 
 func (i *isolation) lowWatermarkLocked() uint64 {
+	if i.disabled {
+		return 0
+	}
+
 	i.readMtx.RLock()
 	defer i.readMtx.RUnlock()
 	if i.readsOpen.prev != i.readsOpen {
@@ -101,11 +118,28 @@ func (i *isolation) lowWatermarkLocked() uint64 {
 	return i.appendsOpenList.next.appendID
 }
 
+// lowestAppendTime returns the lowest minTime for any open appender,
+// or math.MaxInt64 if no open appenders.
+func (i *isolation) lowestAppendTime() int64 {
+	var lowest int64 = math.MaxInt64
+	i.appendMtx.RLock()
+	defer i.appendMtx.RUnlock()
+
+	for a := i.appendsOpenList.next; a != i.appendsOpenList; a = a.next {
+		if lowest > a.minTime {
+			lowest = a.minTime
+		}
+	}
+	return lowest
+}
+
 // State returns an object used to control isolation
 // between a query and appends. Must be closed when complete.
 func (i *isolation) State(mint, maxt int64) *isolationState {
 	i.appendMtx.RLock() // Take append mutex before read mutex.
 	defer i.appendMtx.RUnlock()
+
+	// We need to track the reads even when isolation is disabled.
 	isoState := &isolationState{
 		maxAppendID:       i.appendsOpenList.appendID,
 		lowWatermark:      i.appendsOpenList.next.appendID, // Lowest appendID from appenders, or lastAppendId.
@@ -124,6 +158,7 @@ func (i *isolation) State(mint, maxt int64) *isolationState {
 	isoState.next = i.readsOpen.next
 	i.readsOpen.next.prev = isoState
 	i.readsOpen.next = isoState
+
 	return isoState
 }
 
@@ -145,7 +180,11 @@ func (i *isolation) TraverseOpenReads(f func(s *isolationState) bool) {
 // newAppendID increments the transaction counter and returns a new transaction
 // ID. The first ID returned is 1.
 // Also returns the low watermark, to keep lock/unlock operations down.
-func (i *isolation) newAppendID() (uint64, uint64) {
+func (i *isolation) newAppendID(minTime int64) (uint64, uint64) {
+	if i.disabled {
+		return 0, 0
+	}
+
 	i.appendMtx.Lock()
 	defer i.appendMtx.Unlock()
 
@@ -154,6 +193,7 @@ func (i *isolation) newAppendID() (uint64, uint64) {
 
 	app := i.appendersPool.Get().(*isolationAppender)
 	app.appendID = i.appendsOpenList.appendID
+	app.minTime = minTime
 	app.prev = i.appendsOpenList.prev
 	app.next = i.appendsOpenList
 
@@ -165,6 +205,10 @@ func (i *isolation) newAppendID() (uint64, uint64) {
 }
 
 func (i *isolation) lastAppendID() uint64 {
+	if i.disabled {
+		return 0
+	}
+
 	i.appendMtx.RLock()
 	defer i.appendMtx.RUnlock()
 
@@ -172,6 +216,10 @@ func (i *isolation) lastAppendID() uint64 {
 }
 
 func (i *isolation) closeAppend(appendID uint64) {
+	if i.disabled {
+		return
+	}
+
 	i.appendMtx.Lock()
 	defer i.appendMtx.Unlock()
 

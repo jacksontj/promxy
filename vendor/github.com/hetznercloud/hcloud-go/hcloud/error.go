@@ -25,7 +25,8 @@ const (
 	ErrorCodeMaintenance           ErrorCode = "maintenance"             // Cannot perform operation due to maintenance
 	ErrorCodeConflict              ErrorCode = "conflict"                // The resource has changed during the request, please retry
 	ErrorCodeRobotUnavailable      ErrorCode = "robot_unavailable"       // Robot was not available. The caller may retry the operation after a short delay
-	ErrorUnsupportedError          ErrorCode = "unsupported_error"       // The gives resource does not support this
+	ErrorCodeResourceLocked        ErrorCode = "resource_locked"         // The resource is locked. The caller should contact support
+	ErrorUnsupportedError          ErrorCode = "unsupported_error"       // The given resource does not support this
 
 	// Server related error codes
 	ErrorCodeInvalidServerType     ErrorCode = "invalid_server_type"     // The server type does not fit for the given server or is deprecated
@@ -55,11 +56,12 @@ const (
 	ErrorCodeVolumeAlreadyAttached ErrorCode = "volume_already_attached"   // Volume is already attached to a server, detach first
 
 	// Firewall related error codes
-	ErrorCodeFirewallAlreadyApplied  ErrorCode = "firewall_already_applied"  // Firewall was already applied on resource
-	ErrorCodeFirewallAlreadyRemoved  ErrorCode = "firewall_already_removed"  // Firewall was already removed from the resource
-	ErrorCodeIncompatibleNetworkType ErrorCode = "incompatible_network_type" // The Network type is incompatible for the given resource
-	ErrorCodeResourceInUse           ErrorCode = "resource_in_use"           // Firewall must not be in use to be deleted
-	ErrorCodeServerAlreadyAdded      ErrorCode = "server_already_added"      // Server added more than one time to resource
+	ErrorCodeFirewallAlreadyApplied   ErrorCode = "firewall_already_applied"    // Firewall was already applied on resource
+	ErrorCodeFirewallAlreadyRemoved   ErrorCode = "firewall_already_removed"    // Firewall was already removed from the resource
+	ErrorCodeIncompatibleNetworkType  ErrorCode = "incompatible_network_type"   // The Network type is incompatible for the given resource
+	ErrorCodeResourceInUse            ErrorCode = "resource_in_use"             // Firewall must not be in use to be deleted
+	ErrorCodeServerAlreadyAdded       ErrorCode = "server_already_added"        // Server added more than one time to resource
+	ErrorCodeFirewallResourceNotFound ErrorCode = "firewall_resource_not_found" // Resource a firewall should be attached to / detached from not found
 
 	// Certificate related error codes
 	ErrorCodeCAARecordDoesNotAllowCA                        ErrorCode = "caa_record_does_not_allow_ca"                          // CAA record does not allow certificate authority

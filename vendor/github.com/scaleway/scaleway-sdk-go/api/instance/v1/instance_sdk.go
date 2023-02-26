@@ -151,6 +151,42 @@ func (enum *ImageState) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type ListServersRequestOrder string
+
+const (
+	// ListServersRequestOrderCreationDateDesc is [insert doc].
+	ListServersRequestOrderCreationDateDesc = ListServersRequestOrder("creation_date_desc")
+	// ListServersRequestOrderCreationDateAsc is [insert doc].
+	ListServersRequestOrderCreationDateAsc = ListServersRequestOrder("creation_date_asc")
+	// ListServersRequestOrderModificationDateDesc is [insert doc].
+	ListServersRequestOrderModificationDateDesc = ListServersRequestOrder("modification_date_desc")
+	// ListServersRequestOrderModificationDateAsc is [insert doc].
+	ListServersRequestOrderModificationDateAsc = ListServersRequestOrder("modification_date_asc")
+)
+
+func (enum ListServersRequestOrder) String() string {
+	if enum == "" {
+		// return default value if empty
+		return "creation_date_desc"
+	}
+	return string(enum)
+}
+
+func (enum ListServersRequestOrder) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%s"`, enum)), nil
+}
+
+func (enum *ListServersRequestOrder) UnmarshalJSON(data []byte) error {
+	tmp := ""
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	*enum = ListServersRequestOrder(ListServersRequestOrder(tmp).String())
+	return nil
+}
+
 type PlacementGroupPolicyMode string
 
 const (
@@ -212,6 +248,40 @@ func (enum *PlacementGroupPolicyType) UnmarshalJSON(data []byte) error {
 	}
 
 	*enum = PlacementGroupPolicyType(PlacementGroupPolicyType(tmp).String())
+	return nil
+}
+
+type PrivateNICState string
+
+const (
+	// PrivateNICStateAvailable is [insert doc].
+	PrivateNICStateAvailable = PrivateNICState("available")
+	// PrivateNICStateSyncing is [insert doc].
+	PrivateNICStateSyncing = PrivateNICState("syncing")
+	// PrivateNICStateSyncingError is [insert doc].
+	PrivateNICStateSyncingError = PrivateNICState("syncing_error")
+)
+
+func (enum PrivateNICState) String() string {
+	if enum == "" {
+		// return default value if empty
+		return "available"
+	}
+	return string(enum)
+}
+
+func (enum PrivateNICState) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%s"`, enum)), nil
+}
+
+func (enum *PrivateNICState) UnmarshalJSON(data []byte) error {
+	tmp := ""
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	*enum = PrivateNICState(PrivateNICState(tmp).String())
 	return nil
 }
 
@@ -344,6 +414,40 @@ func (enum *SecurityGroupRuleProtocol) UnmarshalJSON(data []byte) error {
 	}
 
 	*enum = SecurityGroupRuleProtocol(SecurityGroupRuleProtocol(tmp).String())
+	return nil
+}
+
+type SecurityGroupState string
+
+const (
+	// SecurityGroupStateAvailable is [insert doc].
+	SecurityGroupStateAvailable = SecurityGroupState("available")
+	// SecurityGroupStateSyncing is [insert doc].
+	SecurityGroupStateSyncing = SecurityGroupState("syncing")
+	// SecurityGroupStateSyncingError is [insert doc].
+	SecurityGroupStateSyncingError = SecurityGroupState("syncing_error")
+)
+
+func (enum SecurityGroupState) String() string {
+	if enum == "" {
+		// return default value if empty
+		return "available"
+	}
+	return string(enum)
+}
+
+func (enum SecurityGroupState) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%s"`, enum)), nil
+}
+
+func (enum *SecurityGroupState) UnmarshalJSON(data []byte) error {
+	tmp := ""
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	*enum = SecurityGroupState(SecurityGroupState(tmp).String())
 	return nil
 }
 
@@ -533,6 +637,80 @@ func (enum *TaskStatus) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type VolumeServerState string
+
+const (
+	// VolumeServerStateAvailable is [insert doc].
+	VolumeServerStateAvailable = VolumeServerState("available")
+	// VolumeServerStateSnapshotting is [insert doc].
+	VolumeServerStateSnapshotting = VolumeServerState("snapshotting")
+	// VolumeServerStateError is [insert doc].
+	VolumeServerStateError = VolumeServerState("error")
+	// VolumeServerStateFetching is [insert doc].
+	VolumeServerStateFetching = VolumeServerState("fetching")
+	// VolumeServerStateResizing is [insert doc].
+	VolumeServerStateResizing = VolumeServerState("resizing")
+	// VolumeServerStateSaving is [insert doc].
+	VolumeServerStateSaving = VolumeServerState("saving")
+	// VolumeServerStateHotsyncing is [insert doc].
+	VolumeServerStateHotsyncing = VolumeServerState("hotsyncing")
+)
+
+func (enum VolumeServerState) String() string {
+	if enum == "" {
+		// return default value if empty
+		return "available"
+	}
+	return string(enum)
+}
+
+func (enum VolumeServerState) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%s"`, enum)), nil
+}
+
+func (enum *VolumeServerState) UnmarshalJSON(data []byte) error {
+	tmp := ""
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	*enum = VolumeServerState(VolumeServerState(tmp).String())
+	return nil
+}
+
+type VolumeServerVolumeType string
+
+const (
+	// VolumeServerVolumeTypeLSSD is [insert doc].
+	VolumeServerVolumeTypeLSSD = VolumeServerVolumeType("l_ssd")
+	// VolumeServerVolumeTypeBSSD is [insert doc].
+	VolumeServerVolumeTypeBSSD = VolumeServerVolumeType("b_ssd")
+)
+
+func (enum VolumeServerVolumeType) String() string {
+	if enum == "" {
+		// return default value if empty
+		return "l_ssd"
+	}
+	return string(enum)
+}
+
+func (enum VolumeServerVolumeType) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%s"`, enum)), nil
+}
+
+func (enum *VolumeServerVolumeType) UnmarshalJSON(data []byte) error {
+	tmp := ""
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	*enum = VolumeServerVolumeType(VolumeServerVolumeType(tmp).String())
+	return nil
+}
+
 type VolumeState string
 
 const (
@@ -542,6 +720,14 @@ const (
 	VolumeStateSnapshotting = VolumeState("snapshotting")
 	// VolumeStateError is [insert doc].
 	VolumeStateError = VolumeState("error")
+	// VolumeStateFetching is [insert doc].
+	VolumeStateFetching = VolumeState("fetching")
+	// VolumeStateResizing is [insert doc].
+	VolumeStateResizing = VolumeState("resizing")
+	// VolumeStateSaving is [insert doc].
+	VolumeStateSaving = VolumeState("saving")
+	// VolumeStateHotsyncing is [insert doc].
+	VolumeStateHotsyncing = VolumeState("hotsyncing")
 )
 
 func (enum VolumeState) String() string {
@@ -799,41 +985,53 @@ type Image struct {
 
 	Project string `json:"project"`
 
+	Tags []string `json:"tags"`
+
 	Zone scw.Zone `json:"zone"`
 }
 
+// ListBootscriptsResponse: list bootscripts response
 type ListBootscriptsResponse struct {
+	// TotalCount: total number of bootscripts
+	TotalCount uint32 `json:"total_count"`
+	// Bootscripts: list of bootscripts
 	Bootscripts []*Bootscript `json:"bootscripts"`
-
-	TotalCount uint32 `json:"total_count"`
 }
 
+// ListIPsResponse: list ips response
 type ListIPsResponse struct {
+	// TotalCount: total number of ips
+	TotalCount uint32 `json:"total_count"`
+	// IPs: list of ips
 	IPs []*IP `json:"ips"`
-
-	TotalCount uint32 `json:"total_count"`
 }
 
+// ListImagesResponse: list images response
 type ListImagesResponse struct {
-	Images []*Image `json:"images"`
-
+	// TotalCount: total number of images
 	TotalCount uint32 `json:"total_count"`
+	// Images: list of images
+	Images []*Image `json:"images"`
 }
 
+// ListPlacementGroupsResponse: list placement groups response
 type ListPlacementGroupsResponse struct {
-	PlacementGroups []*PlacementGroup `json:"placement_groups"`
-
+	// TotalCount: total number of placement groups
 	TotalCount uint32 `json:"total_count"`
+	// PlacementGroups: list of placement groups
+	PlacementGroups []*PlacementGroup `json:"placement_groups"`
 }
 
 type ListPrivateNICsResponse struct {
 	PrivateNics []*PrivateNIC `json:"private_nics"`
 }
 
+// ListSecurityGroupRulesResponse: list security group rules response
 type ListSecurityGroupRulesResponse struct {
-	Rules []*SecurityGroupRule `json:"rules"`
-
+	// TotalCount: total number of security groups
 	TotalCount uint32 `json:"total_count"`
+	// Rules: list of security groups
+	Rules []*SecurityGroupRule `json:"rules"`
 }
 
 type ListSecurityGroupsResponse struct {
@@ -850,10 +1048,12 @@ type ListServerUserDataResponse struct {
 	UserData []string `json:"user_data"`
 }
 
+// ListServersResponse: list servers response
 type ListServersResponse struct {
-	Servers []*Server `json:"servers"`
-
+	// TotalCount: total number of servers
 	TotalCount uint32 `json:"total_count"`
+	// Servers: list of servers
+	Servers []*Server `json:"servers"`
 }
 
 // ListServersTypesResponse: list servers types response
@@ -864,22 +1064,28 @@ type ListServersTypesResponse struct {
 	Servers map[string]*ServerType `json:"servers"`
 }
 
+// ListSnapshotsResponse: list snapshots response
 type ListSnapshotsResponse struct {
+	// TotalCount: total number of snapshots
+	TotalCount uint32 `json:"total_count"`
+	// Snapshots: list of snapshots
 	Snapshots []*Snapshot `json:"snapshots"`
-
-	TotalCount uint32 `json:"total_count"`
 }
 
+// ListVolumesResponse: list volumes response
 type ListVolumesResponse struct {
-	Volumes []*Volume `json:"volumes"`
-
+	// TotalCount: total number of volumes
 	TotalCount uint32 `json:"total_count"`
+	// Volumes: list of volumes
+	Volumes []*Volume `json:"volumes"`
 }
 
+// ListVolumesTypesResponse: list volumes types response
 type ListVolumesTypesResponse struct {
-	Volumes map[string]*VolumeType `json:"volumes"`
-
+	// TotalCount: total number of volume types
 	TotalCount uint32 `json:"total_count"`
+	// Volumes: map of volume types
+	Volumes map[string]*VolumeType `json:"volumes"`
 }
 
 type NullableStringValue struct {
@@ -898,7 +1104,9 @@ type PlacementGroup struct {
 	Organization string `json:"organization"`
 	// Project: the placement group project ID
 	Project string `json:"project"`
-	// PolicyMode: select the failling mode when the placement cannot be  respected, either optional or enforced
+	// Tags: the placement group tags
+	Tags []string `json:"tags"`
+	// PolicyMode: select the failling mode when the placement cannot be respected, either optional or enforced
 	//
 	// Default value: optional
 	PolicyMode PlacementGroupPolicyMode `json:"policy_mode"`
@@ -930,6 +1138,10 @@ type PrivateNIC struct {
 	PrivateNetworkID string `json:"private_network_id,omitempty"`
 	// MacAddress: the private NIC MAC address
 	MacAddress string `json:"mac_address,omitempty"`
+	// State: the private NIC state
+	//
+	// Default value: available
+	State PrivateNICState `json:"state,omitempty"`
 }
 
 // SecurityGroup: security group
@@ -954,6 +1166,8 @@ type SecurityGroup struct {
 	Organization string `json:"organization"`
 	// Project: the security group project ID
 	Project string `json:"project"`
+	// Tags: the security group tags
+	Tags []string `json:"tags"`
 	// Deprecated: OrganizationDefault: true if it is your default security group for this organization ID
 	OrganizationDefault bool `json:"organization_default"`
 	// ProjectDefault: true if it is your default security group for this project ID
@@ -966,6 +1180,10 @@ type SecurityGroup struct {
 	Servers []*ServerSummary `json:"servers"`
 	// Stateful: true if the security group is stateful
 	Stateful bool `json:"stateful"`
+	// State: security group state
+	//
+	// Default value: available
+	State SecurityGroupState `json:"state"`
 	// Zone: the zone in which is the security group
 	Zone scw.Zone `json:"zone"`
 }
@@ -1059,7 +1277,7 @@ type Server struct {
 	// Default value: local
 	BootType BootType `json:"boot_type"`
 	// Volumes: the server volumes
-	Volumes map[string]*Volume `json:"volumes"`
+	Volumes map[string]*VolumeServer `json:"volumes"`
 	// SecurityGroup: the server security group
 	SecurityGroup *SecurityGroupSummary `json:"security_group"`
 	// Maintenances: the server planned maintenances
@@ -1203,6 +1421,8 @@ type Snapshot struct {
 	Organization string `json:"organization"`
 	// Project: the snapshot project ID
 	Project string `json:"project"`
+	// Tags: the snapshot tags
+	Tags []string `json:"tags"`
 	// VolumeType: the snapshot volume type
 	//
 	// Default value: l_ssd
@@ -1297,6 +1517,8 @@ type Volume struct {
 	Organization string `json:"organization"`
 	// Project: the volume project ID
 	Project string `json:"project"`
+	// Tags: the volume tags
+	Tags []string `json:"tags"`
 	// Server: the server attached to the volume
 	Server *ServerSummary `json:"server"`
 	// State: the volume state
@@ -1305,6 +1527,56 @@ type Volume struct {
 	State VolumeState `json:"state"`
 	// Zone: the zone in which is the volume
 	Zone scw.Zone `json:"zone"`
+}
+
+type VolumeServer struct {
+	ID string `json:"id"`
+
+	Name string `json:"name"`
+
+	ExportURI string `json:"export_uri"`
+
+	Organization string `json:"organization"`
+
+	Server *ServerSummary `json:"server"`
+
+	Size scw.Size `json:"size"`
+	// VolumeType:
+	//
+	// Default value: l_ssd
+	VolumeType VolumeServerVolumeType `json:"volume_type"`
+
+	CreationDate *time.Time `json:"creation_date"`
+
+	ModificationDate *time.Time `json:"modification_date"`
+	// State:
+	//
+	// Default value: available
+	State VolumeServerState `json:"state"`
+
+	Project string `json:"project"`
+
+	Boot bool `json:"boot"`
+
+	Zone scw.Zone `json:"zone"`
+}
+
+// VolumeServerTemplate: volume server template
+type VolumeServerTemplate struct {
+	// ID: UUID of the volume
+	ID string `json:"id,omitempty"`
+	// Boot: force the server to boot on this volume
+	//
+	// Default value: false
+	Boot bool `json:"boot,omitempty"`
+	// Name: name of the volume
+	Name string `json:"name,omitempty"`
+	// Size: disk size of the volume
+	Size scw.Size `json:"size,omitempty"`
+	// VolumeType: type of the volume
+	//
+	// Default value: l_ssd
+	VolumeType VolumeVolumeType `json:"volume_type,omitempty"`
 }
 
 type VolumeSummary struct {
@@ -1552,10 +1824,14 @@ type ListServersRequest struct {
 	//
 	// Default value: running
 	State *ServerState `json:"-"`
-	// Tags: list servers with these exact tags
+	// Tags: list servers with these exact tags (to filter with several tags, use commas to separate them)
 	Tags []string `json:"-"`
 	// PrivateNetwork: list servers in this Private Network
 	PrivateNetwork *string `json:"-"`
+	// Order: define the order of the returned servers
+	//
+	// Default value: creation_date_desc
+	Order ListServersRequestOrder `json:"-"`
 }
 
 // ListServers: list all servers
@@ -1586,6 +1862,7 @@ func (s *API) ListServers(req *ListServersRequest, opts ...scw.RequestOption) (*
 		parameter.AddToQuery(query, "tags", strings.Join(req.Tags, ","))
 	}
 	parameter.AddToQuery(query, "private_network", req.PrivateNetwork)
+	parameter.AddToQuery(query, "order", req.Order)
 
 	if fmt.Sprint(req.Zone) == "" {
 		return nil, errors.New("field Zone cannot be empty in request")
@@ -1607,25 +1884,6 @@ func (s *API) ListServers(req *ListServersRequest, opts ...scw.RequestOption) (*
 	return &resp, nil
 }
 
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListServersResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListServersResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListServersResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.Servers = append(r.Servers, results.Servers...)
-	r.TotalCount += uint32(len(results.Servers))
-	return uint32(len(results.Servers)), nil
-}
-
 type CreateServerRequest struct {
 	Zone scw.Zone `json:"-"`
 	// Name: the server name
@@ -1637,7 +1895,7 @@ type CreateServerRequest struct {
 	// Image: the server image ID or label
 	Image string `json:"image,omitempty"`
 	// Volumes: the volumes attached to the server
-	Volumes map[string]*VolumeTemplate `json:"volumes,omitempty"`
+	Volumes map[string]*VolumeServerTemplate `json:"volumes,omitempty"`
 	// EnableIPv6: true if IPv6 is enabled on the server
 	EnableIPv6 bool `json:"enable_ipv6,omitempty"`
 	// PublicIP: the ID of the reserved IP to attach to the server
@@ -1800,7 +2058,7 @@ type setServerRequest struct {
 	// AllowedActions: provide as list of allowed actions on the server
 	AllowedActions []ServerAction `json:"allowed_actions"`
 	// Tags: the server associated tags
-	Tags []string `json:"tags"`
+	Tags *[]string `json:"tags"`
 	// CommercialType: the server commercial type (eg. GP1-M)
 	CommercialType string `json:"commercial_type"`
 	// CreationDate: the server creation date
@@ -1912,7 +2170,7 @@ type UpdateServerRequest struct {
 	// Tags: tags of the server
 	Tags *[]string `json:"tags,omitempty"`
 
-	Volumes *map[string]*VolumeTemplate `json:"volumes,omitempty"`
+	Volumes *map[string]*VolumeServerTemplate `json:"volumes,omitempty"`
 
 	Bootscript *string `json:"bootscript,omitempty"`
 
@@ -2161,6 +2419,8 @@ type ListImagesRequest struct {
 	Arch *string `json:"-"`
 
 	Project *string `json:"-"`
+
+	Tags *string `json:"-"`
 }
 
 // ListImages: list instance images
@@ -2187,6 +2447,7 @@ func (s *API) ListImages(req *ListImagesRequest, opts ...scw.RequestOption) (*Li
 	parameter.AddToQuery(query, "public", req.Public)
 	parameter.AddToQuery(query, "arch", req.Arch)
 	parameter.AddToQuery(query, "project", req.Project)
+	parameter.AddToQuery(query, "tags", req.Tags)
 
 	if fmt.Sprint(req.Zone) == "" {
 		return nil, errors.New("field Zone cannot be empty in request")
@@ -2206,25 +2467,6 @@ func (s *API) ListImages(req *ListImagesRequest, opts ...scw.RequestOption) (*Li
 		return nil, err
 	}
 	return &resp, nil
-}
-
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListImagesResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListImagesResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListImagesResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.Images = append(r.Images, results.Images...)
-	r.TotalCount += uint32(len(results.Images))
-	return uint32(len(results.Images)), nil
 }
 
 type GetImageRequest struct {
@@ -2287,6 +2529,8 @@ type CreateImageRequest struct {
 	// Project: project ID of the image
 	// Precisely one of Organization, Project must be set.
 	Project *string `json:"project,omitempty"`
+	// Tags: the tags of the image
+	Tags []string `json:"tags,omitempty"`
 	// Public: true to create a public image
 	Public bool `json:"public,omitempty"`
 }
@@ -2370,6 +2614,8 @@ type SetImageRequest struct {
 	State ImageState `json:"state"`
 
 	Project string `json:"project"`
+
+	Tags *[]string `json:"tags"`
 }
 
 // setImage: update image
@@ -2471,6 +2717,8 @@ type ListSnapshotsRequest struct {
 	Name *string `json:"-"`
 
 	Project *string `json:"-"`
+
+	Tags *string `json:"-"`
 }
 
 // ListSnapshots: list snapshots
@@ -2493,6 +2741,7 @@ func (s *API) ListSnapshots(req *ListSnapshotsRequest, opts ...scw.RequestOption
 	parameter.AddToQuery(query, "page", req.Page)
 	parameter.AddToQuery(query, "name", req.Name)
 	parameter.AddToQuery(query, "project", req.Project)
+	parameter.AddToQuery(query, "tags", req.Tags)
 
 	if fmt.Sprint(req.Zone) == "" {
 		return nil, errors.New("field Zone cannot be empty in request")
@@ -2514,31 +2763,14 @@ func (s *API) ListSnapshots(req *ListSnapshotsRequest, opts ...scw.RequestOption
 	return &resp, nil
 }
 
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListSnapshotsResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListSnapshotsResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListSnapshotsResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.Snapshots = append(r.Snapshots, results.Snapshots...)
-	r.TotalCount += uint32(len(results.Snapshots))
-	return uint32(len(results.Snapshots)), nil
-}
-
 type CreateSnapshotRequest struct {
 	Zone scw.Zone `json:"-"`
 	// Name: name of the snapshot
 	Name string `json:"name,omitempty"`
 	// VolumeID: UUID of the volume
 	VolumeID string `json:"volume_id,omitempty"`
+	// Tags: the tags of the snapshot
+	Tags []string `json:"tags,omitempty"`
 	// Deprecated: Organization: organization ID of the snapshot
 	// Precisely one of Organization, Project must be set.
 	Organization *string `json:"organization,omitempty"`
@@ -2634,10 +2866,12 @@ func (s *API) GetSnapshot(req *GetSnapshotRequest, opts ...scw.RequestOption) (*
 	return &resp, nil
 }
 
-type SetSnapshotRequest struct {
+type setSnapshotRequest struct {
 	Zone scw.Zone `json:"-"`
 
-	ID string `json:"-"`
+	SnapshotID string `json:"-"`
+
+	ID string `json:"id"`
 
 	Name string `json:"name"`
 
@@ -2660,12 +2894,14 @@ type SetSnapshotRequest struct {
 	ModificationDate *time.Time `json:"modification_date"`
 
 	Project string `json:"project"`
+
+	Tags *[]string `json:"tags"`
 }
 
 // setSnapshot: update snapshot
 //
 // Replace all snapshot properties with a snapshot message.
-func (s *API) setSnapshot(req *SetSnapshotRequest, opts ...scw.RequestOption) (*setSnapshotResponse, error) {
+func (s *API) setSnapshot(req *setSnapshotRequest, opts ...scw.RequestOption) (*setSnapshotResponse, error) {
 	var err error
 
 	if req.Project == "" {
@@ -2687,13 +2923,13 @@ func (s *API) setSnapshot(req *SetSnapshotRequest, opts ...scw.RequestOption) (*
 		return nil, errors.New("field Zone cannot be empty in request")
 	}
 
-	if fmt.Sprint(req.ID) == "" {
-		return nil, errors.New("field ID cannot be empty in request")
+	if fmt.Sprint(req.SnapshotID) == "" {
+		return nil, errors.New("field SnapshotID cannot be empty in request")
 	}
 
 	scwReq := &scw.ScalewayRequest{
 		Method:  "PUT",
-		Path:    "/instance/v1/zones/" + fmt.Sprint(req.Zone) + "/snapshots/" + fmt.Sprint(req.ID) + "",
+		Path:    "/instance/v1/zones/" + fmt.Sprint(req.Zone) + "/snapshots/" + fmt.Sprint(req.SnapshotID) + "",
 		Headers: http.Header{},
 	}
 
@@ -2765,6 +3001,8 @@ type ListVolumesRequest struct {
 	Organization *string `json:"-"`
 	// Project: filter volume by project ID
 	Project *string `json:"-"`
+	// Tags: filter volumes with these exact tags (to filter with several tags, use commas to separate them)
+	Tags []string `json:"-"`
 	// Name: filter volume by name (for eg. "vol" will return "myvolume" but not "data")
 	Name *string `json:"-"`
 }
@@ -2789,6 +3027,9 @@ func (s *API) ListVolumes(req *ListVolumesRequest, opts ...scw.RequestOption) (*
 	parameter.AddToQuery(query, "page", req.Page)
 	parameter.AddToQuery(query, "organization", req.Organization)
 	parameter.AddToQuery(query, "project", req.Project)
+	if len(req.Tags) != 0 {
+		parameter.AddToQuery(query, "tags", strings.Join(req.Tags, ","))
+	}
 	parameter.AddToQuery(query, "name", req.Name)
 
 	if fmt.Sprint(req.Zone) == "" {
@@ -2811,25 +3052,6 @@ func (s *API) ListVolumes(req *ListVolumesRequest, opts ...scw.RequestOption) (*
 	return &resp, nil
 }
 
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListVolumesResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListVolumesResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListVolumesResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.Volumes = append(r.Volumes, results.Volumes...)
-	r.TotalCount += uint32(len(results.Volumes))
-	return uint32(len(results.Volumes)), nil
-}
-
 type CreateVolumeRequest struct {
 	Zone scw.Zone `json:"-"`
 	// Name: the volume name
@@ -2840,6 +3062,8 @@ type CreateVolumeRequest struct {
 	// Project: the volume project ID
 	// Precisely one of Organization, Project must be set.
 	Project *string `json:"project,omitempty"`
+	// Tags: the volume tags
+	Tags []string `json:"tags,omitempty"`
 	// VolumeType: the volume type
 	//
 	// Default value: l_ssd
@@ -2872,6 +3096,10 @@ func (s *API) CreateVolume(req *CreateVolumeRequest, opts ...scw.RequestOption) 
 	if req.Zone == "" {
 		defaultZone, _ := s.client.GetDefaultZone()
 		req.Zone = defaultZone
+	}
+
+	if req.Name == "" {
+		req.Name = namegenerator.GetRandomName("vol")
 	}
 
 	if fmt.Sprint(req.Zone) == "" {
@@ -2944,6 +3172,8 @@ type UpdateVolumeRequest struct {
 	VolumeID string `json:"-"`
 	// Name: the volume name
 	Name *string `json:"name,omitempty"`
+	// Tags: the tags of the volume
+	Tags *[]string `json:"tags,omitempty"`
 	// Size: the volume disk size
 	Size *scw.Size `json:"size,omitempty"`
 }
@@ -3033,6 +3263,8 @@ type ListSecurityGroupsRequest struct {
 	Organization *string `json:"-"`
 	// Project: the security group project ID
 	Project *string `json:"-"`
+	// Tags: list security groups with these exact tags (to filter with several tags, use commas to separate them)
+	Tags []string `json:"-"`
 	// PerPage: a positive integer lower or equal to 100 to select the number of items to return
 	//
 	// Default value: 50
@@ -3061,6 +3293,9 @@ func (s *API) ListSecurityGroups(req *ListSecurityGroupsRequest, opts ...scw.Req
 	parameter.AddToQuery(query, "name", req.Name)
 	parameter.AddToQuery(query, "organization", req.Organization)
 	parameter.AddToQuery(query, "project", req.Project)
+	if len(req.Tags) != 0 {
+		parameter.AddToQuery(query, "tags", strings.Join(req.Tags, ","))
+	}
 	parameter.AddToQuery(query, "per_page", req.PerPage)
 	parameter.AddToQuery(query, "page", req.Page)
 
@@ -3084,25 +3319,6 @@ func (s *API) ListSecurityGroups(req *ListSecurityGroupsRequest, opts ...scw.Req
 	return &resp, nil
 }
 
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListSecurityGroupsResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListSecurityGroupsResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListSecurityGroupsResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.SecurityGroups = append(r.SecurityGroups, results.SecurityGroups...)
-	r.TotalCount += uint32(len(results.SecurityGroups))
-	return uint32(len(results.SecurityGroups)), nil
-}
-
 type CreateSecurityGroupRequest struct {
 	Zone scw.Zone `json:"-"`
 	// Name: name of the security group
@@ -3115,6 +3331,8 @@ type CreateSecurityGroupRequest struct {
 	// Project: project ID the security group belong to
 	// Precisely one of Organization, Project must be set.
 	Project *string `json:"project,omitempty"`
+	// Tags: the tags of the security group
+	Tags []string `json:"tags,omitempty"`
 	// Deprecated: OrganizationDefault: whether this security group becomes the default security group for new instances
 	//
 	// Default value: false
@@ -3270,6 +3488,8 @@ type setSecurityGroupRequest struct {
 	ID string `json:"-"`
 	// Name: the name of the security group
 	Name string `json:"name"`
+	// Tags: the tags of the security group
+	Tags *[]string `json:"tags"`
 	// CreationDate: the creation date of the security group (will be ignored)
 	CreationDate *time.Time `json:"creation_date"`
 	// ModificationDate: the modification date of the security group (will be ignored)
@@ -3401,25 +3621,6 @@ func (s *API) ListSecurityGroupRules(req *ListSecurityGroupRulesRequest, opts ..
 		return nil, err
 	}
 	return &resp, nil
-}
-
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListSecurityGroupRulesResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListSecurityGroupRulesResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListSecurityGroupRulesResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.Rules = append(r.Rules, results.Rules...)
-	r.TotalCount += uint32(len(results.Rules))
-	return uint32(len(results.Rules)), nil
 }
 
 type CreateSecurityGroupRuleRequest struct {
@@ -3662,6 +3863,8 @@ type ListPlacementGroupsRequest struct {
 	Organization *string `json:"-"`
 	// Project: list only placement groups of this project ID
 	Project *string `json:"-"`
+	// Tags: list placement groups with these exact tags (to filter with several tags, use commas to separate them)
+	Tags []string `json:"-"`
 	// Name: filter placement groups by name (for eg. "cluster1" will return "cluster100" and "cluster1" but not "foo")
 	Name *string `json:"-"`
 }
@@ -3687,6 +3890,9 @@ func (s *API) ListPlacementGroups(req *ListPlacementGroupsRequest, opts ...scw.R
 	parameter.AddToQuery(query, "page", req.Page)
 	parameter.AddToQuery(query, "organization", req.Organization)
 	parameter.AddToQuery(query, "project", req.Project)
+	if len(req.Tags) != 0 {
+		parameter.AddToQuery(query, "tags", strings.Join(req.Tags, ","))
+	}
 	parameter.AddToQuery(query, "name", req.Name)
 
 	if fmt.Sprint(req.Zone) == "" {
@@ -3709,25 +3915,6 @@ func (s *API) ListPlacementGroups(req *ListPlacementGroupsRequest, opts ...scw.R
 	return &resp, nil
 }
 
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListPlacementGroupsResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListPlacementGroupsResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListPlacementGroupsResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.PlacementGroups = append(r.PlacementGroups, results.PlacementGroups...)
-	r.TotalCount += uint32(len(results.PlacementGroups))
-	return uint32(len(results.PlacementGroups)), nil
-}
-
 type CreatePlacementGroupRequest struct {
 	Zone scw.Zone `json:"-"`
 	// Name: name of the placement group
@@ -3738,6 +3925,8 @@ type CreatePlacementGroupRequest struct {
 	// Project: project ID of the placement group
 	// Precisely one of Organization, Project must be set.
 	Project *string `json:"project,omitempty"`
+	// Tags: the tags of the placement group
+	Tags []string `json:"tags,omitempty"`
 	// PolicyMode: the operating mode of the placement group
 	//
 	// Default value: optional
@@ -3855,6 +4044,8 @@ type SetPlacementGroupRequest struct {
 	PolicyType PlacementGroupPolicyType `json:"policy_type"`
 
 	Project string `json:"project"`
+
+	Tags *[]string `json:"tags"`
 }
 
 // SetPlacementGroup: set placement group
@@ -3912,6 +4103,8 @@ type UpdatePlacementGroupRequest struct {
 	PlacementGroupID string `json:"-"`
 	// Name: name of the placement group
 	Name *string `json:"name,omitempty"`
+	// Tags: the tags of the placement group
+	Tags *[]string `json:"tags,omitempty"`
 	// PolicyMode: the operating mode of the placement group
 	//
 	// Default value: optional
@@ -4147,6 +4340,8 @@ type ListIPsRequest struct {
 	Page *int32 `json:"-"`
 	// Project: the project ID the IPs are reserved in
 	Project *string `json:"-"`
+	// Tags: filter IPs with these exact tags (to filter with several tags, use commas to separate them)
+	Tags []string `json:"-"`
 }
 
 // ListIPs: list all flexible IPs
@@ -4169,6 +4364,9 @@ func (s *API) ListIPs(req *ListIPsRequest, opts ...scw.RequestOption) (*ListIPsR
 	parameter.AddToQuery(query, "per_page", req.PerPage)
 	parameter.AddToQuery(query, "page", req.Page)
 	parameter.AddToQuery(query, "project", req.Project)
+	if len(req.Tags) != 0 {
+		parameter.AddToQuery(query, "tags", strings.Join(req.Tags, ","))
+	}
 
 	if fmt.Sprint(req.Zone) == "" {
 		return nil, errors.New("field Zone cannot be empty in request")
@@ -4190,25 +4388,6 @@ func (s *API) ListIPs(req *ListIPsRequest, opts ...scw.RequestOption) (*ListIPsR
 	return &resp, nil
 }
 
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListIPsResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListIPsResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListIPsResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.IPs = append(r.IPs, results.IPs...)
-	r.TotalCount += uint32(len(results.IPs))
-	return uint32(len(results.IPs)), nil
-}
-
 type CreateIPRequest struct {
 	Zone scw.Zone `json:"-"`
 	// Deprecated: Organization: the organization ID the IP is reserved in
@@ -4217,10 +4396,10 @@ type CreateIPRequest struct {
 	// Project: the project ID the IP is reserved in
 	// Precisely one of Organization, Project must be set.
 	Project *string `json:"project,omitempty"`
+	// Tags: the tags of the IP
+	Tags []string `json:"tags,omitempty"`
 	// Server: UUID of the server you want to attach the IP to
 	Server *string `json:"server,omitempty"`
-	// Tags: an array of keywords you want to tag this IP with
-	Tags []string `json:"tags,omitempty"`
 }
 
 // CreateIP: reserve a flexible IP
@@ -4628,25 +4807,6 @@ func (s *API) ListBootscripts(req *ListBootscriptsRequest, opts ...scw.RequestOp
 	return &resp, nil
 }
 
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListBootscriptsResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListBootscriptsResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListBootscriptsResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.Bootscripts = append(r.Bootscripts, results.Bootscripts...)
-	r.TotalCount += uint32(len(results.Bootscripts))
-	return uint32(len(results.Bootscripts)), nil
-}
-
 type GetBootscriptRequest struct {
 	Zone scw.Zone `json:"-"`
 
@@ -4725,4 +4885,175 @@ func (s *API) GetDashboard(req *GetDashboardRequest, opts ...scw.RequestOption) 
 		return nil, err
 	}
 	return &resp, nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListServersResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListServersResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListServersResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.Servers = append(r.Servers, results.Servers...)
+	r.TotalCount += uint32(len(results.Servers))
+	return uint32(len(results.Servers)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListImagesResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListImagesResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListImagesResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.Images = append(r.Images, results.Images...)
+	r.TotalCount += uint32(len(results.Images))
+	return uint32(len(results.Images)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListSnapshotsResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListSnapshotsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListSnapshotsResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.Snapshots = append(r.Snapshots, results.Snapshots...)
+	r.TotalCount += uint32(len(results.Snapshots))
+	return uint32(len(results.Snapshots)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListVolumesResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListVolumesResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListVolumesResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.Volumes = append(r.Volumes, results.Volumes...)
+	r.TotalCount += uint32(len(results.Volumes))
+	return uint32(len(results.Volumes)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListSecurityGroupsResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListSecurityGroupsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListSecurityGroupsResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.SecurityGroups = append(r.SecurityGroups, results.SecurityGroups...)
+	r.TotalCount += uint32(len(results.SecurityGroups))
+	return uint32(len(results.SecurityGroups)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListSecurityGroupRulesResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListSecurityGroupRulesResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListSecurityGroupRulesResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.Rules = append(r.Rules, results.Rules...)
+	r.TotalCount += uint32(len(results.Rules))
+	return uint32(len(results.Rules)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListPlacementGroupsResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListPlacementGroupsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListPlacementGroupsResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.PlacementGroups = append(r.PlacementGroups, results.PlacementGroups...)
+	r.TotalCount += uint32(len(results.PlacementGroups))
+	return uint32(len(results.PlacementGroups)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListIPsResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListIPsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListIPsResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.IPs = append(r.IPs, results.IPs...)
+	r.TotalCount += uint32(len(results.IPs))
+	return uint32(len(results.IPs)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListBootscriptsResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListBootscriptsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListBootscriptsResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.Bootscripts = append(r.Bootscripts, results.Bootscripts...)
+	r.TotalCount += uint32(len(results.Bootscripts))
+	return uint32(len(results.Bootscripts)), nil
 }
