@@ -7,6 +7,7 @@ import (
 
 	"github.com/prometheus/prometheus/model/exemplar"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 )
 
@@ -17,7 +18,7 @@ type appenderStub struct{}
 var appenderLock = sync.Mutex{}
 var appenderWarningTime time.Time
 
-func (a *appenderStub) Append(ref uint64, l labels.Labels, t int64, v float64) (uint64, error) {
+func (a *appenderStub) Append(ref storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
 	appenderLock.Lock()
 	now := time.Now()
 	if now.Sub(appenderWarningTime) > time.Minute {
@@ -29,7 +30,7 @@ func (a *appenderStub) Append(ref uint64, l labels.Labels, t int64, v float64) (
 	return 0, nil
 }
 
-func (a *appenderStub) AppendExemplar(ref uint64, l labels.Labels, e exemplar.Exemplar) (uint64, error) {
+func (a *appenderStub) AppendExemplar(ref storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
 	return 0, fmt.Errorf("not Implemented")
 }
 
