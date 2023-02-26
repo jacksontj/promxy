@@ -16,18 +16,16 @@ package rules
 import (
 	"context"
 	"fmt"
-	"html/template"
 	"net/url"
 	"sync"
 	"time"
 
 	yaml "gopkg.in/yaml.v2"
 
-	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/prometheus/prometheus/pkg/rulefmt"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
-	"github.com/prometheus/prometheus/util/strutil"
 )
 
 // A RecordingRule records its vector expression into new timeseries.
@@ -73,7 +71,7 @@ func (rule *RecordingRule) Labels() labels.Labels {
 }
 
 // Eval evaluates the rule and then overrides the metric names and labels accordingly.
-func (rule *RecordingRule) Eval(ctx context.Context, ts time.Time, query QueryFunc, _ *url.URL) (promql.Vector, error) {
+func (rule *RecordingRule) Eval(ctx context.Context, ts time.Time, query QueryFunc, _ *url.URL, limit int) (promql.Vector, error) {
 	vector, err := query(ctx, rule.vector.String(), ts)
 	if err != nil {
 		return nil, err
@@ -99,6 +97,13 @@ func (rule *RecordingRule) Eval(ctx context.Context, ts time.Time, query QueryFu
 		return nil, fmt.Errorf("vector contains metrics with the same labelset after applying rule labels")
 	}
 
+	numSeries := len(vector)
+	if limit > 0 && numSeries > limit {
+		return nil, fmt.Errorf("exceeded limit of %d with %d series", limit, numSeries)
+	}
+
+	rule.SetHealth(HealthGood)
+	rule.SetLastError(err)
 	return vector, nil
 }
 
@@ -171,26 +176,4 @@ func (rule *RecordingRule) GetEvaluationTimestamp() time.Time {
 	rule.mtx.Lock()
 	defer rule.mtx.Unlock()
 	return rule.evaluationTimestamp
-}
-
-// HTMLSnippet returns an HTML snippet representing this rule.
-func (rule *RecordingRule) HTMLSnippet(pathPrefix string) template.HTML {
-	ruleExpr := rule.vector.String()
-	labels := make(map[string]string, len(rule.labels))
-	for _, l := range rule.labels {
-		labels[l.Name] = template.HTMLEscapeString(l.Value)
-	}
-
-	r := rulefmt.Rule{
-		Record: fmt.Sprintf(`<a href="%s">%s</a>`, pathPrefix+strutil.TableLinkForExpression(rule.name), rule.name),
-		Expr:   fmt.Sprintf(`<a href="%s">%s</a>`, pathPrefix+strutil.TableLinkForExpression(ruleExpr), template.HTMLEscapeString(ruleExpr)),
-		Labels: labels,
-	}
-
-	byt, err := yaml.Marshal(r)
-	if err != nil {
-		return template.HTML(fmt.Sprintf("error marshaling recording rule: %q", template.HTMLEscapeString(err.Error())))
-	}
-
-	return template.HTML(byt)
 }

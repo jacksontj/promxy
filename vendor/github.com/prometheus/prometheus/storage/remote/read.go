@@ -15,10 +15,10 @@ package remote
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
-	"github.com/pkg/errors"
-
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -168,12 +168,12 @@ func (q *querier) Select(sortSeries bool, hints *storage.SelectHints, matchers .
 	}
 	query, err := ToQuery(start, end, m, hints)
 	if err != nil {
-		return storage.ErrSeriesSet(errors.Wrap(err, "toQuery"))
+		return storage.ErrSeriesSet(fmt.Errorf("toQuery: %w", err))
 	}
 
 	res, err := q.client.Read(q.ctx, query)
 	if err != nil {
-		return storage.ErrSeriesSet(errors.Wrap(err, "remote_read"))
+		return storage.ErrSeriesSet(fmt.Errorf("remote_read: %w", err))
 	}
 	return newSeriesSetFilter(FromQueryResult(sortSeries, res), added)
 }

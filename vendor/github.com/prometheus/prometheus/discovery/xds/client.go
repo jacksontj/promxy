@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
@@ -112,7 +111,7 @@ func NewHTTPResourceClient(conf *HTTPResourceClientConfig, protocolVersion Proto
 		endpointURL.RawQuery = conf.ExtraQueryParams.Encode()
 	}
 
-	client, err := config.NewClientFromConfig(conf.HTTPClientConfig, conf.Name, config.WithHTTP2Disabled(), config.WithIdleConnTimeout(conf.Timeout))
+	client, err := config.NewClientFromConfig(conf.HTTPClientConfig, conf.Name, config.WithIdleConnTimeout(conf.Timeout))
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +194,7 @@ func (rc *HTTPResourceClient) Fetch(ctx context.Context) (*v3.DiscoveryResponse,
 		return nil, err
 	}
 	defer func() {
-		io.Copy(ioutil.Discard, resp.Body)
+		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 	}()
 
@@ -208,7 +207,7 @@ func (rc *HTTPResourceClient) Fetch(ctx context.Context) (*v3.DiscoveryResponse,
 		return nil, fmt.Errorf("non 200 status '%d' response during xDS fetch", resp.StatusCode)
 	}
 
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

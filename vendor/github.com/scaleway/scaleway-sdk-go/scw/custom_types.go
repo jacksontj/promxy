@@ -238,10 +238,11 @@ func (n *IPNet) UnmarshalJSON(b []byte) error {
 		str += "/128"
 	}
 
-	_, value, err := net.ParseCIDR(str)
+	ip, value, err := net.ParseCIDR(str)
 	if err != nil {
 		return err
 	}
+	value.IP = ip
 	n.IPNet = *value
 
 	return nil

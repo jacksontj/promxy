@@ -2,7 +2,6 @@ package linodego
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -190,6 +189,9 @@ func (client Client) WaitForLKEClusterStatus(ctx context.Context, clusterID int,
 
 // LKEClusterPollOptions configures polls against LKE Clusters.
 type LKEClusterPollOptions struct {
+	// Retry will cause the Poll to ignore interimittent errors
+	Retry bool
+
 	// TimeoutSeconds is the number of Seconds to wait for the poll to succeed
 	// before exiting.
 	TimeoutSeconds int
@@ -238,7 +240,10 @@ func (client Client) WaitForLKEClusterConditions(
 			case <-ticker.C:
 				result, err := condition(ctx, conditionOptions)
 				if err != nil {
-					return err
+					log.Printf("[WARN] Ignoring WaitForLKEClusterConditions conditional error: %s", err)
+					if !options.Retry {
+						return err
+					}
 				}
 
 				if result {
@@ -259,24 +264,12 @@ func (client Client) WaitForLKEClusterConditions(
 // nolint
 func (client Client) WaitForEventFinished(ctx context.Context, id interface{}, entityType EntityType, action EventAction, minStart time.Time, timeoutSeconds int) (*Event, error) {
 	titledEntityType := strings.Title(string(entityType))
-	filterStruct := map[string]interface{}{
-		// Nor is action
-		"action": action,
-
-		"created": map[string]interface{}{
-			// The API uses UTC time, so we need to ensure the time is converted
-			"+gte": minStart.UTC().Format("2006-01-02T15:04:05"),
-		},
-
-		// With potentially 1000+ events coming back, we should filter on something
-		// Warning: This optimization has the potential to break if users are clearing
-		// events before we see them.
-		"seen": false,
-
-		// Float the latest events to page 1
-		"+order_by": "created",
-		"+order":    "desc",
+	filter := Filter{
+		Order:   Descending,
+		OrderBy: "created",
 	}
+	filter.AddField(Eq, "action", action)
+	filter.AddField(Gte, "created", minStart.UTC().Format("2006-01-02T15:04:05"))
 
 	// Optimistically restrict results to page 1.  We should remove this when more
 	// precise filtering options exist.
@@ -285,14 +278,14 @@ func (client Client) WaitForEventFinished(ctx context.Context, id interface{}, e
 	// The API has limitted filtering support for Event ID and Event Type
 	// Optimize the list, if possible
 	switch entityType {
-	case EntityDisk, EntityLinode, EntityDomain, EntityNodebalancer:
+	case EntityDisk, EntityDatabase, EntityLinode, EntityDomain, EntityNodebalancer:
 		// All of the filter supported types have int ids
 		filterableEntityID, err := strconv.Atoi(fmt.Sprintf("%v", id))
 		if err != nil {
 			return nil, fmt.Errorf("Error parsing Entity ID %q for optimized WaitForEventFinished EventType %q: %s", id, entityType, err)
 		}
-		filterStruct["entity.id"] = filterableEntityID
-		filterStruct["entity.type"] = entityType
+		filter.AddField(Eq, "entity.id", filterableEntityID)
+		filter.AddField(Eq, "entity.type", entityType)
 
 		// TODO: are we conformatable with pages = 0 with the event type and id filter?
 	}
@@ -317,16 +310,15 @@ func (client Client) WaitForEventFinished(ctx context.Context, id interface{}, e
 		select {
 		case <-ticker.C:
 			if lastEventID > 0 {
-				filterStruct["id"] = map[string]interface{}{
-					"+gte": lastEventID,
-				}
+				filter.AddField(Gte, "id", lastEventID)
 			}
 
-			filter, err := json.Marshal(filterStruct)
+			filterStr, err := filter.MarshalJSON()
 			if err != nil {
 				return nil, err
 			}
-			listOptions := NewListOptions(pages, string(filter))
+
+			listOptions := NewListOptions(pages, string(filterStr))
 
 			events, err := client.ListEvents(ctx, listOptions)
 			if err != nil {
@@ -424,6 +416,148 @@ func (client Client) WaitForImageStatus(ctx context.Context, imageID string, sta
 			}
 		case <-ctx.Done():
 			return nil, fmt.Errorf("failed to wait for Image %s status %s: %s", imageID, status, ctx.Err())
+		}
+	}
+}
+
+// WaitForMySQLDatabaseBackup waits for the backup with the given label to be available.
+func (client Client) WaitForMySQLDatabaseBackup(ctx context.Context, dbID int, label string, timeoutSeconds int) (*MySQLDatabaseBackup, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(client.millisecondsPerPoll * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			backups, err := client.ListMySQLDatabaseBackups(ctx, dbID, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, backup := range backups {
+				if backup.Label == label {
+					return &backup, nil
+				}
+			}
+		case <-ctx.Done():
+			return nil, fmt.Errorf("failed to wait for backup %s: %s", label, ctx.Err())
+		}
+	}
+}
+
+// WaitForMongoDatabaseBackup waits for the backup with the given label to be available.
+func (client Client) WaitForMongoDatabaseBackup(ctx context.Context, dbID int, label string, timeoutSeconds int) (*MongoDatabaseBackup, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(client.millisecondsPerPoll * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			backups, err := client.ListMongoDatabaseBackups(ctx, dbID, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, backup := range backups {
+				if backup.Label == label {
+					return &backup, nil
+				}
+			}
+		case <-ctx.Done():
+			return nil, fmt.Errorf("failed to wait for backup %s: %s", label, ctx.Err())
+		}
+	}
+}
+
+// WaitForPostgresDatabaseBackup waits for the backup with the given label to be available.
+func (client Client) WaitForPostgresDatabaseBackup(ctx context.Context, dbID int, label string, timeoutSeconds int) (*PostgresDatabaseBackup, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(client.millisecondsPerPoll * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			backups, err := client.ListPostgresDatabaseBackups(ctx, dbID, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, backup := range backups {
+				if backup.Label == label {
+					return &backup, nil
+				}
+			}
+		case <-ctx.Done():
+			return nil, fmt.Errorf("failed to wait for backup %s: %s", label, ctx.Err())
+		}
+	}
+}
+
+type databaseStatusFunc func(ctx context.Context, client Client, dbID int) (DatabaseStatus, error)
+
+var databaseStatusHandlers = map[DatabaseEngineType]databaseStatusFunc{
+	DatabaseEngineTypeMySQL: func(ctx context.Context, client Client, dbID int) (DatabaseStatus, error) {
+		db, err := client.GetMySQLDatabase(ctx, dbID)
+		if err != nil {
+			return "", err
+		}
+
+		return db.Status, nil
+	},
+	DatabaseEngineTypeMongo: func(ctx context.Context, client Client, dbID int) (DatabaseStatus, error) {
+		db, err := client.GetMongoDatabase(ctx, dbID)
+		if err != nil {
+			return "", err
+		}
+
+		return db.Status, nil
+	},
+	DatabaseEngineTypePostgres: func(ctx context.Context, client Client, dbID int) (DatabaseStatus, error) {
+		db, err := client.GetPostgresDatabase(ctx, dbID)
+		if err != nil {
+			return "", err
+		}
+
+		return db.Status, nil
+	},
+}
+
+// WaitForDatabaseStatus waits for the provided database to have the given status.
+func (client Client) WaitForDatabaseStatus(
+	ctx context.Context, dbID int, dbEngine DatabaseEngineType, status DatabaseStatus, timeoutSeconds int,
+) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(client.millisecondsPerPoll * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			statusHandler, ok := databaseStatusHandlers[dbEngine]
+			if !ok {
+				return fmt.Errorf("invalid db engine: %s", dbEngine)
+			}
+
+			currentStatus, err := statusHandler(ctx, client, dbID)
+			if err != nil {
+				return fmt.Errorf("failed to get db status: %s", err)
+			}
+
+			if currentStatus == status {
+				return nil
+			}
+		case <-ctx.Done():
+			return fmt.Errorf("failed to wait for database %d status: %s", dbID, ctx.Err())
 		}
 	}
 }

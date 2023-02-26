@@ -183,6 +183,38 @@ func (enum *ListServersRequestOrderBy) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type ListSettingsRequestOrderBy string
+
+const (
+	// ListSettingsRequestOrderByCreatedAtAsc is [insert doc].
+	ListSettingsRequestOrderByCreatedAtAsc = ListSettingsRequestOrderBy("created_at_asc")
+	// ListSettingsRequestOrderByCreatedAtDesc is [insert doc].
+	ListSettingsRequestOrderByCreatedAtDesc = ListSettingsRequestOrderBy("created_at_desc")
+)
+
+func (enum ListSettingsRequestOrderBy) String() string {
+	if enum == "" {
+		// return default value if empty
+		return "created_at_asc"
+	}
+	return string(enum)
+}
+
+func (enum ListSettingsRequestOrderBy) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%s"`, enum)), nil
+}
+
+func (enum *ListSettingsRequestOrderBy) UnmarshalJSON(data []byte) error {
+	tmp := ""
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	*enum = ListSettingsRequestOrderBy(ListSettingsRequestOrderBy(tmp).String())
+	return nil
+}
+
 type OfferStock string
 
 const (
@@ -214,6 +246,40 @@ func (enum *OfferStock) UnmarshalJSON(data []byte) error {
 	}
 
 	*enum = OfferStock(OfferStock(tmp).String())
+	return nil
+}
+
+type OfferSubscriptionPeriod string
+
+const (
+	// OfferSubscriptionPeriodUnknownSubscriptionPeriod is [insert doc].
+	OfferSubscriptionPeriodUnknownSubscriptionPeriod = OfferSubscriptionPeriod("unknown_subscription_period")
+	// OfferSubscriptionPeriodHourly is [insert doc].
+	OfferSubscriptionPeriodHourly = OfferSubscriptionPeriod("hourly")
+	// OfferSubscriptionPeriodMonthly is [insert doc].
+	OfferSubscriptionPeriodMonthly = OfferSubscriptionPeriod("monthly")
+)
+
+func (enum OfferSubscriptionPeriod) String() string {
+	if enum == "" {
+		// return default value if empty
+		return "unknown_subscription_period"
+	}
+	return string(enum)
+}
+
+func (enum OfferSubscriptionPeriod) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%s"`, enum)), nil
+}
+
+func (enum *OfferSubscriptionPeriod) UnmarshalJSON(data []byte) error {
+	tmp := ""
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	*enum = OfferSubscriptionPeriod(OfferSubscriptionPeriod(tmp).String())
 	return nil
 }
 
@@ -289,6 +355,44 @@ func (enum *ServerInstallStatus) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type ServerOptionOptionStatus string
+
+const (
+	// ServerOptionOptionStatusOptionStatusUnknown is [insert doc].
+	ServerOptionOptionStatusOptionStatusUnknown = ServerOptionOptionStatus("option_status_unknown")
+	// ServerOptionOptionStatusOptionStatusEnable is [insert doc].
+	ServerOptionOptionStatusOptionStatusEnable = ServerOptionOptionStatus("option_status_enable")
+	// ServerOptionOptionStatusOptionStatusEnabling is [insert doc].
+	ServerOptionOptionStatusOptionStatusEnabling = ServerOptionOptionStatus("option_status_enabling")
+	// ServerOptionOptionStatusOptionStatusDisabling is [insert doc].
+	ServerOptionOptionStatusOptionStatusDisabling = ServerOptionOptionStatus("option_status_disabling")
+	// ServerOptionOptionStatusOptionStatusError is [insert doc].
+	ServerOptionOptionStatusOptionStatusError = ServerOptionOptionStatus("option_status_error")
+)
+
+func (enum ServerOptionOptionStatus) String() string {
+	if enum == "" {
+		// return default value if empty
+		return "option_status_unknown"
+	}
+	return string(enum)
+}
+
+func (enum ServerOptionOptionStatus) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%s"`, enum)), nil
+}
+
+func (enum *ServerOptionOptionStatus) UnmarshalJSON(data []byte) error {
+	tmp := ""
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	*enum = ServerOptionOptionStatus(ServerOptionOptionStatus(tmp).String())
+	return nil
+}
+
 type ServerPingStatus string
 
 const (
@@ -346,6 +450,8 @@ const (
 	ServerStatusLocked = ServerStatus("locked")
 	// ServerStatusOutOfStock is [insert doc].
 	ServerStatusOutOfStock = ServerStatus("out_of_stock")
+	// ServerStatusOrdered is [insert doc].
+	ServerStatusOrdered = ServerStatus("ordered")
 )
 
 func (enum ServerStatus) String() string {
@@ -368,6 +474,38 @@ func (enum *ServerStatus) UnmarshalJSON(data []byte) error {
 	}
 
 	*enum = ServerStatus(ServerStatus(tmp).String())
+	return nil
+}
+
+type SettingType string
+
+const (
+	// SettingTypeUnknown is [insert doc].
+	SettingTypeUnknown = SettingType("unknown")
+	// SettingTypeSMTP is [insert doc].
+	SettingTypeSMTP = SettingType("smtp")
+)
+
+func (enum SettingType) String() string {
+	if enum == "" {
+		// return default value if empty
+		return "unknown"
+	}
+	return string(enum)
+}
+
+func (enum SettingType) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%s"`, enum)), nil
+}
+
+func (enum *SettingType) UnmarshalJSON(data []byte) error {
+	tmp := ""
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	*enum = SettingType(SettingType(tmp).String())
 	return nil
 }
 
@@ -401,6 +539,14 @@ type CreateServerRequestInstall struct {
 	Hostname string `json:"hostname"`
 
 	SSHKeyIDs []string `json:"ssh_key_ids"`
+
+	User *string `json:"user"`
+
+	Password *string `json:"password"`
+
+	ServiceUser *string `json:"service_user"`
+
+	ServicePassword *string `json:"service_password"`
 }
 
 // Disk: disk
@@ -453,6 +599,14 @@ type ListOffersResponse struct {
 	Offers []*Offer `json:"offers"`
 }
 
+// ListOptionsResponse: list options response
+type ListOptionsResponse struct {
+	// TotalCount: total count of matching options
+	TotalCount uint32 `json:"total_count"`
+	// Options: options that match filters
+	Options []*Option `json:"options"`
+}
+
 // ListServerEventsResponse: list server events response
 type ListServerEventsResponse struct {
 	// TotalCount: total count of matching events
@@ -467,6 +621,14 @@ type ListServersResponse struct {
 	TotalCount uint32 `json:"total_count"`
 	// Servers: servers that match filters
 	Servers []*Server `json:"servers"`
+}
+
+// ListSettingsResponse: list settings response
+type ListSettingsResponse struct {
+	// TotalCount: total count of matching sttings
+	TotalCount uint32 `json:"total_count"`
+	// Settings: settings that match filters
+	Settings []*Setting `json:"settings"`
 }
 
 // Memory: memory
@@ -488,6 +650,26 @@ type OS struct {
 	Name string `json:"name"`
 	// Version: version of the OS
 	Version string `json:"version"`
+	// LogoURL: URL of this os's logo
+	LogoURL string `json:"logo_url"`
+	// SSH: define the SSH requirements to install the OS
+	SSH *OSOSField `json:"ssh"`
+	// User: define the username requirements to install the OS
+	User *OSOSField `json:"user"`
+	// Password: define the password requirements to install the OS
+	Password *OSOSField `json:"password"`
+	// ServiceUser: define the username requirements to install the service
+	ServiceUser *OSOSField `json:"service_user"`
+	// ServicePassword: define the password requirements to install the service
+	ServicePassword *OSOSField `json:"service_password"`
+}
+
+type OSOSField struct {
+	Editable bool `json:"editable"`
+
+	Required bool `json:"required"`
+
+	DefaultValue *string `json:"default_value"`
 }
 
 // Offer: offer
@@ -522,6 +704,46 @@ type Offer struct {
 	PersistentMemories []*PersistentMemory `json:"persistent_memories"`
 	// RaidControllers: raid controller specifications of the offer
 	RaidControllers []*RaidController `json:"raid_controllers"`
+	// IncompatibleOsIDs: array of incompatible OS ids
+	IncompatibleOsIDs []string `json:"incompatible_os_ids"`
+	// SubscriptionPeriod: period of subscription for the offer
+	//
+	// Default value: unknown_subscription_period
+	SubscriptionPeriod OfferSubscriptionPeriod `json:"subscription_period"`
+	// OperationPath: operation path of the service
+	OperationPath string `json:"operation_path"`
+	// Fee: fee to pay on order
+	Fee *scw.Money `json:"fee"`
+	// Options: options available on offer
+	Options []*OfferOptionOffer `json:"options"`
+}
+
+type OfferOptionOffer struct {
+	ID string `json:"id"`
+
+	Name string `json:"name"`
+
+	Price *scw.Money `json:"price"`
+
+	Enabled bool `json:"enabled"`
+	// SubscriptionPeriod:
+	//
+	// Default value: unknown_subscription_period
+	SubscriptionPeriod OfferSubscriptionPeriod `json:"subscription_period"`
+
+	Manageable bool `json:"manageable"`
+
+	OsID *string `json:"os_id"`
+}
+
+// Option: option
+type Option struct {
+	// ID: ID of the option
+	ID string `json:"id"`
+	// Name: name of the option
+	Name string `json:"name"`
+	// Manageable: is false if the option could not be remove
+	Manageable bool `json:"manageable"`
 }
 
 type PersistentMemory struct {
@@ -560,6 +782,8 @@ type Server struct {
 	Status ServerStatus `json:"status"`
 	// OfferID: offer ID of the server
 	OfferID string `json:"offer_id"`
+	// OfferName: offer name of the server
+	OfferName string `json:"offer_name"`
 	// Tags: array of customs tags attached to the server
 	Tags []string `json:"tags"`
 	// IPs: array of IPs attached to the server
@@ -578,6 +802,8 @@ type Server struct {
 	//
 	// Default value: ping_status_unknown
 	PingStatus ServerPingStatus `json:"ping_status"`
+	// Options: options enabled on server
+	Options []*ServerOption `json:"options"`
 }
 
 // ServerEvent: server event
@@ -602,6 +828,38 @@ type ServerInstall struct {
 	//
 	// Default value: unknown
 	Status ServerInstallStatus `json:"status"`
+
+	User string `json:"user"`
+
+	ServiceUser string `json:"service_user"`
+
+	ServiceURL string `json:"service_url"`
+}
+
+type ServerOption struct {
+	ID string `json:"id"`
+
+	Name string `json:"name"`
+	// Status:
+	//
+	// Default value: option_status_unknown
+	Status ServerOptionOptionStatus `json:"status"`
+
+	Manageable bool `json:"manageable"`
+}
+
+// Setting: setting
+type Setting struct {
+	// ID: ID of the setting
+	ID string `json:"id"`
+	// Type: type of the setting
+	//
+	// Default value: unknown
+	Type SettingType `json:"type"`
+	// ProjectID: ID of the project ID
+	ProjectID string `json:"project_id"`
+	// Enabled: the setting is enable or disable
+	Enabled bool `json:"enabled"`
 }
 
 // Service API
@@ -616,21 +874,23 @@ type ListServersRequest struct {
 	//
 	// Default value: created_at_asc
 	OrderBy ListServersRequestOrderBy `json:"-"`
-	// Tags: filter servers by tags
+	// Tags: filter by tags
 	Tags []string `json:"-"`
-	// Status: filter servers by status
+	// Status: filter by status
 	Status []string `json:"-"`
-	// Name: filter servers by name
+	// Name: filter by name
 	Name *string `json:"-"`
-	// OrganizationID: filter servers by organization ID
+	// OrganizationID: filter by organization ID
 	OrganizationID *string `json:"-"`
-	// ProjectID: filter servers by project ID
+	// ProjectID: filter by project ID
 	ProjectID *string `json:"-"`
+	// OptionID: filter by option ID
+	OptionID *string `json:"-"`
 }
 
-// ListServers: list baremetal servers for organization
+// ListServers: list elastic metal servers for organization
 //
-// List baremetal servers for organization.
+// List elastic metal servers for organization.
 func (s *API) ListServers(req *ListServersRequest, opts ...scw.RequestOption) (*ListServersResponse, error) {
 	var err error
 
@@ -653,6 +913,7 @@ func (s *API) ListServers(req *ListServersRequest, opts ...scw.RequestOption) (*
 	parameter.AddToQuery(query, "name", req.Name)
 	parameter.AddToQuery(query, "organization_id", req.OrganizationID)
 	parameter.AddToQuery(query, "project_id", req.ProjectID)
+	parameter.AddToQuery(query, "option_id", req.OptionID)
 
 	if fmt.Sprint(req.Zone) == "" {
 		return nil, errors.New("field Zone cannot be empty in request")
@@ -674,32 +935,13 @@ func (s *API) ListServers(req *ListServersRequest, opts ...scw.RequestOption) (*
 	return &resp, nil
 }
 
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListServersResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListServersResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListServersResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.Servers = append(r.Servers, results.Servers...)
-	r.TotalCount += uint32(len(results.Servers))
-	return uint32(len(results.Servers)), nil
-}
-
 type GetServerRequest struct {
 	Zone scw.Zone `json:"-"`
 	// ServerID: ID of the server
 	ServerID string `json:"-"`
 }
 
-// GetServer: get a specific baremetal server
+// GetServer: get a specific elastic metal server
 //
 // Get the server associated with the given ID.
 func (s *API) GetServer(req *GetServerRequest, opts ...scw.RequestOption) (*Server, error) {
@@ -751,11 +993,13 @@ type CreateServerRequest struct {
 	Tags []string `json:"tags"`
 
 	Install *CreateServerRequestInstall `json:"install"`
+	// OptionIDs: iDs of options to enable on server
+	OptionIDs []string `json:"option_ids"`
 }
 
-// CreateServer: create a baremetal server
+// CreateServer: create a elastic metal server
 //
-// Create a new baremetal server. Once the server is created, you probably want to install an OS.
+// Create a new elastic metal server. Once the server is created, you probably want to install an OS.
 func (s *API) CreateServer(req *CreateServerRequest, opts ...scw.RequestOption) (*Server, error) {
 	var err error
 
@@ -810,7 +1054,7 @@ type UpdateServerRequest struct {
 	Tags *[]string `json:"tags"`
 }
 
-// UpdateServer: update a baremetal server
+// UpdateServer: update a elastic metal server
 //
 // Update the server associated with the given ID.
 func (s *API) UpdateServer(req *UpdateServerRequest, opts ...scw.RequestOption) (*Server, error) {
@@ -859,9 +1103,17 @@ type InstallServerRequest struct {
 	Hostname string `json:"hostname"`
 	// SSHKeyIDs: SSH key IDs authorized on the server
 	SSHKeyIDs []string `json:"ssh_key_ids"`
+	// User: user used for the installation
+	User *string `json:"user"`
+	// Password: password used for the installation
+	Password *string `json:"password"`
+	// ServiceUser: user used for the service to install
+	ServiceUser *string `json:"service_user"`
+	// ServicePassword: password used for the service to install
+	ServicePassword *string `json:"service_password"`
 }
 
-// InstallServer: install a baremetal server
+// InstallServer: install a elastic metal server
 //
 // Install an OS on the server associated with the given ID.
 func (s *API) InstallServer(req *InstallServerRequest, opts ...scw.RequestOption) (*Server, error) {
@@ -946,7 +1198,7 @@ type DeleteServerRequest struct {
 	ServerID string `json:"-"`
 }
 
-// DeleteServer: delete a baremetal server
+// DeleteServer: delete a elastic metal server
 //
 // Delete the server associated with the given ID.
 func (s *API) DeleteServer(req *DeleteServerRequest, opts ...scw.RequestOption) (*Server, error) {
@@ -990,7 +1242,7 @@ type RebootServerRequest struct {
 	BootType ServerBootType `json:"boot_type"`
 }
 
-// RebootServer: reboot a baremetal server
+// RebootServer: reboot a elastic metal server
 //
 // Reboot the server associated with the given ID, use boot param to reboot in rescue.
 func (s *API) RebootServer(req *RebootServerRequest, opts ...scw.RequestOption) (*Server, error) {
@@ -1039,7 +1291,7 @@ type StartServerRequest struct {
 	BootType ServerBootType `json:"boot_type"`
 }
 
-// StartServer: start a baremetal server
+// StartServer: start a elastic metal server
 //
 // Start the server associated with the given ID.
 func (s *API) StartServer(req *StartServerRequest, opts ...scw.RequestOption) (*Server, error) {
@@ -1084,7 +1336,7 @@ type StopServerRequest struct {
 	ServerID string `json:"-"`
 }
 
-// StopServer: stop a baremetal server
+// StopServer: stop a elastic metal server
 //
 // Stop the server associated with the given ID.
 func (s *API) StopServer(req *StopServerRequest, opts ...scw.RequestOption) (*Server, error) {
@@ -1182,25 +1434,6 @@ func (s *API) ListServerEvents(req *ListServerEventsRequest, opts ...scw.Request
 	return &resp, nil
 }
 
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListServerEventsResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListServerEventsResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListServerEventsResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.Events = append(r.Events, results.Events...)
-	r.TotalCount += uint32(len(results.Events))
-	return uint32(len(results.Events)), nil
-}
-
 type StartBMCAccessRequest struct {
 	Zone scw.Zone `json:"-"`
 	// ServerID: ID of the server
@@ -1209,9 +1442,9 @@ type StartBMCAccessRequest struct {
 	IP net.IP `json:"ip"`
 }
 
-// StartBMCAccess: start BMC (Baseboard Management Controller) access for a given baremetal server
+// StartBMCAccess: unvailable - Start BMC (Baseboard Management Controller) access for a given elastic metal server
 //
-// Start BMC (Baseboard Management Controller) access associated with the given ID.
+// Unvailable - Start BMC (Baseboard Management Controller) access associated with the given ID.
 // The BMC (Baseboard Management Controller) access is available one hour after the installation of the server.
 //
 func (s *API) StartBMCAccess(req *StartBMCAccessRequest, opts ...scw.RequestOption) (*BMCAccess, error) {
@@ -1256,7 +1489,7 @@ type GetBMCAccessRequest struct {
 	ServerID string `json:"-"`
 }
 
-// GetBMCAccess: get BMC (Baseboard Management Controller) access for a given baremetal server
+// GetBMCAccess: get BMC (Baseboard Management Controller) access for a given elastic metal server
 //
 // Get the BMC (Baseboard Management Controller) access associated with the given ID.
 func (s *API) GetBMCAccess(req *GetBMCAccessRequest, opts ...scw.RequestOption) (*BMCAccess, error) {
@@ -1296,7 +1529,7 @@ type StopBMCAccessRequest struct {
 	ServerID string `json:"-"`
 }
 
-// StopBMCAccess: stop BMC (Baseboard Management Controller) access for a given baremetal server
+// StopBMCAccess: stop BMC (Baseboard Management Controller) access for a given elastic metal server
 //
 // Stop BMC (Baseboard Management Controller) access associated with the given ID.
 func (s *API) StopBMCAccess(req *StopBMCAccessRequest, opts ...scw.RequestOption) error {
@@ -1381,12 +1614,113 @@ func (s *API) UpdateIP(req *UpdateIPRequest, opts ...scw.RequestOption) (*IP, er
 	return &resp, nil
 }
 
+type AddOptionServerRequest struct {
+	Zone scw.Zone `json:"-"`
+	// ServerID: ID of the server
+	ServerID string `json:"-"`
+	// OptionID: ID of the option to add
+	OptionID string `json:"-"`
+}
+
+// AddOptionServer: add server option
+//
+// Add an option to a specific server.
+func (s *API) AddOptionServer(req *AddOptionServerRequest, opts ...scw.RequestOption) (*Server, error) {
+	var err error
+
+	if req.Zone == "" {
+		defaultZone, _ := s.client.GetDefaultZone()
+		req.Zone = defaultZone
+	}
+
+	if fmt.Sprint(req.Zone) == "" {
+		return nil, errors.New("field Zone cannot be empty in request")
+	}
+
+	if fmt.Sprint(req.ServerID) == "" {
+		return nil, errors.New("field ServerID cannot be empty in request")
+	}
+
+	if fmt.Sprint(req.OptionID) == "" {
+		return nil, errors.New("field OptionID cannot be empty in request")
+	}
+
+	scwReq := &scw.ScalewayRequest{
+		Method:  "POST",
+		Path:    "/baremetal/v1/zones/" + fmt.Sprint(req.Zone) + "/servers/" + fmt.Sprint(req.ServerID) + "/options/" + fmt.Sprint(req.OptionID) + "",
+		Headers: http.Header{},
+	}
+
+	err = scwReq.SetBody(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp Server
+
+	err = s.client.Do(scwReq, &resp, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+type DeleteOptionServerRequest struct {
+	Zone scw.Zone `json:"-"`
+	// ServerID: ID of the server
+	ServerID string `json:"-"`
+	// OptionID: ID of the option to delete
+	OptionID string `json:"-"`
+}
+
+// DeleteOptionServer: delete server option
+//
+// Delete an option from a specific server.
+func (s *API) DeleteOptionServer(req *DeleteOptionServerRequest, opts ...scw.RequestOption) (*Server, error) {
+	var err error
+
+	if req.Zone == "" {
+		defaultZone, _ := s.client.GetDefaultZone()
+		req.Zone = defaultZone
+	}
+
+	if fmt.Sprint(req.Zone) == "" {
+		return nil, errors.New("field Zone cannot be empty in request")
+	}
+
+	if fmt.Sprint(req.ServerID) == "" {
+		return nil, errors.New("field ServerID cannot be empty in request")
+	}
+
+	if fmt.Sprint(req.OptionID) == "" {
+		return nil, errors.New("field OptionID cannot be empty in request")
+	}
+
+	scwReq := &scw.ScalewayRequest{
+		Method:  "DELETE",
+		Path:    "/baremetal/v1/zones/" + fmt.Sprint(req.Zone) + "/servers/" + fmt.Sprint(req.ServerID) + "/options/" + fmt.Sprint(req.OptionID) + "",
+		Headers: http.Header{},
+	}
+
+	var resp Server
+
+	err = s.client.Do(scwReq, &resp, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 type ListOffersRequest struct {
 	Zone scw.Zone `json:"-"`
 	// Page: page number
 	Page *int32 `json:"-"`
 	// PageSize: number of offers per page
 	PageSize *uint32 `json:"-"`
+	// SubscriptionPeriod: period of subscription to filter offers
+	//
+	// Default value: unknown_subscription_period
+	SubscriptionPeriod OfferSubscriptionPeriod `json:"-"`
 }
 
 // ListOffers: list offers
@@ -1408,6 +1742,7 @@ func (s *API) ListOffers(req *ListOffersRequest, opts ...scw.RequestOption) (*Li
 	query := url.Values{}
 	parameter.AddToQuery(query, "page", req.Page)
 	parameter.AddToQuery(query, "page_size", req.PageSize)
+	parameter.AddToQuery(query, "subscription_period", req.SubscriptionPeriod)
 
 	if fmt.Sprint(req.Zone) == "" {
 		return nil, errors.New("field Zone cannot be empty in request")
@@ -1427,25 +1762,6 @@ func (s *API) ListOffers(req *ListOffersRequest, opts ...scw.RequestOption) (*Li
 		return nil, err
 	}
 	return &resp, nil
-}
-
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListOffersResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListOffersResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListOffersResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.Offers = append(r.Offers, results.Offers...)
-	r.TotalCount += uint32(len(results.Offers))
-	return uint32(len(results.Offers)), nil
 }
 
 type GetOfferRequest struct {
@@ -1488,6 +1804,203 @@ func (s *API) GetOffer(req *GetOfferRequest, opts ...scw.RequestOption) (*Offer,
 	return &resp, nil
 }
 
+type GetOptionRequest struct {
+	Zone scw.Zone `json:"-"`
+	// OptionID: ID of the option
+	OptionID string `json:"-"`
+}
+
+// GetOption: get option
+//
+// Return specific option for the given ID.
+func (s *API) GetOption(req *GetOptionRequest, opts ...scw.RequestOption) (*Option, error) {
+	var err error
+
+	if req.Zone == "" {
+		defaultZone, _ := s.client.GetDefaultZone()
+		req.Zone = defaultZone
+	}
+
+	if fmt.Sprint(req.Zone) == "" {
+		return nil, errors.New("field Zone cannot be empty in request")
+	}
+
+	if fmt.Sprint(req.OptionID) == "" {
+		return nil, errors.New("field OptionID cannot be empty in request")
+	}
+
+	scwReq := &scw.ScalewayRequest{
+		Method:  "GET",
+		Path:    "/baremetal/v1/zones/" + fmt.Sprint(req.Zone) + "/options/" + fmt.Sprint(req.OptionID) + "",
+		Headers: http.Header{},
+	}
+
+	var resp Option
+
+	err = s.client.Do(scwReq, &resp, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+type ListOptionsRequest struct {
+	Zone scw.Zone `json:"-"`
+	// Page: page number
+	Page *int32 `json:"-"`
+	// PageSize: number of options per page
+	PageSize *uint32 `json:"-"`
+	// OfferID: filter options by offer_id
+	OfferID *string `json:"-"`
+	// Name: filter options by name
+	Name *string `json:"-"`
+}
+
+// ListOptions: list options
+//
+// List all options matching with filters.
+func (s *API) ListOptions(req *ListOptionsRequest, opts ...scw.RequestOption) (*ListOptionsResponse, error) {
+	var err error
+
+	if req.Zone == "" {
+		defaultZone, _ := s.client.GetDefaultZone()
+		req.Zone = defaultZone
+	}
+
+	defaultPageSize, exist := s.client.GetDefaultPageSize()
+	if (req.PageSize == nil || *req.PageSize == 0) && exist {
+		req.PageSize = &defaultPageSize
+	}
+
+	query := url.Values{}
+	parameter.AddToQuery(query, "page", req.Page)
+	parameter.AddToQuery(query, "page_size", req.PageSize)
+	parameter.AddToQuery(query, "offer_id", req.OfferID)
+	parameter.AddToQuery(query, "name", req.Name)
+
+	if fmt.Sprint(req.Zone) == "" {
+		return nil, errors.New("field Zone cannot be empty in request")
+	}
+
+	scwReq := &scw.ScalewayRequest{
+		Method:  "GET",
+		Path:    "/baremetal/v1/zones/" + fmt.Sprint(req.Zone) + "/options",
+		Query:   query,
+		Headers: http.Header{},
+	}
+
+	var resp ListOptionsResponse
+
+	err = s.client.Do(scwReq, &resp, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+type ListSettingsRequest struct {
+	Zone scw.Zone `json:"-"`
+	// Page: page number
+	Page *int32 `json:"-"`
+	// PageSize: set the maximum list size
+	PageSize *uint32 `json:"-"`
+	// OrderBy: order the response
+	//
+	// Default value: created_at_asc
+	OrderBy ListSettingsRequestOrderBy `json:"-"`
+	// ProjectID: ID of the project
+	ProjectID *string `json:"-"`
+}
+
+// ListSettings: list all settings
+//
+// Return all settings for a project ID.
+func (s *API) ListSettings(req *ListSettingsRequest, opts ...scw.RequestOption) (*ListSettingsResponse, error) {
+	var err error
+
+	if req.Zone == "" {
+		defaultZone, _ := s.client.GetDefaultZone()
+		req.Zone = defaultZone
+	}
+
+	defaultPageSize, exist := s.client.GetDefaultPageSize()
+	if (req.PageSize == nil || *req.PageSize == 0) && exist {
+		req.PageSize = &defaultPageSize
+	}
+
+	query := url.Values{}
+	parameter.AddToQuery(query, "page", req.Page)
+	parameter.AddToQuery(query, "page_size", req.PageSize)
+	parameter.AddToQuery(query, "order_by", req.OrderBy)
+	parameter.AddToQuery(query, "project_id", req.ProjectID)
+
+	if fmt.Sprint(req.Zone) == "" {
+		return nil, errors.New("field Zone cannot be empty in request")
+	}
+
+	scwReq := &scw.ScalewayRequest{
+		Method:  "GET",
+		Path:    "/baremetal/v1/zones/" + fmt.Sprint(req.Zone) + "/settings",
+		Query:   query,
+		Headers: http.Header{},
+	}
+
+	var resp ListSettingsResponse
+
+	err = s.client.Do(scwReq, &resp, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+type UpdateSettingRequest struct {
+	Zone scw.Zone `json:"-"`
+	// SettingID: ID of the setting
+	SettingID string `json:"-"`
+	// Enabled: enable/Disable the setting
+	Enabled *bool `json:"enabled"`
+}
+
+// UpdateSetting: update setting
+//
+// Update a setting for a project ID (enable or disable).
+func (s *API) UpdateSetting(req *UpdateSettingRequest, opts ...scw.RequestOption) (*Setting, error) {
+	var err error
+
+	if req.Zone == "" {
+		defaultZone, _ := s.client.GetDefaultZone()
+		req.Zone = defaultZone
+	}
+
+	if fmt.Sprint(req.Zone) == "" {
+		return nil, errors.New("field Zone cannot be empty in request")
+	}
+
+	if fmt.Sprint(req.SettingID) == "" {
+		return nil, errors.New("field SettingID cannot be empty in request")
+	}
+
+	scwReq := &scw.ScalewayRequest{
+		Method:  "PATCH",
+		Path:    "/baremetal/v1/zones/" + fmt.Sprint(req.Zone) + "/settings/" + fmt.Sprint(req.SettingID) + "",
+		Headers: http.Header{},
+	}
+
+	err = scwReq.SetBody(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp Setting
+
+	err = s.client.Do(scwReq, &resp, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 type ListOSRequest struct {
 	Zone scw.Zone `json:"-"`
 	// Page: page number
@@ -1498,9 +2011,9 @@ type ListOSRequest struct {
 	OfferID *string `json:"-"`
 }
 
-// ListOS: list all available OS that can be install on a baremetal server
+// ListOS: list all available OS that can be install on a elastic metal server
 //
-// List all available OS that can be install on a baremetal server.
+// List all available OS that can be install on a elastic metal server.
 func (s *API) ListOS(req *ListOSRequest, opts ...scw.RequestOption) (*ListOSResponse, error) {
 	var err error
 
@@ -1537,25 +2050,6 @@ func (s *API) ListOS(req *ListOSRequest, opts ...scw.RequestOption) (*ListOSResp
 		return nil, err
 	}
 	return &resp, nil
-}
-
-// UnsafeGetTotalCount should not be used
-// Internal usage only
-func (r *ListOSResponse) UnsafeGetTotalCount() uint32 {
-	return r.TotalCount
-}
-
-// UnsafeAppend should not be used
-// Internal usage only
-func (r *ListOSResponse) UnsafeAppend(res interface{}) (uint32, error) {
-	results, ok := res.(*ListOSResponse)
-	if !ok {
-		return 0, errors.New("%T type cannot be appended to type %T", res, r)
-	}
-
-	r.Os = append(r.Os, results.Os...)
-	r.TotalCount += uint32(len(results.Os))
-	return uint32(len(results.Os)), nil
 }
 
 type GetOSRequest struct {
@@ -1596,4 +2090,118 @@ func (s *API) GetOS(req *GetOSRequest, opts ...scw.RequestOption) (*OS, error) {
 		return nil, err
 	}
 	return &resp, nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListServersResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListServersResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListServersResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.Servers = append(r.Servers, results.Servers...)
+	r.TotalCount += uint32(len(results.Servers))
+	return uint32(len(results.Servers)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListServerEventsResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListServerEventsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListServerEventsResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.Events = append(r.Events, results.Events...)
+	r.TotalCount += uint32(len(results.Events))
+	return uint32(len(results.Events)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListOffersResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListOffersResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListOffersResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.Offers = append(r.Offers, results.Offers...)
+	r.TotalCount += uint32(len(results.Offers))
+	return uint32(len(results.Offers)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListOptionsResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListOptionsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListOptionsResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.Options = append(r.Options, results.Options...)
+	r.TotalCount += uint32(len(results.Options))
+	return uint32(len(results.Options)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListSettingsResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListSettingsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListSettingsResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.Settings = append(r.Settings, results.Settings...)
+	r.TotalCount += uint32(len(results.Settings))
+	return uint32(len(results.Settings)), nil
+}
+
+// UnsafeGetTotalCount should not be used
+// Internal usage only
+func (r *ListOSResponse) UnsafeGetTotalCount() uint32 {
+	return r.TotalCount
+}
+
+// UnsafeAppend should not be used
+// Internal usage only
+func (r *ListOSResponse) UnsafeAppend(res interface{}) (uint32, error) {
+	results, ok := res.(*ListOSResponse)
+	if !ok {
+		return 0, errors.New("%T type cannot be appended to type %T", res, r)
+	}
+
+	r.Os = append(r.Os, results.Os...)
+	r.TotalCount += uint32(len(results.Os))
+	return uint32(len(results.Os)), nil
 }
