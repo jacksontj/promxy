@@ -121,12 +121,12 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 			MaxSamples:               50000000,
 			NoStepSubqueryIntervalFn: func(int64) int64 { return (1 * time.Minute).Milliseconds() },
 			EnableAtModifier:         true,
-		}),
-		s.(storage.SampleAndChunkQueryable),
-		nil, //appendable
-		nil, // exemplarQueryable
-		nil, //factoryTr
-		nil, //factoryAr
+		}), // Query Engine
+		s.(storage.SampleAndChunkQueryable), // SampleAndChunkQueryable
+		nil,                                 //appendable
+		nil,                                 // exemplarQueryable
+		nil,                                 //factoryTr
+		nil,                                 //factoryAr
 		cfgFunc,
 		nil, // flags
 		v1.GlobalURLOptions{
@@ -143,11 +143,13 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 		50000000,  // RemoteReadSampleLimit
 		1000,      // RemoteReadConcurrencyLimit
 		1048576,   // RemoteReadBytesInFrame
+		false,     // isAgent
 		nil,       // CORSOrigin
 		nil,       // runtimeInfo
 		nil,       // buildInfo
 		nil,       // gatherer
 		nil,       // registerer
+		nil,       // statsRenderer
 	)
 
 	apiRouter := route.New()
