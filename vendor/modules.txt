@@ -399,7 +399,7 @@ github.com/pmezard/go-difflib/difflib
 # github.com/prometheus/alertmanager v0.23.0
 ## explicit; go 1.16
 github.com/prometheus/alertmanager/api/v2/models
-# github.com/prometheus/client_golang v1.11.1-0.20210607165600-196536534fbb
+# github.com/prometheus/client_golang v1.11.1
 ## explicit; go 1.13
 github.com/prometheus/client_golang/api
 github.com/prometheus/client_golang/api/prometheus/v1
