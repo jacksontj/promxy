@@ -598,7 +598,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 		subEvalStmt.Start = s.Start.Add(-n.Offset).Add(-n.Range).Truncate(subEvalStmt.Interval)
 		if subEvalStmt.Start.Before(s.Start.Add(-n.Offset).Add(-n.Range)) {
-			subEvalStmt.Start.Add(subEvalStmt.Interval)
+			subEvalStmt.Start = subEvalStmt.Start.Add(subEvalStmt.Interval)
 		}
 
 		newN, err := parser.Inspect(ctx, &subEvalStmt, func(parser.Node, []parser.Node) error { return nil }, p.NodeReplacer)
