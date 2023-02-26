@@ -28,7 +28,7 @@ func (s *Storage) Appender() (storage.Appender, error) {
 }
 
 // Add implements storage.Appender.
-func (s *Storage) Append(ref uint64, l labels.Labels, t int64, v float64) (uint64, error) {
+func (s *Storage) Append(ref storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	for _, q := range s.queues {
@@ -43,7 +43,7 @@ func (s *Storage) Append(ref uint64, l labels.Labels, t int64, v float64) (uint6
 	return 0, nil
 }
 
-func (s *Storage) AppendExemplar(ref uint64, l labels.Labels, e exemplar.Exemplar) (uint64, error) {
+func (s *Storage) AppendExemplar(ref storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
 	return 0, fmt.Errorf("not supported")
 }
 
