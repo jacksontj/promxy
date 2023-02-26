@@ -202,9 +202,9 @@ func (p *ProxyStorage) Stats(statsByLabelName string) (*tsdb.Stats, error) {
 // chunks of the query, farming them out to prometheus hosts, then stitching the results back together.
 // An example would be a sum, we can sum multiple sums and come up with the same result -- so we do.
 // There are a few ground rules for this:
-//      - Children cannot be AggregateExpr: aggregates have their own combining logic, so its not safe to send a subquery with additional aggregations
-//      - offsets within the subtree must match: if they don't then we'll get mismatched data, so we wait until we are far enough down the tree that they converge
-//      - Don't reduce accuracy/granularity: the intention of this is to get the correct data faster, meaning correctness overrules speed.
+//   - Children cannot be AggregateExpr: aggregates have their own combining logic, so its not safe to send a subquery with additional aggregations
+//   - offsets within the subtree must match: if they don't then we'll get mismatched data, so we wait until we are far enough down the tree that they converge
+//   - Don't reduce accuracy/granularity: the intention of this is to get the correct data faster, meaning correctness overrules speed.
 func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, node parser.Node, path []parser.Node) (parser.Node, error) {
 	isAgg := func(node parser.Node) bool {
 		_, ok := node.(*parser.AggregateExpr)
