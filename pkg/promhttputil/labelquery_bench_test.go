@@ -3,7 +3,7 @@ package promhttputil
 import (
 	"testing"
 
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 func BenchmarkMatcherToString(b *testing.B) {

@@ -1,7 +1,7 @@
 package promhttputil
 
 import (
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 // MatcherToString converts a []*labels.Matcher into the actual matcher you would
