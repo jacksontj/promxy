@@ -21,6 +21,8 @@ func (m *MetricsAllowed) Update(items *model.LabelValues) *MetricsAllowed {
 	for _, item := range *items {
 		m.items.Add(string(item))
 	}
+	m.items.Remove("grpc_client_handled_total")
+	m.items.Remove("up")
 	return m
 }
 

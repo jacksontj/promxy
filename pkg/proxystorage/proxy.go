@@ -259,7 +259,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 				}
 			}
 		} else {
-			fmt.Println("AST is nil", node.String())
+			logrus.Debug("AST is nil", node.String())
 		}
 
 	}
