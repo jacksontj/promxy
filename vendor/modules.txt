@@ -119,7 +119,7 @@ github.com/dennwc/varint
 # github.com/digitalocean/godo v1.65.0
 ## explicit; go 1.14
 github.com/digitalocean/godo
-# github.com/docker/distribution v2.7.1+incompatible
+# github.com/docker/distribution v2.8.0+incompatible
 ## explicit
 github.com/docker/distribution/digestset
 github.com/docker/distribution/reference
