@@ -3,10 +3,12 @@ package proxystorage
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"reflect"
 	"sync/atomic"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
@@ -34,7 +36,7 @@ const MetricNameWorkaroundLabel = "__name"
 type proxyStorageState struct {
 	sgs            []*servergroup.ServerGroup
 	client         promclient.API
-	cfg            *proxyconfig.PromxyConfig
+	cfg            *proxyconfig.Config
 	remoteStorage  *remote.Storage
 	appender       storage.Appender
 	appenderCloser func() error
@@ -98,7 +100,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	apis := make([]promclient.API, len(c.ServerGroups))
 	newState := &proxyStorageState{
 		sgs: make([]*servergroup.ServerGroup, len(c.ServerGroups)),
-		cfg: &c.PromxyConfig,
+		cfg: c,
 	}
 	for i, sgCfg := range c.ServerGroups {
 		tmp := servergroup.New()
@@ -152,6 +154,31 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	return nil
 }
 
+func (p *ProxyStorage) ConfigHandler(w http.ResponseWriter, r *http.Request) {
+	state := p.GetState()
+	v := map[string]interface{}{
+		"status": "success",
+		"data": map[string]string{
+			"yaml": state.cfg.String(),
+		},
+	}
+
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+	b, err := json.Marshal(v)
+	if err != nil {
+		logrus.Error("msg", "error marshaling json response", "err", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if n, err := w.Write(b); err != nil {
+		logrus.Error("msg", "error writing response", "bytesWritten", n, "err", err)
+	}
+
+}
+
 // Querier returns a new Querier on the storage.
 func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
 	state := p.GetState()
@@ -161,7 +188,7 @@ func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Q
 		timestamp.Time(maxt).UTC(),
 		state.client,
 
-		state.cfg,
+		&state.cfg.PromxyConfig,
 	}, nil
 }
 
