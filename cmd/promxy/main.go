@@ -3,24 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"path"
-	"regexp"
-
-	"github.com/jacksontj/promxy/pkg/middleware"
-	"github.com/jacksontj/promxy/pkg/server"
-
-	"go.uber.org/atomic"
-	"k8s.io/klog"
-
-	"github.com/golang/glog"
-
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -29,6 +19,8 @@ import (
 	_ "net/http/pprof"
 
 	kitlog "github.com/go-kit/kit/log"
+	"github.com/golang/glog"
+	"github.com/grafana/regexp"
 	"github.com/jessevdk/go-flags"
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus"
@@ -49,10 +41,14 @@ import (
 	"github.com/prometheus/prometheus/util/strutil"
 	"github.com/prometheus/prometheus/web"
 	"github.com/sirupsen/logrus"
+	"go.uber.org/atomic"
+	"k8s.io/klog"
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/logging"
+	"github.com/jacksontj/promxy/pkg/middleware"
 	"github.com/jacksontj/promxy/pkg/proxystorage"
+	"github.com/jacksontj/promxy/pkg/server"
 )
 
 var (
@@ -320,7 +316,7 @@ func main() {
 			}
 			files = append(files, fs...)
 		}
-		if err := ruleManager.Update(time.Duration(cfg.GlobalConfig.EvaluationInterval), files, cfg.GlobalConfig.ExternalLabels, externalUrl.String()); err != nil {
+		if err := ruleManager.Update(time.Duration(cfg.GlobalConfig.EvaluationInterval), files, cfg.GlobalConfig.ExternalLabels, externalUrl.String(), nil); err != nil {
 			return err
 		}
 
@@ -385,7 +381,7 @@ func main() {
 
 	webHandler := web.New(logger, webOptions)
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(webHandler))
-	webHandler.Ready()
+	webHandler.SetReady(true)
 
 	apiPrefix := path.Join(webOptions.RoutePrefix, "/api/v1")
 	// Register API endpoint with correct route prefix
