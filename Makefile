@@ -24,7 +24,7 @@ imports:
 
 .PHONY: test
 test:
-	GO111MODULE=on $(GO) test -mod=vendor -tags netgo,builtinassets ./...
+	GO111MODULE=on $(GO) test -race -mod=vendor -tags netgo,builtinassets ./...
 
 .PHONY: release
 release:
@@ -42,5 +42,5 @@ vendor:
 
 .PHONY: update-prom-fork
 update-prom-fork:
-	GO111MODULE=on $(GO) mod edit -replace github.com/prometheus/prometheus=github.com/jacksontj/prometheus@v0.2.37.2-fork
+	GO111MODULE=on $(GO) mod edit -replace github.com/prometheus/prometheus=github.com/jacksontj/prometheus@v0.2.37.3-fork
 	$(MAKE) vendor

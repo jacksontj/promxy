@@ -10,6 +10,7 @@ require (
 	github.com/golang/snappy v0.0.4
 	github.com/grafana/regexp v0.0.0-20221122212121-6b5c0a4cb7fd
 	github.com/jessevdk/go-flags v1.5.0
+	github.com/json-iterator/go v1.1.12
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.2
@@ -104,7 +105,6 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
-	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kolo/xmlrpc v0.0.0-20201022064351-38db28db192b // indirect
 	github.com/linode/linodego v1.8.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
@@ -164,7 +164,7 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace github.com/prometheus/prometheus => github.com/jacksontj/prometheus v1.8.1-0.20230308053645-8213dd6c9a54
+replace github.com/prometheus/prometheus => github.com/jacksontj/prometheus v1.8.1-0.20230309220703-968ded36c597
 
 replace github.com/golang/glog => github.com/kubermatic/glog-gokit v0.0.0-20181129151237-8ab7e4c2d352
 
