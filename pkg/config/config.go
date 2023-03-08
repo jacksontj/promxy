@@ -48,6 +48,14 @@ type Config struct {
 	WebConfig web.TLSStruct `yaml:"tls_server_config"`
 }
 
+func (c *Config) String() string {
+	b, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Sprintf("<error creating config string: %s>", err)
+	}
+	return string(b)
+}
+
 // PromxyConfig is the configuration for Promxy itself
 type PromxyConfig struct {
 	// Config for each of the server groups promxy is configured to aggregate
