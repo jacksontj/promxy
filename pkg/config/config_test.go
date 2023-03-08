@@ -1,13 +1,12 @@
 package proxyconfig
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 )
 
 func TestConfigFromFile(t *testing.T) {
-	file, err := ioutil.TempFile(os.TempDir(), "")
+	file, err := os.CreateTemp(os.TempDir(), "")
 	if err != nil {
 		t.Errorf("Could not create temp file:")
 	}

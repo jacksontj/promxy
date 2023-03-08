@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -157,7 +156,7 @@ func (c *Client) Read(ctx context.Context, query *prompb.Query) (*prompb.QueryRe
 		return nil, fmt.Errorf("server returned HTTP status %s", httpResp.Status)
 	}
 
-	compressed, err = ioutil.ReadAll(httpResp.Body)
+	compressed, err = io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error reading response: %v", err)
 	}

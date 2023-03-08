@@ -4,9 +4,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -39,7 +40,7 @@ func TestUnauthenticatedServerFunctions(t *testing.T) {
 		t.Fatalf("could not make request to metrics endpoint: %s", err.Error())
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("could not read response body: %s", err.Error())
 	}
@@ -124,7 +125,7 @@ func TestMutualTLSClientCanConnectToAuthenticatedServerWithCerts(t *testing.T) {
 		t.Fatalf("could not make request to metrics endpoint: %s", err.Error())
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("could not read response body: %s", err.Error())
 	}
@@ -154,7 +155,7 @@ func getFreePort() (int, error) {
 }
 
 func setupAuthenticatedClient(t *testing.T) *http.Client {
-	caCert, err := ioutil.ReadFile("testdata/test-ca.crt")
+	caCert, err := os.ReadFile("testdata/test-ca.crt")
 	if err != nil {
 		t.Fatalf("could not read ca certificate: %s", err)
 	}

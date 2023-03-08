@@ -3,10 +3,10 @@ package test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -265,7 +265,7 @@ func TestEvaluations(t *testing.T) {
 }
 
 func newTestFromFile(t testutil.T, filename string) (*promql.Test, error) {
-	content, err := ioutil.ReadFile(filename)
+	content, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
