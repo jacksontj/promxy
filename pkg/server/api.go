@@ -3,8 +3,8 @@ package server
 import (
 	"crypto/tls"
 	"io"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/prometheus/exporter-toolkit/web"
@@ -82,7 +82,7 @@ func createAndStartHTTPS(srv *http.Server, tlsConfigFile string) (*http.Server, 
 }
 
 func parseConfigFile(tlsConfigFile string) (*tls.Config, error) {
-	content, err := ioutil.ReadFile(tlsConfigFile)
+	content, err := os.ReadFile(tlsConfigFile)
 	if err != nil {
 		return nil, err
 	}

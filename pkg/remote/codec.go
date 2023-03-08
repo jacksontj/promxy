@@ -16,7 +16,6 @@ package remote
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"sort"
 
@@ -48,7 +47,7 @@ func (e HTTPError) Status() int {
 
 // DecodeReadRequest reads a remote.Request from a http.Request.
 func DecodeReadRequest(r *http.Request) (*prompb.ReadRequest, error) {
-	compressed, err := ioutil.ReadAll(io.LimitReader(r.Body, decodeReadLimit))
+	compressed, err := io.ReadAll(io.LimitReader(r.Body, decodeReadLimit))
 	if err != nil {
 		return nil, err
 	}

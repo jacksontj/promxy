@@ -2,15 +2,13 @@ package proxyconfig
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/prometheus/exporter-toolkit/web"
-
 	"github.com/prometheus/prometheus/config"
+	yaml "gopkg.in/yaml.v2"
 
 	"github.com/jacksontj/promxy/pkg/servergroup"
-
-	yaml "gopkg.in/yaml.v2"
 )
 
 // DefaultPromxyConfig is the default promxy config that the config file
@@ -24,7 +22,7 @@ func ConfigFromFile(path string) (*Config, error) {
 		PromConfig:   config.DefaultConfig,
 		PromxyConfig: DefaultPromxyConfig,
 	}
-	configBytes, err := ioutil.ReadFile(path)
+	configBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("error loading config: %v", err)
 	}
