@@ -581,3 +581,80 @@ func (m *MultiAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 
 	return result, warnings.Warnings(), nil
 }
+
+// Metadata returns metadata about metrics currently scraped by the metric name.
+func (m *MultiAPI) Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+
+	type chanResult struct {
+		v   map[string][]v1.Metadata
+		err error
+		ls  model.Fingerprint
+	}
+
+	resultChans := make([]chan chanResult, len(m.apis))
+	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
+
+	for i, api := range m.apis {
+		resultChans[i] = make(chan chanResult, 1)
+		outstandingRequests[m.apiFingerprints[i]]++
+		go func(i int, retChan chan chanResult, api API, metric, limit string) {
+			start := time.Now()
+			result, err := api.Metadata(childContext, metric, limit)
+			took := time.Since(start)
+			if err != nil {
+				m.recordMetric(i, "query", "error", took.Seconds())
+			} else {
+				m.recordMetric(i, "query", "success", took.Seconds())
+			}
+			retChan <- chanResult{
+				v:   result,
+				err: NormalizePromError(err),
+				ls:  m.apiFingerprints[i],
+			}
+		}(i, resultChans[i], api, metric, limit)
+	}
+
+	// Wait for results as we get them
+	var result map[string][]v1.Metadata
+	var lastError error
+	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
+	for i := 0; i < len(m.apis); i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+
+		case ret := <-resultChans[i]:
+			outstandingRequests[ret.ls]--
+			if ret.err != nil {
+				// If there aren't enough outstanding requests to possibly succeed, no reason to wait
+				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
+					return nil, ret.err
+				}
+				lastError = ret.err
+			} else {
+				successMap[ret.ls]++
+				if result == nil {
+					result = ret.v
+				} else {
+					// Merge metadata!
+					for k, v := range ret.v {
+						if _, ok := result[k]; !ok {
+							result[k] = v
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Verify that we hit the requiredCount for all of the buckets
+	for k := range outstandingRequests {
+		if successMap[k] < m.requiredCount {
+			return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+		}
+	}
+
+	return result, nil
+}

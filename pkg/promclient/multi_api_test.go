@@ -19,6 +19,7 @@ type stubAPI struct {
 	queryRange  func() model.Value
 	series      func() []model.LabelSet
 	getValue    func() model.Value
+	metadata    func() map[string][]v1.Metadata
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
@@ -49,6 +50,11 @@ func (s *stubAPI) Series(ctx context.Context, matches []string, startTime time.T
 // GetValue loads the raw data for a given set of matchers in the time range
 func (s *stubAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
 	return s.getValue(), nil, nil
+}
+
+// Metadata returns metadata about metrics currently scraped by the metric name.
+func (s *stubAPI) Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
+	return s.metadata(), nil
 }
 
 type errorAPI struct {

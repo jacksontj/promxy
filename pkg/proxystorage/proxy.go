@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -161,6 +162,62 @@ func (p *ProxyStorage) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 		"data": map[string]string{
 			"yaml": state.cfg.String(),
 		},
+	}
+
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+	b, err := json.Marshal(v)
+	if err != nil {
+		logrus.Error("msg", "error marshaling json response", "err", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if n, err := w.Write(b); err != nil {
+		logrus.Error("msg", "error writing response", "bytesWritten", n, "err", err)
+	}
+}
+
+// MetadataHandler is an implementation of the metadata handler within the prometheus API
+func (p *ProxyStorage) MetadataHandler(w http.ResponseWriter, r *http.Request) {
+	// Check that "limit" is valid
+	var limit int
+	if s := r.FormValue("limit"); s != "" {
+		var err error
+		if limit, err = strconv.Atoi(s); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Do the metadata lookup
+	state := p.GetState()
+	metadata, err := state.client.Metadata(r.Context(), r.FormValue("metric"), r.FormValue("limit"))
+
+	// Trim the results to the requested limit
+	if len(metadata) > limit {
+		count := 0
+		for k := range metadata {
+			if count < limit {
+				count++
+			} else {
+				delete(metadata, k)
+			}
+		}
+	}
+
+	var v map[string]interface{}
+	if err != nil {
+		v = map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		}
+	} else {
+		v = map[string]interface{}{
+			"status": "success",
+			"data":   metadata,
+		}
 	}
 
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
