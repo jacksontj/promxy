@@ -64,3 +64,10 @@ func (n *IgnoreErrorAPI) Key() model.LabelSet {
 	}
 	return nil
 }
+
+// Metadata returns metadata about metrics currently scraped by the metric name.
+func (n *IgnoreErrorAPI) Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
+	// TODO: query all and merge
+	v, _ := n.A.Metadata(ctx, metric, limit)
+	return v, nil
+}

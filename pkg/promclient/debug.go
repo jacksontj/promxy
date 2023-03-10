@@ -164,3 +164,28 @@ func (d *DebugAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 
 	return v, w, err
 }
+
+// Metadata returns metadata about metrics currently scraped by the metric name.
+func (d *DebugAPI) Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
+	fields := logrus.Fields{
+		"api":    "Metadata",
+		"metric": metric,
+		"limit":  limit,
+	}
+
+	logrus.WithFields(fields).Debug(d.PrefixMessage)
+
+	s := time.Now()
+	v, err := d.A.Metadata(ctx, metric, limit)
+	fields["took"] = time.Since(s)
+
+	if logrus.GetLevel() > logrus.DebugLevel {
+		fields["value"] = v
+		fields["error"] = err
+		logrus.WithFields(fields).Trace(d.PrefixMessage)
+	} else {
+		logrus.WithFields(fields).Debug(d.PrefixMessage)
+	}
+
+	return v, err
+}

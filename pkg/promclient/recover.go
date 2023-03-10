@@ -72,3 +72,13 @@ func (api *recoverAPI) GetValue(ctx context.Context, start, end time.Time, match
 	}()
 	return api.A.GetValue(ctx, start, end, matchers)
 }
+
+// Metadata returns metadata about metrics currently scraped by the metric name.
+func (api *recoverAPI) Metadata(ctx context.Context, metric, limit string) (v map[string][]v1.Metadata, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+	return api.A.Metadata(ctx, metric, limit)
+}

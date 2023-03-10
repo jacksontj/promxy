@@ -23,6 +23,8 @@ type API interface {
 	Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error)
 	// GetValue loads the raw data for a given set of matchers in the time range
 	GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error)
+	// Metadata returns metadata about metrics currently scraped by the metric name.
+	Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error)
 }
 
 // APILabels includes a Key() mechanism to differentiate which APIs are "the same"
