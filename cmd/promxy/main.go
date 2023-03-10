@@ -65,9 +65,11 @@ var (
 		Name: "process_reload_time_seconds",
 		Help: "Last reload (SIGHUP) time of the process since unix epoch in seconds.",
 	})
-	// Version of promxy
-	Version = "<version>"
 )
+
+func init() {
+	prometheus.MustRegister(version.NewCollector("promxy"))
+}
 
 type cliOpts struct {
 	Version bool `long:"version" short:"v" description:"print out version and exit"`
@@ -168,7 +170,7 @@ func main() {
 	}
 
 	if opts.Version {
-		fmt.Println("Version", Version)
+		fmt.Println(version.Print("promxy"))
 		os.Exit(0)
 	}
 
