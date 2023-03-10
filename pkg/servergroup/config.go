@@ -7,6 +7,8 @@ import (
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 
+	"github.com/jacksontj/promxy/pkg/promclient"
+
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/model/relabel"
 )
@@ -88,6 +90,35 @@ type Config struct {
 	// So in reality its "the same", the difference is in prometheus these apply to the labels/targets of a scrape job,
 	// in promxy they apply to the prometheus hosts in the servergroup - but the behavior is the same.
 	RelabelConfigs []*relabel.Config `yaml:"relabel_configs,omitempty"`
+	// MetricsRelabelConfigs are similar in spirit to prometheus' relabel config but quite different.
+	// As this relabeling is being done within the query-path all relabel actions need to be reversible
+	// so that we can alter queries (e.g. matchers) based on the relabel config. This is done by strictly
+	// limiting the rewrite capability to just those subset of actions that can be reversed. Similar to
+	// prometheus' relabel capability these rules are executed in an order -- so the rules can be compounded
+	// to create relatively complex relabel behavior.
+	// To showcase the versatility, lets look at an example:
+	//
+	//    metrics_relabel_configs:
+	//      # this will drop the `replica` label; enabling replica deduplication
+	//      # similar to thanos -- https://github.com/thanos-io/thanos/blob/master/docs/components/query.md#deduplication
+	//      - action: labeldrop
+	//        source_label: replica
+	//      # this will replace the `job` label with `scrape_job`
+	//      - action: replace
+	//        source_label: job
+	//        target_label: scrape_job
+	//      # this will drop the label `job`.
+	//      - action: labeldrop
+	//        source_label: job
+	//      # this will lowecase the `branch` label in-place (as source_label and target_label match)
+	//      - action: lowercase
+	//        source_label: branch
+	//        target_label: branch
+	//      # this will uppercase the `instance` label into `instanceUpper`
+	//      - action: uppercase
+	//        source_label: instance
+	//        target_label: instanceUpper
+	MetricsRelabelConfigs []*promclient.MetricRelabelConfig `yaml:"metrics_relabel_configs,omitempty"`
 	// ServiceDiscoveryConfigs is a set of ServiceDiscoveryConfig options that allow promxy to discover
 	// all hosts in the server_group
 	ServiceDiscoveryConfigs discovery.Configs `yaml:"-"`
