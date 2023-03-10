@@ -1,0 +1,2 @@
+load 5m
+  prometheus_build_info{branch="HEAD", goversion="go1.16.4", instance="demo.do.prometheus.io:9090", job="prometheus", revision="24c9b61221f7006e87cd62b9fe2901d43e19ed53", version="2.27.0"} 0+10x10

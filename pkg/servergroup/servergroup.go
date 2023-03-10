@@ -218,6 +218,16 @@ SyncLoop:
 						// Add labels
 						apiClient = &promclient.AddLabelClient{apiClient, modelLabelSet.Merge(s.Cfg.Labels)}
 
+						// Add MetricRelabel if set
+						if len(s.Cfg.MetricsRelabelConfigs) > 0 {
+							tmp, err := promclient.NewMetricsRelabelClient(apiClient, s.Cfg.MetricsRelabelConfigs)
+							if err != nil {
+								panic(err) // TODO
+							}
+							apiClient = tmp
+
+						}
+
 						// If debug logging is enabled, wrap the client with a debugAPI client
 						// Since these are called in the reverse order of what we add, we want
 						// to make sure that this is the last wrap of the client
