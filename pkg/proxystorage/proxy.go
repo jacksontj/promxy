@@ -112,7 +112,12 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		newState.sgs[i] = tmp
 		apis[i] = tmp
 	}
-	newState.client = promclient.NewTimeTruncate(promclient.NewMultiAPI(apis, model.TimeFromUnix(0), nil, len(apis)))
+	multiApi, err := promclient.NewMultiAPI(apis, model.TimeFromUnix(0), nil, len(apis))
+	if err != nil {
+		return err
+	}
+
+	newState.client = promclient.NewTimeTruncate(multiApi)
 
 	if failed {
 		newState.Cancel(nil)
