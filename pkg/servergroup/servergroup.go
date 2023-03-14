@@ -235,9 +235,13 @@ SyncLoop:
 			}
 
 			logrus.Debugf("Updating targets from discovery manager: %v", targets)
+			apiClient, err := promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc, 1)
+			if err != nil {
+				panic(err) // TODO
+			}
 			newState := &ServerGroupState{
 				Targets:   targets,
-				apiClient: promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc, 1),
+				apiClient: apiClient,
 			}
 
 			if s.Cfg.IgnoreError {

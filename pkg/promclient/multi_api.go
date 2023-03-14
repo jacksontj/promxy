@@ -3,6 +3,7 @@ package promclient
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -60,8 +61,17 @@ func NormalizePromError(err error) error {
 // the specific API calls made through this multi client
 type MultiAPIMetricFunc func(i int, api, status string, took float64)
 
+// NewMustMultiAPI returns a MultiAPI
+func NewMustMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricFunc, requiredCount int) *MultiAPI {
+	a, err := NewMultiAPI(apis, antiAffinity, metricFunc, requiredCount)
+	if err != nil {
+		panic(err)
+	}
+	return a
+}
+
 // NewMultiAPI returns a MultiAPI
-func NewMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricFunc, requiredCount int) *MultiAPI {
+func NewMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricFunc, requiredCount int) (*MultiAPI, error) {
 	fingerprintCounts := make(map[model.Fingerprint]int)
 	apiFingerprints := make([]model.Fingerprint, len(apis))
 	for i, api := range apis {
@@ -77,8 +87,7 @@ func NewMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricF
 
 	for _, v := range fingerprintCounts {
 		if v < requiredCount {
-			// TODO: return an error
-			panic("not possible")
+			return nil, fmt.Errorf("unable to create multiAPI as the APIs aren't unique")
 		}
 	}
 
@@ -88,7 +97,7 @@ func NewMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricF
 		antiAffinity:    antiAffinity,
 		metricFunc:      metricFunc,
 		requiredCount:   requiredCount,
-	}
+	}, nil
 }
 
 // MultiAPI implements the API interface while merging the results from the apis it wraps
