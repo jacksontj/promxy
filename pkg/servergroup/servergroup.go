@@ -340,6 +340,5 @@ func (s *ServerGroup) Series(ctx context.Context, matches []string, startTime, e
 
 // Metadata returns metadata about metrics currently scraped by the metric name.
 func (s *ServerGroup) Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
-	// TODO: query all and merge
 	return s.State().apiClient.Metadata(ctx, metric, limit)
 }
