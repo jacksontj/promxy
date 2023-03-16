@@ -262,7 +262,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 					apiClient = &promclient.DebugAPI{apiClient, u.String()}
 				}
 
-                // Add LabelFilter if configured
+				// Add LabelFilter if configured
 				if s.Cfg.LabelFilterConfig != nil {
 					apiClient, err = promclient.NewLabelFilterClient(ctx, apiClient, s.Cfg.LabelFilterConfig)
 					if err != nil {
