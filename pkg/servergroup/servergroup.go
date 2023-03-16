@@ -73,6 +73,9 @@ type ServerGroupState struct {
 	// Targets is the list of target URLs for this discovery round
 	Targets   []string
 	apiClient promclient.API
+
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 }
 
 // ServerGroup encapsulates a set of prometheus downstreams to query/aggregate
@@ -132,9 +135,16 @@ func (s *ServerGroup) Sync() {
 	}
 }
 
-func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgroup.Group) error {
+func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgroup.Group) (err error) {
 	targets := make([]string, 0)
 	apiClients := make([]promclient.API, 0)
+
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	defer func() {
+		if err != nil {
+			ctxCancel()
+		}
+	}()
 
 	for _, targetGroupList := range targetGroupMap {
 		for _, targetGroup := range targetGroupList {
@@ -252,9 +262,12 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 					apiClient = &promclient.DebugAPI{apiClient, u.String()}
 				}
 
-				apiClient, err = promclient.NewLabelFilterClient(apiClient)
-				if err != nil {
-					return err
+                // Add LabelFilter if configured
+				if s.Cfg.LabelFilterConfig != nil {
+					apiClient, err = promclient.NewLabelFilterClient(ctx, apiClient, s.Cfg.LabelFilterConfig)
+					if err != nil {
+						return err
+					}
 				}
 
 				apiClients = append(apiClients, apiClient)
@@ -271,16 +284,23 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 	if err != nil {
 		return err
 	}
+
 	newState := &ServerGroupState{
 		Targets:   targets,
 		apiClient: apiClient,
+		ctx:       ctx,
+		ctxCancel: ctxCancel,
 	}
 
 	if s.Cfg.IgnoreError {
 		newState.apiClient = &promclient.IgnoreErrorAPI{newState.apiClient}
 	}
 
-	s.state.Store(newState)
+	oldState := s.State()   // Fetch the current state (so we can stop it)
+	s.state.Store(newState) // Store new state
+	if oldState != nil {
+		oldState.ctxCancel() // Cancel the old state
+	}
 
 	if !s.loaded {
 		s.loaded = true

@@ -2,44 +2,107 @@ package promclient
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/sirupsen/logrus"
 )
 
-// TODO: config
-func NewLabelFilterClient(a API) (*LabelFilterClient, error) {
-	c := &LabelFilterClient{
-		API:            a,
-		LabelsToFilter: []string{"__name__", "job", "version"},
+type LabelFilterConfig struct {
+	LabelsToFilter []string      `yaml:"labels_to_filter"`
+	SyncInterval   time.Duration `yaml:"sync_interval"`
+}
+
+func (c *LabelFilterConfig) Validate() error {
+	for _, l := range c.LabelsToFilter {
+		if !model.IsValidMetricName(model.LabelValue(l)) {
+			return fmt.Errorf("%s is not a valid label name", l)
+		}
 	}
 
-	// TODO; background
-	if err := c.Sync(context.TODO()); err != nil {
+	return nil
+}
+
+// UnmarshalYAML implements the yaml.Unmarshaler interface.
+func (c *LabelFilterConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain LabelFilterConfig
+	if err := unmarshal((*plain)(c)); err != nil {
+		return err
+	}
+
+	return c.Validate()
+}
+
+// NewLabelFilterClient returns a LabelFilterClient which will filter the queries sent downstream based
+// on a filter of labels maintained in memory from the downstream API.
+func NewLabelFilterClient(ctx context.Context, a API, cfg *LabelFilterConfig) (*LabelFilterClient, error) {
+	c := &LabelFilterClient{
+		API: a,
+		ctx: ctx,
+		cfg: cfg,
+	}
+
+	// Do an initial sync
+	if err := c.Sync(ctx); err != nil {
 		return nil, err
+	}
+
+	if cfg.SyncInterval > 0 {
+		go func() {
+			ticker := time.NewTicker(cfg.SyncInterval)
+			for {
+				select {
+				case <-ticker.C:
+					// TODO: metric on sync status
+					if err := c.Sync(ctx); err != nil {
+						logrus.Errorf("error syncing in label_filter from downstream: %#v", err)
+					}
+				case <-ctx.Done():
+					ticker.Stop()
+					return
+				}
+			}
+		}()
 	}
 
 	return c, nil
 }
 
-// LabelFilterClient proxies a client and adds the given labels to all results
+// LabelFilterClient filters out calls to the downstream based on a label filter
+// which is pulled and maintained from the downstream API.
 type LabelFilterClient struct {
 	API
 
 	LabelsToFilter []string // Which labels we want to pull to check
 
-	// TODO: move to a local block (to disk)?? or optionally so?
-	// labelFilter is a map of labelName -> labelValue -> nothing (for quick lookups)
-	labelFilter map[string]map[string]struct{}
+	// filter is an atomic to hold the LabelFilter which is a map of labelName -> labelValue -> nothing (for quick lookups)
+	filter atomic.Value
+
+	// Used as the background context for this client
+	ctx context.Context
+
+	// cfg is a pointer to the config for this client
+	cfg *LabelFilterConfig
+}
+
+// State returns the current ServerGroupState
+func (c *LabelFilterClient) LabelFilter() map[string]map[string]struct{} {
+	tmp := c.filter.Load()
+	if ret, ok := tmp.(map[string]map[string]struct{}); ok {
+		return ret
+	}
+	return nil
 }
 
 func (c *LabelFilterClient) Sync(ctx context.Context) error {
 	filter := make(map[string]map[string]struct{})
 
-	for _, label := range c.LabelsToFilter {
+	for _, label := range c.cfg.LabelsToFilter {
 		labelFilter := make(map[string]struct{})
 		// TODO: warn?
 		vals, _, err := c.LabelValues(ctx, label, nil, model.Time(0).Time(), model.Now().Time())
@@ -52,7 +115,7 @@ func (c *LabelFilterClient) Sync(ctx context.Context) error {
 		filter[label] = labelFilter
 	}
 
-	c.labelFilter = filter
+	c.filter.Store(filter)
 
 	return nil
 }
@@ -65,7 +128,7 @@ func (c *LabelFilterClient) Query(ctx context.Context, query string, ts time.Tim
 		return nil, nil, err
 	}
 
-	filterVisitor := NewFilterLabelVisitor(c.labelFilter)
+	filterVisitor := NewFilterLabelVisitor(c.LabelFilter())
 	if _, err := parser.Walk(ctx, filterVisitor, &parser.EvalStmt{Expr: e}, e, nil, nil); err != nil {
 		return nil, nil, err
 	}
