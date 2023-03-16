@@ -2,6 +2,7 @@ package servergroup
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -18,6 +19,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/prometheus/discovery"
+	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/storage/remote"
@@ -41,7 +43,7 @@ func init() {
 }
 
 // New creates a new servergroup
-func New() *ServerGroup {
+func NewServerGroup() (*ServerGroup, error) {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	// Create the targetSet (which will maintain all of the updating etc. in the background)
 	sg := &ServerGroup{
@@ -55,14 +57,14 @@ func New() *ServerGroup {
 		Format: &promlog.AllowedFormat{},
 	}
 	if err := logCfg.Level.Set("info"); err != nil {
-		panic(err)
+		return nil, err
 	}
 	sg.targetManager = discovery.NewManager(ctx, promlog.New(logCfg))
 	// Background the updating
 	go sg.targetManager.Run()
 	go sg.Sync()
 
-	return sg
+	return sg, nil
 
 }
 
@@ -108,164 +110,179 @@ func (s *ServerGroup) RoundTrip(r *http.Request) (*http.Response, error) {
 func (s *ServerGroup) Sync() {
 	syncCh := s.targetManager.SyncCh()
 
-SyncLoop:
 	for {
 		select {
 		case <-s.ctx.Done():
 			return
 		case targetGroupMap := <-syncCh:
 			logrus.Debug("Updating targets from discovery manager")
-			targets := make([]string, 0)
-			apiClients := make([]promclient.API, 0)
-
-			for _, targetGroupList := range targetGroupMap {
-				for _, targetGroup := range targetGroupList {
-					for _, target := range targetGroup.Targets {
-
-						lbls := make([]labels.Label, 0, len(target)+len(targetGroup.Labels)+2)
-
-						for ln, lv := range target {
-							lbls = append(lbls, labels.Label{Name: string(ln), Value: string(lv)})
-						}
-
-						for ln, lv := range targetGroup.Labels {
-							if _, ok := target[ln]; !ok {
-								lbls = append(lbls, labels.Label{Name: string(ln), Value: string(lv)})
-							}
-						}
-
-						lbls = append(lbls, labels.Label{Name: model.SchemeLabel, Value: string(s.Cfg.Scheme)})
-						lbls = append(lbls, labels.Label{Name: PathPrefixLabel, Value: string(s.Cfg.PathPrefix)})
-
-						lset := labels.New(lbls...)
-
-						logrus.Tracef("Potential target pre-relabel: %v", lset)
-						lset = relabel.Process(lset, s.Cfg.RelabelConfigs...)
-						logrus.Tracef("Potential target post-relabel: %v", lset)
-						// Check if the target was dropped, if so we skip it
-						if len(lset) == 0 {
-							continue
-						}
-
-						// If there is no address, then we can't use this set of targets
-						if v := lset.Get(model.AddressLabel); v == "" {
-							logrus.Errorf("Discovery target is missing address label: %v", lset)
-							continue SyncLoop
-						}
-
-						u := &url.URL{
-							Scheme: lset.Get(model.SchemeLabel),
-							Host:   lset.Get(model.AddressLabel),
-							Path:   lset.Get(PathPrefixLabel),
-						}
-
-						targets = append(targets, u.Host)
-
-						client, err := api.NewClient(api.Config{Address: u.String(), RoundTripper: s})
-						if err != nil {
-							panic(err) // TODO: shouldn't be possible? If this happens I guess we log and skip?
-						}
-
-						if len(s.Cfg.QueryParams) > 0 {
-							client = promclient.NewClientArgsWrap(client, s.Cfg.QueryParams)
-						}
-
-						var apiClient promclient.API
-						apiClient = &promclient.PromAPIV1{v1.NewAPI(client)}
-
-						if s.Cfg.RemoteRead {
-							u.Path = path.Join(u.Path, s.Cfg.RemoteReadPath)
-							cfg := &remote.ClientConfig{
-								URL:              &config_util.URL{u},
-								HTTPClientConfig: s.Cfg.HTTPConfig.HTTPConfig,
-								Timeout:          model.Duration(time.Minute * 2),
-							}
-							remoteStorageClient, err := remote.NewReadClient("foo", cfg)
-							if err != nil {
-								panic(err)
-							}
-
-							apiClient = &promclient.PromAPIRemoteRead{apiClient, remoteStorageClient}
-						}
-
-						// Optionally add time range layers
-						if s.Cfg.AbsoluteTimeRangeConfig != nil {
-							apiClient = &promclient.AbsoluteTimeFilter{
-								API:      apiClient,
-								Start:    s.Cfg.AbsoluteTimeRangeConfig.Start,
-								End:      s.Cfg.AbsoluteTimeRangeConfig.End,
-								Truncate: s.Cfg.AbsoluteTimeRangeConfig.Truncate,
-							}
-						}
-
-						if s.Cfg.RelativeTimeRangeConfig != nil {
-							apiClient = &promclient.RelativeTimeFilter{
-								API:      apiClient,
-								Start:    s.Cfg.RelativeTimeRangeConfig.Start,
-								End:      s.Cfg.RelativeTimeRangeConfig.End,
-								Truncate: s.Cfg.RelativeTimeRangeConfig.Truncate,
-							}
-						}
-
-						// We remove all private labels after we set the target entry
-						modelLabelSet := make(model.LabelSet, len(lset))
-						for _, lbl := range lset {
-							if !strings.HasPrefix(string(lbl.Name), model.ReservedLabelPrefix) {
-								modelLabelSet[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
-							}
-						}
-
-						// Add labels
-						apiClient = &promclient.AddLabelClient{apiClient, modelLabelSet.Merge(s.Cfg.Labels)}
-
-						// Add MetricRelabel if set
-						if len(s.Cfg.MetricsRelabelConfigs) > 0 {
-							tmp, err := promclient.NewMetricsRelabelClient(apiClient, s.Cfg.MetricsRelabelConfigs)
-							if err != nil {
-								panic(err) // TODO
-							}
-							apiClient = tmp
-
-						}
-
-						// If debug logging is enabled, wrap the client with a debugAPI client
-						// Since these are called in the reverse order of what we add, we want
-						// to make sure that this is the last wrap of the client
-						if logrus.GetLevel() >= logrus.DebugLevel {
-							apiClient = &promclient.DebugAPI{apiClient, u.String()}
-						}
-
-						apiClients = append(apiClients, apiClient)
-					}
+			// TODO: retry and error handling
+			err := s.loadTargetGroupMap(targetGroupMap)
+			for err != nil {
+				logrus.Errorf("Error loading servergroup, retrying: %v", err)
+				// TODO: configurable backoff
+				select {
+				case <-time.After(time.Second):
+					err = s.loadTargetGroupMap(targetGroupMap)
+				case <-s.ctx.Done():
+					return
 				}
-			}
-
-			apiClientMetricFunc := func(i int, api, status string, took float64) {
-				serverGroupSummary.WithLabelValues(targets[i], api, status).Observe(took)
-			}
-
-			logrus.Debugf("Updating targets from discovery manager: %v", targets)
-			apiClient, err := promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc, 1)
-			if err != nil {
-				panic(err) // TODO
-			}
-			newState := &ServerGroupState{
-				Targets:   targets,
-				apiClient: apiClient,
-			}
-
-			if s.Cfg.IgnoreError {
-				newState.apiClient = &promclient.IgnoreErrorAPI{newState.apiClient}
-			}
-
-			s.state.Store(newState)
-
-			if !s.loaded {
-				s.loaded = true
-				close(s.Ready)
 			}
 		}
 	}
+}
+
+func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgroup.Group) error {
+	targets := make([]string, 0)
+	apiClients := make([]promclient.API, 0)
+
+	for _, targetGroupList := range targetGroupMap {
+		for _, targetGroup := range targetGroupList {
+			for _, target := range targetGroup.Targets {
+
+				lbls := make([]labels.Label, 0, len(target)+len(targetGroup.Labels)+2)
+
+				for ln, lv := range target {
+					lbls = append(lbls, labels.Label{Name: string(ln), Value: string(lv)})
+				}
+
+				for ln, lv := range targetGroup.Labels {
+					if _, ok := target[ln]; !ok {
+						lbls = append(lbls, labels.Label{Name: string(ln), Value: string(lv)})
+					}
+				}
+
+				lbls = append(lbls, labels.Label{Name: model.SchemeLabel, Value: string(s.Cfg.Scheme)})
+				lbls = append(lbls, labels.Label{Name: PathPrefixLabel, Value: string(s.Cfg.PathPrefix)})
+
+				lset := labels.New(lbls...)
+
+				logrus.Tracef("Potential target pre-relabel: %v", lset)
+				lset = relabel.Process(lset, s.Cfg.RelabelConfigs...)
+				logrus.Tracef("Potential target post-relabel: %v", lset)
+				// Check if the target was dropped, if so we skip it
+				if len(lset) == 0 {
+					continue
+				}
+
+				// If there is no address, then we can't use this set of targets
+				if v := lset.Get(model.AddressLabel); v == "" {
+					return fmt.Errorf("discovery target is missing address label: %v", lset)
+				}
+
+				u := &url.URL{
+					Scheme: lset.Get(model.SchemeLabel),
+					Host:   lset.Get(model.AddressLabel),
+					Path:   lset.Get(PathPrefixLabel),
+				}
+
+				targets = append(targets, u.Host)
+
+				client, err := api.NewClient(api.Config{Address: u.String(), RoundTripper: s})
+				if err != nil {
+					return err
+				}
+
+				if len(s.Cfg.QueryParams) > 0 {
+					client = promclient.NewClientArgsWrap(client, s.Cfg.QueryParams)
+				}
+
+				var apiClient promclient.API
+				apiClient = &promclient.PromAPIV1{v1.NewAPI(client)}
+
+				if s.Cfg.RemoteRead {
+					u.Path = path.Join(u.Path, s.Cfg.RemoteReadPath)
+					cfg := &remote.ClientConfig{
+						URL:              &config_util.URL{u},
+						HTTPClientConfig: s.Cfg.HTTPConfig.HTTPConfig,
+						Timeout:          model.Duration(time.Minute * 2),
+					}
+					remoteStorageClient, err := remote.NewReadClient("foo", cfg)
+					if err != nil {
+						return err
+					}
+
+					apiClient = &promclient.PromAPIRemoteRead{apiClient, remoteStorageClient}
+				}
+
+				// Optionally add time range layers
+				if s.Cfg.AbsoluteTimeRangeConfig != nil {
+					apiClient = &promclient.AbsoluteTimeFilter{
+						API:      apiClient,
+						Start:    s.Cfg.AbsoluteTimeRangeConfig.Start,
+						End:      s.Cfg.AbsoluteTimeRangeConfig.End,
+						Truncate: s.Cfg.AbsoluteTimeRangeConfig.Truncate,
+					}
+				}
+
+				if s.Cfg.RelativeTimeRangeConfig != nil {
+					apiClient = &promclient.RelativeTimeFilter{
+						API:      apiClient,
+						Start:    s.Cfg.RelativeTimeRangeConfig.Start,
+						End:      s.Cfg.RelativeTimeRangeConfig.End,
+						Truncate: s.Cfg.RelativeTimeRangeConfig.Truncate,
+					}
+				}
+
+				// We remove all private labels after we set the target entry
+				modelLabelSet := make(model.LabelSet, len(lset))
+				for _, lbl := range lset {
+					if !strings.HasPrefix(string(lbl.Name), model.ReservedLabelPrefix) {
+						modelLabelSet[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
+					}
+				}
+
+				// Add labels
+				apiClient = &promclient.AddLabelClient{apiClient, modelLabelSet.Merge(s.Cfg.Labels)}
+
+				// Add MetricRelabel if set
+				if len(s.Cfg.MetricsRelabelConfigs) > 0 {
+					tmp, err := promclient.NewMetricsRelabelClient(apiClient, s.Cfg.MetricsRelabelConfigs)
+					if err != nil {
+						return err
+					}
+					apiClient = tmp
+
+				}
+
+				// If debug logging is enabled, wrap the client with a debugAPI client
+				// Since these are called in the reverse order of what we add, we want
+				// to make sure that this is the last wrap of the client
+				if logrus.GetLevel() >= logrus.DebugLevel {
+					apiClient = &promclient.DebugAPI{apiClient, u.String()}
+				}
+
+				apiClients = append(apiClients, apiClient)
+			}
+		}
+	}
+
+	apiClientMetricFunc := func(i int, api, status string, took float64) {
+		serverGroupSummary.WithLabelValues(targets[i], api, status).Observe(took)
+	}
+
+	logrus.Debugf("Updating targets from discovery manager: %v", targets)
+	apiClient, err := promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc, 1)
+	if err != nil {
+		return err
+	}
+	newState := &ServerGroupState{
+		Targets:   targets,
+		apiClient: apiClient,
+	}
+
+	if s.Cfg.IgnoreError {
+		newState.apiClient = &promclient.IgnoreErrorAPI{newState.apiClient}
+	}
+
+	s.state.Store(newState)
+
+	if !s.loaded {
+		s.loaded = true
+		close(s.Ready)
+	}
+
+	return nil
 }
 
 // ApplyConfig applies new configuration to the ServerGroup

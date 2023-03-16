@@ -104,25 +104,36 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		cfg: c,
 	}
 	for i, sgCfg := range c.ServerGroups {
-		tmp := servergroup.New()
-		if err := tmp.ApplyConfig(sgCfg); err != nil {
+		tmp, err := servergroup.NewServerGroup()
+		if err != nil {
 			failed = true
-			logrus.Errorf("Error applying config to server group: %s", err)
+			logrus.Errorf("Error creating server group (%d): %s", i, err)
+			// We can continue to other as we don't need to cancel this as we didn't ApplyConfig()
+			continue
 		}
+		// Once the ServerGroup was created; we want to add this to the lists as there
+		// are background goroutines launched (so we'd need to cancel)
 		newState.sgs[i] = tmp
 		apis[i] = tmp
+
+		if err := tmp.ApplyConfig(sgCfg); err != nil {
+			failed = true
+			logrus.Errorf("Error applying config to server group (%d): %s", i, err)
+		}
 	}
+
+	// If there was a failure anywhere, we need to cancel the newState and return an error
+	if failed {
+		newState.Cancel(nil)
+		return fmt.Errorf("error applying config to one or more server group(s)")
+	}
+
 	multiApi, err := promclient.NewMultiAPI(apis, model.TimeFromUnix(0), nil, len(apis))
 	if err != nil {
 		return err
 	}
 
 	newState.client = promclient.NewTimeTruncate(multiApi)
-
-	if failed {
-		newState.Cancel(nil)
-		return fmt.Errorf("error applying config to one or more server group(s)")
-	}
 
 	// Check for remote_write (for appender)
 	if c.PromConfig.RemoteWriteConfigs != nil {
