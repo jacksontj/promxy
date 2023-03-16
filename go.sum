@@ -521,8 +521,8 @@ github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANyt
 github.com/influxdata/influxdb1-client v0.0.0-20191209144304-8bf82d3c094d/go.mod h1:qj24IKcXYK6Iy9ceXlo3Tc+vtHo9lIhSX5JddghvEPo=
 github.com/ionos-cloud/sdk-go/v6 v6.1.0 h1:0EZz5H+t6W23zHt6dgHYkKavr72/30O9nA97E3FZaS4=
 github.com/ionos-cloud/sdk-go/v6 v6.1.0/go.mod h1:Ox3W0iiEz0GHnfY9e5LmAxwklsxguuNFEUSu0gVRTME=
-github.com/jacksontj/prometheus v1.8.1-0.20230309220703-968ded36c597 h1:EdeyyTk+pKFaBK81FuooCIfc2GZaI3NIFJngKBRSuS0=
-github.com/jacksontj/prometheus v1.8.1-0.20230309220703-968ded36c597/go.mod h1:637xk6elYZWENDfmM/Lpb9tzMI7oKvB7WAboalOs998=
+github.com/jacksontj/prometheus v1.8.1-0.20230316162245-bf26a7edb634 h1:nZEyw8j2UOg7YCe9akUCqbyREm/UrcIXXeY1P+mZdwQ=
+github.com/jacksontj/prometheus v1.8.1-0.20230316162245-bf26a7edb634/go.mod h1:637xk6elYZWENDfmM/Lpb9tzMI7oKvB7WAboalOs998=
 github.com/jessevdk/go-flags v1.5.0 h1:1jKYvbxEjfUl0fmqTCOfonvskHHXMjBySTLW4y9LFvc=
 github.com/jessevdk/go-flags v1.5.0/go.mod h1:Fw0T6WPc1dYxT4mKEZRfG5kJhaTDP9pj1c2EWnYs/m4=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=

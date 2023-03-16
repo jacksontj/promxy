@@ -12,6 +12,11 @@ func findPathRange(path []parser.Node, eRanges []evalRange) time.Duration {
 		depth     int
 	)
 	for _, r := range eRanges {
+		// If the prefix is longer then it can't be the parent of `child`
+		if len(r.Prefix) > len(path) {
+			continue
+		}
+
 		// Check if we are a child
 		child := true
 		for i, p := range r.Prefix {
@@ -29,7 +34,7 @@ func findPathRange(path []parser.Node, eRanges []evalRange) time.Duration {
 	return evalRange
 }
 
-// evalRange summarizes a defined evalRange (from a MatrixSelector) within the asg
+// evalRange summarizes a defined evalRange (from a MatrixSelector) within the ast
 type evalRange struct {
 	Prefix []parser.PositionRange
 	Range  time.Duration
