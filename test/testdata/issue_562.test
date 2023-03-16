@@ -1,0 +1,7 @@
+# Test for https://github.com/jacksontj/promxy/issues/562
+load 5m
+    metric_1{a="1"} 0+10x1000 100+30x1000
+
+eval instant at 5m max_over_time(metric_1[5m]) + metric_1
+    {a="1", az="a"} 20
+    {a="1", az="b"} 20
