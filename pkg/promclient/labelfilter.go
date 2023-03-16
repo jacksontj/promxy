@@ -34,8 +34,9 @@ func init() {
 }
 
 type LabelFilterConfig struct {
-	LabelsToFilter []string      `yaml:"labels_to_filter"`
-	SyncInterval   time.Duration `yaml:"sync_interval"`
+	LabelsToFilter []string            `yaml:"labels_to_filter"`
+	SyncInterval   time.Duration       `yaml:"sync_interval"`
+	ExcludeLabels  map[string][]string `yaml:"exclude_labels"`
 }
 
 func (c *LabelFilterConfig) Validate() error {
@@ -140,6 +141,16 @@ func (c *LabelFilterClient) Sync(ctx context.Context) error {
 			labelFilter[string(v)] = struct{}{}
 		}
 		filter[label] = labelFilter
+	}
+
+	// Apply exclude list
+	for k, vList := range c.cfg.ExcludeLabels {
+		if filterMap, ok := filter[k]; ok {
+			for _, item := range vList {
+				delete(filterMap, item)
+			}
+			filter[k] = filterMap
+		}
 	}
 
 	c.filter.Store(filter)
