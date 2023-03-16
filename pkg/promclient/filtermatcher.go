@@ -8,30 +8,24 @@ import (
 	"github.com/prometheus/prometheus/promql/parser"
 )
 
-func NewLabelFilterVisitor(ls model.LabelSet) *LabelFilterVisitor {
-	return &LabelFilterVisitor{
+func NewFilterMatcherVisitor(ls model.LabelSet) *FilterMatcherVisitor {
+	return &FilterMatcherVisitor{
 		ls:          ls,
 		filterMatch: true,
 	}
 }
 
-// LabelFilterVisitor implements the parser.Visitor interface to filter selectors based on a labelstet
-type LabelFilterVisitor struct {
+// FilterMatcherVisitor implements the parser.Visitor interface to filter matchers based on a labelstet
+type FilterMatcherVisitor struct {
 	l           sync.Mutex
 	ls          model.LabelSet
 	filterMatch bool
 }
 
 // Visit checks if the given node matches the labels in the filter
-func (l *LabelFilterVisitor) Visit(node parser.Node, path []parser.Node) (w parser.Visitor, err error) {
+func (l *FilterMatcherVisitor) Visit(node parser.Node, path []parser.Node) (w parser.Visitor, err error) {
 	switch nodeTyped := node.(type) {
 	case *parser.VectorSelector:
-		for _, matcher := range nodeTyped.LabelMatchers {
-			if matcher.Name == model.MetricNameLabel && matcher.Type == labels.MatchEqual {
-				nodeTyped.Name = matcher.Value
-			}
-		}
-
 		filteredMatchers, ok := FilterMatchers(l.ls, nodeTyped.LabelMatchers)
 		l.l.Lock()
 		l.filterMatch = l.filterMatch && ok
@@ -43,12 +37,6 @@ func (l *LabelFilterVisitor) Visit(node parser.Node, path []parser.Node) (w pars
 			return nil, nil
 		}
 	case *parser.MatrixSelector:
-		for _, matcher := range nodeTyped.VectorSelector.(*parser.VectorSelector).LabelMatchers {
-			if matcher.Name == model.MetricNameLabel && matcher.Type == labels.MatchEqual {
-				nodeTyped.VectorSelector.(*parser.VectorSelector).Name = matcher.Value
-			}
-		}
-
 		filteredMatchers, ok := FilterMatchers(l.ls, nodeTyped.VectorSelector.(*parser.VectorSelector).LabelMatchers)
 		l.l.Lock()
 		l.filterMatch = l.filterMatch && ok
