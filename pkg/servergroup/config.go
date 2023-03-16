@@ -160,6 +160,9 @@ type Config struct {
 	// An example use-case would be if a specific servergroup was was "deprecated" and wasn't getting
 	// any new data after a specific given point in time
 	AbsoluteTimeRangeConfig *AbsoluteTimeRangeConfig `yaml:"absolute_time_range"`
+
+	// TODO: docs
+	LabelFilterConfig *promclient.LabelFilterConfig `yaml:"label_filter"`
 }
 
 // GetScheme returns the scheme for this servergroup
