@@ -8,10 +8,30 @@ import (
 	"time"
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/sirupsen/logrus"
 )
+
+// Metrics
+var (
+	syncCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "promxy_label_filter_sync_count_total",
+		Help: "How many syncs completed from a promxy label_filter, partitioned by success",
+	}, []string{"status"})
+	syncSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Name: "promxy_label_filter_sync_duration_seconds",
+		Help: "Latency of sync process from a promxy label_fitler",
+	}, []string{"status"})
+)
+
+func init() {
+	prometheus.MustRegister(
+		syncCount,
+		syncSummary,
+	)
+}
 
 type LabelFilterConfig struct {
 	LabelsToFilter []string      `yaml:"labels_to_filter"`
@@ -58,10 +78,17 @@ func NewLabelFilterClient(ctx context.Context, a API, cfg *LabelFilterConfig) (*
 			for {
 				select {
 				case <-ticker.C:
-					// TODO: metric on sync status
-					if err := c.Sync(ctx); err != nil {
+					start := time.Now()
+					err := c.Sync(ctx)
+					took := time.Since(start)
+					status := "success"
+					if err != nil {
 						logrus.Errorf("error syncing in label_filter from downstream: %#v", err)
+						status = "error"
 					}
+					syncCount.WithLabelValues(status).Inc()
+					syncSummary.WithLabelValues(status).Observe(took.Seconds())
+
 				case <-ctx.Done():
 					ticker.Stop()
 					return
