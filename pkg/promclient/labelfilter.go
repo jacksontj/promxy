@@ -39,13 +39,14 @@ func init() {
 }
 
 type LabelFilterConfig struct {
-	LabelsToFilter []string            `yaml:"labels_to_filter"`
-	SyncInterval   time.Duration       `yaml:"sync_interval"`
-	ExcludeLabels  map[string][]string `yaml:"exclude_labels"`
+	DynamicLabels       []string            `yaml:"dynamic_labels_include"`
+	SyncInterval        time.Duration       `yaml:"sync_interval"`
+	StaticLabelsInclude map[string][]string `yaml:"static_labels_include"`
+	StaticLabelsExclude map[string][]string `yaml:"static_labels_exclude"`
 }
 
 func (c *LabelFilterConfig) Validate() error {
-	for _, l := range c.LabelsToFilter {
+	for _, l := range c.DynamicLabels {
 		if !model.IsValidMetricName(model.LabelValue(l)) {
 			return fmt.Errorf("%s is not a valid label name", l)
 		}
@@ -111,8 +112,6 @@ func NewLabelFilterClient(ctx context.Context, a API, cfg *LabelFilterConfig) (*
 type LabelFilterClient struct {
 	API
 
-	LabelsToFilter []string // Which labels we want to pull to check
-
 	// filter is an atomic to hold the LabelFilter which is a map of labelName -> labelValue -> nothing (for quick lookups)
 	filter atomic.Value
 
@@ -135,7 +134,7 @@ func (c *LabelFilterClient) LabelFilter() map[string]map[string]struct{} {
 func (c *LabelFilterClient) Sync(ctx context.Context) error {
 	filter := make(map[string]map[string]struct{})
 
-	for _, label := range c.cfg.LabelsToFilter {
+	for _, label := range c.cfg.DynamicLabels {
 		labelFilter := make(map[string]struct{})
 		// TODO: warn?
 		vals, _, err := c.LabelValues(ctx, label, nil, model.Time(0).Time(), model.Now().Time())
@@ -148,8 +147,20 @@ func (c *LabelFilterClient) Sync(ctx context.Context) error {
 		filter[label] = labelFilter
 	}
 
+	// Apply static include list
+	for k, vList := range c.cfg.StaticLabelsInclude {
+		filterMap, ok := filter[k]
+		if !ok {
+			filterMap = make(map[string]struct{})
+		}
+		for _, item := range vList {
+			filterMap[item] = struct{}{}
+		}
+		filter[k] = filterMap
+	}
+
 	// Apply exclude list
-	for k, vList := range c.cfg.ExcludeLabels {
+	for k, vList := range c.cfg.StaticLabelsExclude {
 		if filterMap, ok := filter[k]; ok {
 			for _, item := range vList {
 				delete(filterMap, item)

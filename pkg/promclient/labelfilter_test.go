@@ -113,8 +113,11 @@ func TestLabelFilter(t *testing.T) {
 
 	// Create the LabelFilter client
 	cfg := &LabelFilterConfig{
-		LabelsToFilter: []string{"__name__", "filterlabel"},
-		ExcludeLabels: map[string][]string{
+		DynamicLabels: []string{"__name__", "filterlabel"},
+		StaticLabelsInclude: map[string][]string{
+			"__name__": {"staticinclude"},
+		},
+		StaticLabelsExclude: map[string][]string{
 			"__name__": {"up"},
 		},
 	}
@@ -130,6 +133,7 @@ func TestLabelFilter(t *testing.T) {
 	}{
 		{query: "notametric"},                            // A metric that definitely doesn't exist
 		{query: "testmetric", callCount: 1},              // A metric that does exist
+		{query: "staticinclude", callCount: 1},           // A metric that statically exists
 		{query: "up"},                                    // A metric that does exist, but we filter out
 		{query: `{filterlabel="notavalue"}`},             // A metric that definitely doesn't exist
 		{query: `{notalabel="notavalue"}`, callCount: 1}, // A metric that definitely doesn't exist, but isn't filterable
