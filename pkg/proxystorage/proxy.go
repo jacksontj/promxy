@@ -615,16 +615,15 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		ret := &parser.VectorSelector{OriginalOffset: offset}
 		ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
 
+		// Some functions require specific handling which we'll catch here
+		switch n.Func.Name {
 		// the "scalar()" function is a bit tricky. It can return a scalar or a vector.
 		// So to handle this instead of returning the vector directly (as its just the values selected)
 		// we can set it as the args (the vector of data) and the promql engine handles the types properly
-		if n.Func.Name == "scalar" {
+		case "scalar":
 			n.Args[0] = ret
 			return nil, nil
-		}
-
 		// the functions of sort() and sort_desc() need whole results to calculate.
-		switch n.Func.Name {
 		case "sort", "sort_desc":
 			return &parser.Call{
 				Func: n.Func,
