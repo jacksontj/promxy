@@ -25,6 +25,10 @@ var (
 		Name: "promxy_label_filter_sync_duration_seconds",
 		Help: "Latency of sync process from a promxy label_fitler",
 	}, []string{"status"})
+	filteredCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "promxy_label_filter_filtered_count_total",
+		Help: "How many requests have been filtered from the downstream,, partitioned by query type",
+	}, []string{"type"})
 )
 
 func init() {
@@ -172,6 +176,7 @@ func (c *LabelFilterClient) Query(ctx context.Context, query string, ts time.Tim
 		return nil, nil, err
 	}
 	if !filterVisitor.filterMatch {
+		filteredCount.WithLabelValues("Query").Inc()
 		return nil, nil, nil
 	}
 
@@ -191,6 +196,7 @@ func (c *LabelFilterClient) QueryRange(ctx context.Context, query string, r v1.R
 		return nil, nil, err
 	}
 	if !filterVisitor.filterMatch {
+		filteredCount.WithLabelValues("QueryRange").Inc()
 		return nil, nil, nil
 	}
 
@@ -207,6 +213,7 @@ func (c *LabelFilterClient) Series(ctx context.Context, matches []string, startT
 		// check if the matcher is excluded by our filter
 		for _, matcher := range matchers {
 			if !FilterLabelMatchers(c.LabelFilter(), matcher) {
+				filteredCount.WithLabelValues("Series").Inc()
 				return nil, nil, nil
 			}
 		}
@@ -219,6 +226,7 @@ func (c *LabelFilterClient) GetValue(ctx context.Context, start, end time.Time, 
 	// check if the matcher is excluded by our filter
 	for _, matcher := range matchers {
 		if !FilterLabelMatchers(c.LabelFilter(), matcher) {
+			filteredCount.WithLabelValues("GetValue").Inc()
 			return nil, nil, nil
 		}
 	}
@@ -232,6 +240,7 @@ func (c *LabelFilterClient) Metadata(ctx context.Context, metric, limit string) 
 		return nil, err
 	}
 	if !FilterLabelMatchers(c.LabelFilter(), matcher) {
+		filteredCount.WithLabelValues("Metadata").Inc()
 		return nil, nil
 	}
 	return c.API.Metadata(ctx, metric, limit)
