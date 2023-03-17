@@ -161,7 +161,30 @@ type Config struct {
 	// any new data after a specific given point in time
 	AbsoluteTimeRangeConfig *AbsoluteTimeRangeConfig `yaml:"absolute_time_range"`
 
-	// TODO: docs
+	// LabelFilterConfig is a mechanism to restrict which queries are sent to the particular downstream.
+	// This is done by maintaining a "filter" of labels that are downstream and ensuring that the
+	// matchers for any particular query match that in-memory filter. This can be defined both
+	// statically and dynamically.
+	// NOTE: this is not a "secure" mechanism as it is relying on the query's matchers. So it is trivial
+	// for a malicious actor to work around this filter by changing matchers.
+	// Example:
+	//
+	//    label_filter:
+	//      # This will dynamically query the downstream for the values of `__name__` and `job`
+	//      dynamic_labels:
+	//        - __name__
+	//        - job
+	//      # (optional) this will define a re-sync interval for dynamic labels from the downstream
+	//      sync_interval: 5m
+	//      # This will statically define a filter of labels
+	//      static_labels_include:
+	//        instance:
+	//          - instance1
+	//      # This will statically define an exclusion list (removed from the filter)|
+	//      static_labels_exclude:
+	//        __name__:
+	//          - up
+
 	LabelFilterConfig *promclient.LabelFilterConfig `yaml:"label_filter"`
 }
 
