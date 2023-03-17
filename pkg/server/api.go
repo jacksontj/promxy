@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/tls"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -17,17 +18,21 @@ import (
 func CreateAndStart(bindAddr string, logFormat string, webReadTimeout time.Duration, accessLogOut io.Writer, router http.Handler, tlsConfigFile string) (*http.Server, error) {
 	handler := createHandler(accessLogOut, router, logFormat)
 
+	ln, err := net.Listen("tcp", bindAddr)
+	if err != nil {
+		return nil, err
+	}
 	srv := &http.Server{
-		Addr:        bindAddr,
+		Addr:        ln.Addr().String(),
 		Handler:     handler,
 		ReadTimeout: webReadTimeout,
 	}
 
 	if tlsConfigFile == "" {
-		return createAndStartHTTP(srv)
+		return createAndStartHTTP(srv, ln)
 	}
 
-	return createAndStartHTTPS(srv, tlsConfigFile)
+	return createAndStartHTTPS(srv, ln, tlsConfigFile)
 }
 
 func createHandler(accessLogOut io.Writer, router http.Handler, logFormat string) http.Handler {
@@ -46,12 +51,12 @@ func createHandler(accessLogOut io.Writer, router http.Handler, logFormat string
 	return handler
 }
 
-func createAndStartHTTP(srv *http.Server) (*http.Server, error) {
+func createAndStartHTTP(srv *http.Server, ln net.Listener) (*http.Server, error) {
 	srv.TLSConfig = nil
 
 	go func() {
 		logrus.Infof("promxy starting with HTTP...")
-		if err := srv.ListenAndServe(); err != nil {
+		if err := srv.Serve(ln); err != nil {
 			if err == http.ErrServerClosed {
 				return
 			}
@@ -61,7 +66,7 @@ func createAndStartHTTP(srv *http.Server) (*http.Server, error) {
 	return srv, nil
 }
 
-func createAndStartHTTPS(srv *http.Server, tlsConfigFile string) (*http.Server, error) {
+func createAndStartHTTPS(srv *http.Server, ln net.Listener, tlsConfigFile string) (*http.Server, error) {
 	tlsConfig, err := parseConfigFile(tlsConfigFile)
 	if err != nil {
 		return nil, err
@@ -71,7 +76,7 @@ func createAndStartHTTPS(srv *http.Server, tlsConfigFile string) (*http.Server, 
 
 	go func() {
 		logrus.Infof("promxy starting with TLS...")
-		if err := srv.ListenAndServeTLS("", ""); err != nil {
+		if err := srv.ServeTLS(ln, "", ""); err != nil {
 			if err == http.ErrServerClosed {
 				return
 			}
