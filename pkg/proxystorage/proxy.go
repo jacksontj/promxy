@@ -578,17 +578,16 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// prometheus node to answer
 	case *parser.Call:
 		logrus.Debugf("call %v %v", n, n.Type())
-		removeOffsetFn()
 
-		// if we faced absent() or absent_over_time() functions in a call, then let's call subquery without it
-		// and apply it only on result
+		// absent and absent_over_time are difficult to implement at this layer; and as such we won't touch them
+		// we'll do our NodeReplace at another node in the tree
 		switch n.Func.Name {
 		case "absent", "absent_over_time":
-			return &parser.Call{
-				Func: n.Func,
-				Args: n.Args,
-			}, nil
+			return nil, nil
 		}
+
+		// For all the Call's we actually will work on, we need to remove the offset
+		removeOffsetFn()
 
 		var result model.Value
 		var warnings v1.Warnings
