@@ -1,0 +1,13 @@
+# Test for https://github.com/jacksontj/promxy/issues/496
+load 5m
+    metric_1{a="1"} 0+10x1000 100+30x1000
+
+eval instant at 5m absent(notametric)
+    {} 1
+
+eval instant at 5m absent(metric_1)
+
+eval instant at 5m absent_over_time(notametric[5m])
+    {} 1
+
+eval instant at 5m absent_over_time(metric_1[5m])
