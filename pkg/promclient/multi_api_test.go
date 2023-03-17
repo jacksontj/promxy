@@ -14,7 +14,7 @@ import (
 
 type stubAPI struct {
 	labelNames  func() []string
-	labelValues func() model.LabelValues
+	labelValues func(label string) model.LabelValues
 	query       func() model.Value
 	queryRange  func() model.Value
 	series      func() []model.LabelSet
@@ -24,36 +24,57 @@ type stubAPI struct {
 
 // LabelNames returns all the unique label names present in the block in sorted order.
 func (s *stubAPI) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
+	if s.labelNames == nil {
+		return nil, nil, nil
+	}
 	return s.labelNames(), nil, nil
 }
 
 // LabelValues performs a query for the values of the given label.
 func (s *stubAPI) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
-	return s.labelValues(), nil, nil
+	if s.labelValues == nil {
+		return nil, nil, nil
+	}
+	return s.labelValues(label), nil, nil
 }
 
 // Query performs a query for the given time.
 func (s *stubAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+	if s.query == nil {
+		return nil, nil, nil
+	}
 	return s.query(), nil, nil
 }
 
 // QueryRange performs a query for the given range.
 func (s *stubAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+	if s.queryRange == nil {
+		return nil, nil, nil
+	}
 	return s.queryRange(), nil, nil
 }
 
 // Series finds series by label matchers.
 func (s *stubAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
+	if s.series == nil {
+		return nil, nil, nil
+	}
 	return s.series(), nil, nil
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
 func (s *stubAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
+	if s.getValue == nil {
+		return nil, nil, nil
+	}
 	return s.getValue(), nil, nil
 }
 
 // Metadata returns metadata about metrics currently scraped by the metric name.
 func (s *stubAPI) Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
+	if s.metadata == nil {
+		return nil, nil
+	}
 	return s.metadata(), nil
 }
 
@@ -130,7 +151,7 @@ func TestMultiAPIMerging(t *testing.T) {
 			return []string{"a"}
 		},
 
-		labelValues: func() model.LabelValues {
+		labelValues: func(_ string) model.LabelValues {
 			return model.LabelValues{}
 		},
 		query: func() model.Value {
