@@ -38,10 +38,21 @@ func init() {
 	)
 }
 
+// LabelFilterConfig is the configuraiton for the LabelFilterClient
 type LabelFilterConfig struct {
-	DynamicLabels       []string            `yaml:"dynamic_labels_include"`
-	SyncInterval        time.Duration       `yaml:"sync_interval"`
+	// DynamicLabels is a list of labels to dynamically maintain a filter from the downstream from
+	DynamicLabels []string `yaml:"dynamic_labels"`
+	// SyncInterval defines how frequenlty to update the dynamic label filter
+	SyncInterval time.Duration `yaml:"sync_interval"`
+	// StaticLabelsInclude is a set of labels to always add to the downstream filter
+	// this allows you to define some metrics to be included statically if you want to
+	// avoid polling the downstream.
+	// NOTE: this is not a "secure" measure as this entire label_filter is based on matchers
+	// and as such doesn't restrict which metrics they touch (e.g. if you restrict by `__name__`
+	// the could just query by another label).
 	StaticLabelsInclude map[string][]string `yaml:"static_labels_include"`
+	// StaticLabelsExclude is a set of labels to always exclude from the filter. This is done last
+	// so it will apply after the dynamic and static lists are added to the filter.
 	StaticLabelsExclude map[string][]string `yaml:"static_labels_exclude"`
 }
 
@@ -50,6 +61,10 @@ func (c *LabelFilterConfig) Validate() error {
 		if !model.IsValidMetricName(model.LabelValue(l)) {
 			return fmt.Errorf("%s is not a valid label name", l)
 		}
+	}
+
+	if c.SyncInterval > 0 && len(c.DynamicLabels) == 0 {
+		return fmt.Errorf("sync_interval requires `dynamic_labels_include` to be set")
 	}
 
 	return nil
