@@ -10,6 +10,7 @@ import (
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/sirupsen/logrus"
 )
@@ -177,6 +178,65 @@ func (c *LabelFilterClient) Query(ctx context.Context, query string, ts time.Tim
 	return c.API.Query(ctx, query, ts)
 }
 
+// Query performs a query for the given time.
+func (c *LabelFilterClient) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+	// Parse out the promql query into expressions etc.
+	e, err := parser.ParseExpr(query)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	filterVisitor := NewFilterLabelVisitor(c.LabelFilter())
+	if _, err := parser.Walk(ctx, filterVisitor, &parser.EvalStmt{Expr: e}, e, nil, nil); err != nil {
+		return nil, nil, err
+	}
+	if !filterVisitor.filterMatch {
+		return nil, nil, nil
+	}
+
+	return c.API.QueryRange(ctx, query, r)
+}
+
+// Series finds series by label matchers.
+func (c *LabelFilterClient) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
+	for _, m := range matches {
+		matchers, err := parser.ParseMetricSelector(m)
+		if err != nil {
+			return nil, nil, err
+		}
+		// check if the matcher is excluded by our filter
+		for _, matcher := range matchers {
+			if !FilterLabelMatchers(c.LabelFilter(), matcher) {
+				return nil, nil, nil
+			}
+		}
+	}
+	return c.API.Series(ctx, matches, startTime, endTime)
+}
+
+// GetValue loads the raw data for a given set of matchers in the time range
+func (c *LabelFilterClient) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
+	// check if the matcher is excluded by our filter
+	for _, matcher := range matchers {
+		if !FilterLabelMatchers(c.LabelFilter(), matcher) {
+			return nil, nil, nil
+		}
+	}
+	return c.API.GetValue(ctx, start, end, matchers)
+}
+
+// Metadata returns metadata about metrics currently scraped by the metric name.
+func (c *LabelFilterClient) Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
+	matcher, err := labels.NewMatcher(labels.MatchEqual, labels.MetricName, metric)
+	if err != nil {
+		return nil, err
+	}
+	if !FilterLabelMatchers(c.LabelFilter(), matcher) {
+		return nil, nil
+	}
+	return c.API.Metadata(ctx, metric, limit)
+}
+
 func NewFilterLabelVisitor(filter map[string]map[string]struct{}) *FilterLabelVisitor {
 	return &FilterLabelVisitor{
 		labelFilter: filter,
@@ -196,28 +256,35 @@ func (l *FilterLabelVisitor) Visit(node parser.Node, path []parser.Node) (w pars
 	switch nodeTyped := node.(type) {
 	case *parser.VectorSelector:
 		for _, matcher := range nodeTyped.LabelMatchers {
-			for labelName, labelFilter := range l.labelFilter {
-				if matcher.Name == labelName {
-					match := false
-					// Check that there is a match somewhere!
-					for v := range labelFilter {
-						if matcher.Matches(v) {
-							match = true
-							break
-						}
-					}
-					if !match {
-						l.l.Lock()
-						l.filterMatch = false
-						l.l.Unlock()
-						return nil, nil
-					}
-				}
+			if !FilterLabelMatchers(l.labelFilter, matcher) {
+				l.l.Lock()
+				l.filterMatch = false
+				l.l.Unlock()
+				return nil, nil
 			}
 		}
-	case *parser.MatrixSelector:
-		// TODO:
 	}
 
 	return l, nil
+}
+
+// TODO: better name, this is to check if a matcher is in the filter
+func FilterLabelMatchers(filter map[string]map[string]struct{}, matcher *labels.Matcher) bool {
+	for labelName, labelFilter := range filter {
+		if matcher.Name == labelName {
+			match := false
+			// Check that there is a match somewhere!
+			for v := range labelFilter {
+				if matcher.Matches(v) {
+					match = true
+					break
+				}
+			}
+			if !match {
+				return match
+			}
+		}
+	}
+
+	return true
 }
