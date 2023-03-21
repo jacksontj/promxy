@@ -38,7 +38,7 @@ func init() {
 	)
 }
 
-// LabelFilterConfig is the configuraiton for the LabelFilterClient
+// LabelFilterConfig is the configuration for the LabelFilterClient
 type LabelFilterConfig struct {
 	// DynamicLabels is a list of labels to dynamically maintain a filter from the downstream from
 	DynamicLabels []string `yaml:"dynamic_labels"`

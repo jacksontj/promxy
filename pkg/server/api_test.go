@@ -27,7 +27,7 @@ func TestUnauthenticatedServerFunctions(t *testing.T) {
 
 	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "")
 	if err != nil {
-		t.Fatalf("an error occured during creation of server: %s", err.Error())
+		t.Fatalf("an error occurred during creation of server: %s", err.Error())
 	}
 
 	client := &http.Client{
@@ -85,7 +85,7 @@ func TestMutualTLSClientCannotConnectToAuthenticatedServerWithoutCerts(t *testin
 
 	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/tls-server-config.yml")
 	if err != nil {
-		t.Fatalf("an error occured during creation of server: %s", err.Error())
+		t.Fatalf("an error occurred during creation of server: %s", err.Error())
 	}
 
 	client := &http.Client{
@@ -115,7 +115,7 @@ func TestMutualTLSClientCanConnectToAuthenticatedServerWithCerts(t *testing.T) {
 
 	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/tls-server-config.yml")
 	if err != nil {
-		t.Fatalf("an error occured during creation of server: %s", err.Error())
+		t.Fatalf("an error occurred during creation of server: %s", err.Error())
 	}
 
 	client := setupAuthenticatedClient(t)
