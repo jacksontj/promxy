@@ -41,8 +41,8 @@ func (s *SeriesSet) Err() error {
 	return s.err
 }
 
-// A collection of warnings for the whole set.
-// Warnings could be return even iteration has not failed with error.
+// Warnings returns a collection of warnings for the whole set.
+// Note: Warnings could be returned even if iteration has not failed with an error.
 func (s *SeriesSet) Warnings() storage.Warnings {
 	return s.warnings
 }

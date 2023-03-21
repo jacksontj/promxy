@@ -108,6 +108,7 @@ func (f *BooleanFinder) Visit(node parser.Node, _ []parser.Node) (parser.Visitor
 	return f, nil
 }
 
+// CloneExp returns a cloned copy of `expr`
 func CloneExpr(expr parser.Expr) (newExpr parser.Expr) {
 	newExpr, _ = parser.ParseExpr(expr.String())
 	return

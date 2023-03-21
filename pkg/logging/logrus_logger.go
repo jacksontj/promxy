@@ -1,4 +1,4 @@
-// A logrus adapter to the go-kit log.Logger interface.
+// Package logging provides a logrus adapter to the go-kit log.Logger interface.
 package logging
 
 import (
@@ -10,27 +10,23 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Logger is a go-kit logger interface to logrus
 type Logger struct {
 	field logrus.FieldLogger
 }
 
-type Option func(*Logger)
-
 var errMissingValue = errors.New("(MISSING)")
 
 // NewLogger returns a Go kit log.Logger that sends log events to a logrus.Logger.
-func NewLogger(logger logrus.FieldLogger, options ...Option) log.Logger {
+func NewLogger(logger logrus.FieldLogger) log.Logger {
 	l := &Logger{
 		field: logger,
-	}
-
-	for _, optFunc := range options {
-		optFunc(l)
 	}
 
 	return l
 }
 
+// Log will log the pairs of `keyvals`
 func (l Logger) Log(keyvals ...interface{}) error {
 	fields := logrus.Fields{}
 

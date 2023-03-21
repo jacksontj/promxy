@@ -18,6 +18,7 @@ type ClientArgsWrap struct {
 	args map[string]string
 }
 
+// URL returns a URL for the given endpoint + args
 func (c *ClientArgsWrap) URL(ep string, args map[string]string) *url.URL {
 	u := c.Client.URL(ep, args)
 

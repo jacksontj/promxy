@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 )
 
+// NewTimeTruncate returns a new TimeTruncate client -- which will truncate the time to the millisecond.
 func NewTimeTruncate(a API) *TimeTruncate {
 	return &TimeTruncate{a}
 }
