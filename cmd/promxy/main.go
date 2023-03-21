@@ -240,6 +240,11 @@ func main() {
 		MaxSamples:               opts.QueryMaxSamples,
 		NoStepSubqueryIntervalFn: noStepSubqueryInterval.Get,
 		LookbackDelta:            opts.QueryLookbackDelta,
+
+		// EnableAtModifier and EnableNegativeOffset have to be
+		// always on for regular PromQL as of Prometheus v2.33.
+		EnableAtModifier:     true,
+		EnableNegativeOffset: true,
 	}
 
 	if opts.QueryMaxConcurrency != -1 {
