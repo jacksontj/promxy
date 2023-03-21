@@ -172,6 +172,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 	return nil
 }
 
+// ConfigHandler is an implementation of the config handler within the prometheus API
 func (p *ProxyStorage) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 	state := p.GetState()
 	v := map[string]interface{}{
@@ -279,16 +280,14 @@ func (p *ProxyStorage) Appender(context.Context) storage.Appender {
 // Close releases the resources of the Querier.
 func (p *ProxyStorage) Close() error { return nil }
 
+// ChunkQuerier returns a new ChunkQuerier on the storage.
 func (p *ProxyStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (storage.ChunkQuerier, error) {
 	return nil, errors.New("not implemented")
 }
 
+// ExemplarQuerier returns a new ExemplarQuerier on the storage.
 func (p *ProxyStorage) ExemplarQuerier(ctx context.Context) (storage.ExemplarQuerier, error) {
 	return nil, errors.New("not implemented")
-}
-
-func (p *ProxyStorage) WALReplayStatus() (tsdb.WALReplayStatus, error) {
-	return tsdb.WALReplayStatus{}, errors.New("not implemented")
 }
 
 // Implement web.LocalStorage
@@ -297,6 +296,9 @@ func (p *ProxyStorage) Delete(mint, maxt int64, ms ...*labels.Matcher) error { r
 func (p *ProxyStorage) Snapshot(dir string, withHead bool) error             { return nil }
 func (p *ProxyStorage) Stats(statsByLabelName string) (*tsdb.Stats, error) {
 	return &tsdb.Stats{IndexPostingStats: &index.PostingsStats{}}, nil
+}
+func (p *ProxyStorage) WALReplayStatus() (tsdb.WALReplayStatus, error) {
+	return tsdb.WALReplayStatus{}, errors.New("not implemented")
 }
 
 // NodeReplacer replaces promql Nodes with more efficient-to-fetch ones. This works by taking lower-layer
