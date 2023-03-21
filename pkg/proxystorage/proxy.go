@@ -32,7 +32,8 @@ import (
 	"github.com/jacksontj/promxy/pkg/servergroup"
 )
 
-const MetricNameWorkaroundLabel = "__name"
+// metricNameWorkaroundLabel is a workaround from https://github.com/jacksontj/promxy/issues/274
+const metricNameWorkaroundLabel = "__name"
 
 type proxyStorageState struct {
 	sgs            []*servergroup.ServerGroup
@@ -434,7 +435,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 				replacedGrouping := make([]string, len(n.Grouping))
 				for i, g := range n.Grouping {
 					if g == model.MetricNameLabel {
-						replacedGrouping[i] = MetricNameWorkaroundLabel
+						replacedGrouping[i] = metricNameWorkaroundLabel
 					} else {
 						replacedGrouping[i] = g
 					}
@@ -446,7 +447,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 						Op: parser.DIV,
 						LHS: &parser.AggregateExpr{
 							Op:       parser.SUM,
-							Expr:     PreserveLabel(CloneExpr(n.Expr), model.MetricNameLabel, MetricNameWorkaroundLabel),
+							Expr:     PreserveLabel(CloneExpr(n.Expr), model.MetricNameLabel, metricNameWorkaroundLabel),
 							Param:    n.Param,
 							Grouping: replacedGrouping,
 							Without:  n.Without,
@@ -454,13 +455,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 						RHS: &parser.AggregateExpr{
 							Op:       parser.COUNT,
-							Expr:     PreserveLabel(CloneExpr(n.Expr), model.MetricNameLabel, MetricNameWorkaroundLabel),
+							Expr:     PreserveLabel(CloneExpr(n.Expr), model.MetricNameLabel, metricNameWorkaroundLabel),
 							Param:    n.Param,
 							Grouping: replacedGrouping,
 							Without:  n.Without,
 						},
 						VectorMatching: &parser.VectorMatching{Card: parser.CardOneToOne},
-					}, MetricNameWorkaroundLabel, model.MetricNameLabel),
+					}, metricNameWorkaroundLabel, model.MetricNameLabel),
 					Grouping: n.Grouping,
 					Without:  n.Without,
 				}, nil
