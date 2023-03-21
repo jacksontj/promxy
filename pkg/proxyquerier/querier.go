@@ -27,8 +27,8 @@ type ProxyQuerier struct {
 	Cfg *proxyconfig.PromxyConfig
 }
 
-// TODO: switch based on sortSeries bool(first arg)
 // Select returns a set of series that matches the given label matchers.
+// TODO: switch based on sortSeries bool(first arg)
 func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	start := time.Now()
 	defer func() {
