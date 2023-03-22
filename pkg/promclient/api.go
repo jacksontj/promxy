@@ -3,6 +3,7 @@ package promclient
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -14,6 +15,15 @@ import (
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 )
 
+// Copied from prometheus' API (these should just be exported...)
+// TODO: switch to model values once they are fixed
+//
+//	https://github.com/prometheus/client_golang/issues/951
+var (
+	minTime = time.Unix(math.MinInt64/1000+62135596801, 0).UTC()
+	maxTime = time.Unix(math.MaxInt64/1000-62135596801, 999999999).UTC()
+)
+
 // PromAPIV1 implements our internal API interface using *only* the v1 HTTP API
 // Simply wraps the prom API to fullfil our internal API interface
 type PromAPIV1 struct {
@@ -22,12 +32,51 @@ type PromAPIV1 struct {
 
 // LabelNames returns all the unique label names present in the block in sorted order.
 func (p *PromAPIV1) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
+	// If the start or end are min/max (respectively) we want to un-set before we send those down
+	if startTime.Equal(minTime) {
+		startTime = time.Time{}
+	}
+	if endTime.Equal(maxTime) {
+		endTime = time.Time{}
+	}
+
 	return p.API.LabelNames(ctx, matchers, startTime, endTime)
 }
 
 // LabelValues performs a query for the values of the given label.
 func (p *PromAPIV1) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
+	// If the start or end are min/max (respectively) we want to un-set before we send those down
+	if startTime.Equal(minTime) {
+		startTime = time.Time{}
+	}
+	if endTime.Equal(maxTime) {
+		endTime = time.Time{}
+	}
+
 	return p.API.LabelValues(ctx, label, matchers, startTime, endTime)
+}
+
+// Query performs a query for the given time.
+func (p *PromAPIV1) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+	return p.API.Query(ctx, query, ts)
+}
+
+// QueryRange performs a query for the given range.
+func (p *PromAPIV1) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+	return p.API.QueryRange(ctx, query, r)
+}
+
+// Series finds series by label matchers.
+func (p *PromAPIV1) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
+	// If the start or end are min/max (respectively) we want to un-set before we send those down
+	if startTime.Equal(minTime) {
+		startTime = time.Time{}
+	}
+	if endTime.Equal(maxTime) {
+		endTime = time.Time{}
+	}
+
+	return p.API.Series(ctx, matches, startTime, endTime)
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
