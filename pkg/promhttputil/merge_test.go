@@ -107,6 +107,7 @@ func TestMergeValues(t *testing.T) {
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
 					model.SampleValue(10),
 					model.Time(100),
+					nil,
 				},
 			}),
 			b: model.Vector([]*model.Sample{
@@ -114,6 +115,7 @@ func TestMergeValues(t *testing.T) {
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
 					model.SampleValue(10),
 					model.Time(100),
+					nil,
 				},
 			}),
 			r: model.Vector([]*model.Sample{
@@ -121,6 +123,7 @@ func TestMergeValues(t *testing.T) {
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
 					model.SampleValue(10),
 					model.Time(100),
+					nil,
 				},
 			}),
 		},
@@ -132,11 +135,13 @@ func TestMergeValues(t *testing.T) {
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("metrica")}),
 					model.SampleValue(10),
 					model.Time(100),
+					nil,
 				},
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("metricb")}),
 					model.SampleValue(10),
 					model.Time(100),
+					nil,
 				},
 			}),
 			b: model.Vector([]*model.Sample{
@@ -144,6 +149,7 @@ func TestMergeValues(t *testing.T) {
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("metrica")}),
 					model.SampleValue(10),
 					model.Time(100),
+					nil,
 				},
 			}),
 			r: model.Vector([]*model.Sample{
@@ -151,11 +157,13 @@ func TestMergeValues(t *testing.T) {
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("metrica")}),
 					model.SampleValue(10),
 					model.Time(100),
+					nil,
 				},
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("metricb")}),
 					model.SampleValue(10),
 					model.Time(100),
+					nil,
 				},
 			}),
 		},
@@ -168,6 +176,7 @@ func TestMergeValues(t *testing.T) {
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
 					model.SampleValue(10),
 					model.Time(100),
+					nil,
 				},
 			}),
 			b: model.Vector([]*model.Sample{}),
@@ -176,6 +185,7 @@ func TestMergeValues(t *testing.T) {
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
 					model.SampleValue(10),
 					model.Time(100),
+					nil,
 				},
 			}),
 		},
@@ -189,6 +199,7 @@ func TestMergeValues(t *testing.T) {
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
 					model.SampleValue(10),
 					model.Time(100),
+					nil,
 				},
 			}),
 			r: model.Vector([]*model.Sample{
@@ -196,6 +207,7 @@ func TestMergeValues(t *testing.T) {
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
 					model.SampleValue(10),
 					model.Time(100),
+					nil,
 				},
 			}),
 		},
@@ -211,6 +223,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			b: model.Matrix([]*model.SampleStream{
@@ -220,6 +233,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			r: model.Matrix([]*model.SampleStream{
@@ -229,6 +243,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 		},
@@ -242,6 +257,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hostb")}),
@@ -249,6 +265,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			b: model.Matrix([]*model.SampleStream{
@@ -258,6 +275,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			r: model.Matrix([]*model.SampleStream{
@@ -267,6 +285,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hostb")}),
@@ -274,6 +293,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 		},
@@ -288,6 +308,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			b: model.Matrix([]*model.SampleStream{
@@ -297,6 +318,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(200),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			r: model.Matrix([]*model.SampleStream{
@@ -312,6 +334,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 		},
@@ -333,6 +356,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 			b: model.Matrix([]*model.SampleStream{
@@ -352,6 +376,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 			r: model.Matrix([]*model.SampleStream{
@@ -379,6 +404,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 			antiAffinity: model.Time(20),
@@ -402,6 +428,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 			b: model.Matrix([]*model.SampleStream{
@@ -417,6 +444,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 			r: model.Matrix([]*model.SampleStream{
@@ -432,6 +460,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 			antiAffinity: model.Time(100),
@@ -448,6 +477,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			b: model.Matrix([]*model.SampleStream{
@@ -457,6 +487,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(101),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			r: model.Matrix([]*model.SampleStream{
@@ -466,6 +497,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			antiAffinity: model.Time(2),
@@ -483,6 +515,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(101),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			b: model.Matrix([]*model.SampleStream{
@@ -492,6 +525,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			r: model.Matrix([]*model.SampleStream{
@@ -501,6 +535,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(101),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			antiAffinity: model.Time(2),
@@ -512,6 +547,7 @@ func TestMergeValues(t *testing.T) {
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
 					[]model.SamplePair{},
+					nil,
 				},
 			}),
 			b: model.Matrix([]*model.SampleStream{
@@ -521,6 +557,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			r: model.Matrix([]*model.SampleStream{
@@ -530,6 +567,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			antiAffinity: model.Time(2),
@@ -544,12 +582,14 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			b: model.Matrix([]*model.SampleStream{
 				{
 					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
 					[]model.SamplePair{},
+					nil,
 				},
 			}),
 			r: model.Matrix([]*model.SampleStream{
@@ -559,6 +599,7 @@ func TestMergeValues(t *testing.T) {
 						model.Time(100),
 						model.SampleValue(10),
 					}},
+					nil,
 				},
 			}),
 			antiAffinity: model.Time(2),
@@ -580,6 +621,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 			b: model.Matrix([]*model.SampleStream{
@@ -611,6 +653,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 			r: model.Matrix([]*model.SampleStream{
@@ -642,6 +685,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 			antiAffinity: model.Time(2),
@@ -674,6 +718,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 			b: model.Matrix([]*model.SampleStream{
@@ -697,6 +742,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 			r: model.Matrix([]*model.SampleStream{
@@ -720,6 +766,7 @@ func TestMergeValues(t *testing.T) {
 							model.SampleValue(10),
 						},
 					},
+					nil,
 				},
 			}),
 			antiAffinity: model.Time(10),
