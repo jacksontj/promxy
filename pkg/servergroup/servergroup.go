@@ -200,6 +200,13 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				var apiClient promclient.API
 				apiClient = &promclient.PromAPIV1{v1.NewAPI(client)}
 
+				// If debug logging is enabled, wrap the client with a debugAPI client
+				// Since these are called in the reverse order of what we add, we want
+				// to make sure that this is the first wrap of the client
+				if logrus.GetLevel() >= logrus.DebugLevel {
+					apiClient = &promclient.DebugAPI{apiClient, u.String()}
+				}
+
 				if s.Cfg.RemoteRead {
 					u.Path = path.Join(u.Path, s.Cfg.RemoteReadPath)
 					cfg := &remote.ClientConfig{
@@ -253,13 +260,6 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 					}
 					apiClient = tmp
 
-				}
-
-				// If debug logging is enabled, wrap the client with a debugAPI client
-				// Since these are called in the reverse order of what we add, we want
-				// to make sure that this is the last wrap of the client
-				if logrus.GetLevel() >= logrus.DebugLevel {
-					apiClient = &promclient.DebugAPI{apiClient, u.String()}
 				}
 
 				// Add LabelFilter if configured
