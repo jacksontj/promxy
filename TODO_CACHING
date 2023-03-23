@@ -1,0 +1,11 @@
+QueryRange -- only cache matrix responses
+    - break the time into chunks, merge chunks together to respond
+
+Step normalization
+    normalize to the step
+	    // Align start/end to step boundaries
+	    start = (start / stepMS) * stepMS
+	    end = ((end / stepMS) * stepMS)
+
+FastForward
+    - stitch most recent data (vector) onto the end of the matrix response
