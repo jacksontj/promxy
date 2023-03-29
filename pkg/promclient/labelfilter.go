@@ -35,6 +35,7 @@ func init() {
 	prometheus.MustRegister(
 		syncCount,
 		syncSummary,
+		filteredCount,
 	)
 }
 
