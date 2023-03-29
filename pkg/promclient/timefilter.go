@@ -16,6 +16,42 @@ type AbsoluteTimeFilter struct {
 	Truncate   bool
 }
 
+// LabelNames returns all the unique label names present in the block in sorted order.
+func (tf *AbsoluteTimeFilter) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
+	if (!tf.Start.IsZero() && endTime.Before(tf.Start)) || (!tf.End.IsZero() && startTime.After(tf.End)) {
+		return nil, nil, nil
+	}
+
+	if tf.Truncate {
+		if startTime.Before(tf.Start) {
+			startTime = tf.Start
+		}
+		if endTime.After(tf.End) {
+			endTime = tf.End
+		}
+	}
+
+	return tf.API.LabelNames(ctx, matchers, startTime, endTime)
+}
+
+// LabelValues performs a query for the values of the given label.
+func (tf *AbsoluteTimeFilter) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
+	if (!tf.Start.IsZero() && endTime.Before(tf.Start)) || (!tf.End.IsZero() && startTime.After(tf.End)) {
+		return nil, nil, nil
+	}
+
+	if tf.Truncate {
+		if startTime.Before(tf.Start) {
+			startTime = tf.Start
+		}
+		if endTime.After(tf.End) {
+			endTime = tf.End
+		}
+	}
+
+	return tf.API.LabelValues(ctx, label, matchers, startTime, endTime)
+}
+
 // Query performs a query for the given time.
 func (tf *AbsoluteTimeFilter) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
 	if (!tf.Start.IsZero() && ts.Before(tf.Start)) || (!tf.End.IsZero() && ts.After(tf.End)) {
@@ -98,6 +134,44 @@ func (tf *RelativeTimeFilter) window() (time.Time, time.Time) {
 	}
 
 	return start, end
+}
+
+// LabelNames returns all the unique label names present in the block in sorted order.
+func (tf *RelativeTimeFilter) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
+	tfStart, tfEnd := tf.window()
+	if (!tfStart.IsZero() && endTime.Before(tfStart)) || (!tfEnd.IsZero() && startTime.After(tfEnd)) {
+		return nil, nil, nil
+	}
+
+	if tf.Truncate {
+		if startTime.Before(tfStart) {
+			startTime = tfStart
+		}
+		if endTime.After(tfEnd) {
+			endTime = tfEnd
+		}
+	}
+
+	return tf.API.LabelNames(ctx, matchers, startTime, endTime)
+}
+
+// LabelValues performs a query for the values of the given label.
+func (tf *RelativeTimeFilter) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
+	tfStart, tfEnd := tf.window()
+	if (!tfStart.IsZero() && endTime.Before(tfStart)) || (!tfEnd.IsZero() && startTime.After(tfEnd)) {
+		return nil, nil, nil
+	}
+
+	if tf.Truncate {
+		if startTime.Before(tfStart) {
+			startTime = tfStart
+		}
+		if endTime.After(tfEnd) {
+			endTime = tfEnd
+		}
+	}
+
+	return tf.API.LabelValues(ctx, label, matchers, startTime, endTime)
 }
 
 // Query performs a query for the given time.
