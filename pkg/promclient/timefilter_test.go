@@ -39,6 +39,18 @@ func timefilterTest(t *testing.T, api API, testCase timeFilterTestCase) {
 
 	for i, r := range testCase.validRanges {
 		t.Run(fmt.Sprintf("validRange_%d", i), func(t *testing.T) {
+			t.Run("label_names", func(t *testing.T) {
+				if _, _, err := api.LabelNames(context.TODO(), []string{"a"}, r.Start, r.End); err == nil {
+					t.Fatalf("Missing call to API")
+				}
+			})
+
+			t.Run("label_values", func(t *testing.T) {
+				if _, _, err := api.LabelValues(context.TODO(), "__name__", []string{"a"}, r.Start, r.End); err == nil {
+					t.Fatalf("Missing call to API")
+				}
+			})
+
 			t.Run("query_range", func(t *testing.T) {
 				if _, _, err := api.QueryRange(context.TODO(), "", v1.Range{Start: r.Start, End: r.End}); err == nil {
 					t.Fatalf("Missing call to API")
@@ -58,6 +70,18 @@ func timefilterTest(t *testing.T, api API, testCase timeFilterTestCase) {
 	}
 	for i, r := range testCase.invalidRanges {
 		t.Run(fmt.Sprintf("invalidRange_%d", i), func(t *testing.T) {
+			t.Run("label_names", func(t *testing.T) {
+				if _, _, err := api.LabelNames(context.TODO(), []string{"a"}, r.Start, r.End); err != nil {
+					t.Fatalf("Unexpected call to API")
+				}
+			})
+
+			t.Run("label_values", func(t *testing.T) {
+				if _, _, err := api.LabelValues(context.TODO(), "__name__", []string{"a"}, r.Start, r.End); err != nil {
+					t.Fatalf("Unexpected call to API")
+				}
+			})
+
 			t.Run("query_range", func(t *testing.T) {
 				if _, _, err := api.QueryRange(context.TODO(), "", v1.Range{Start: r.Start, End: r.End}); err != nil {
 					t.Fatalf("Unexpected call to API")
