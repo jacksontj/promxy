@@ -21,7 +21,7 @@ import (
 //	https://github.com/prometheus/client_golang/issues/951
 var (
 	minTime = time.Unix(math.MinInt64/1000+62135596801, 0).UTC()
-	maxTime = time.Unix(math.MaxInt64/1000-62135596801, 999999999).UTC()
+	maxTime = time.Unix(math.MaxInt64/1000-62135596801, 999999999).UTC().Truncate(time.Millisecond) // Truncated to ms because prometheus' web API does this
 )
 
 // PromAPIV1 implements our internal API interface using *only* the v1 HTTP API
