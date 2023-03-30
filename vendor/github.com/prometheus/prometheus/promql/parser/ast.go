@@ -341,7 +341,7 @@ func Walk(ctx context.Context, v Visitor, s *EvalStmt, node Node, path []Node, n
 		wg.Add(1)
 		go func(i int, e Node) {
 			defer wg.Done()
-			if childNode, childErr := Walk(ctx, v, s, e, append([]Node{}, path...), nr); err != nil {
+			if childNode, childErr := Walk(ctx, v, s, e, append([]Node{}, path...), nr); childErr != nil {
 				errs[i] = childErr
 			} else {
 				newChildren[i] = childNode
@@ -366,11 +366,16 @@ func Walk(ctx context.Context, v Visitor, s *EvalStmt, node Node, path []Node, n
 }
 
 func ExtractSelectors(expr Expr) [][]*labels.Matcher {
-	var selectors [][]*labels.Matcher
+	var (
+		selectors [][]*labels.Matcher
+		l         sync.Mutex
+	)
 	Inspect(context.TODO(), &EvalStmt{Expr: expr}, func(node Node, _ []Node) error {
 		vs, ok := node.(*VectorSelector)
 		if ok {
+			l.Lock()
 			selectors = append(selectors, vs.LabelMatchers)
+			l.Unlock()
 		}
 		return nil
 	}, nil)
