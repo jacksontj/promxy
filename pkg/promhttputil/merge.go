@@ -266,6 +266,7 @@ func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream, 
 						newValues = append(newValues, bValue)
 						done = true
 					}
+					break
 				}
 			}
 
