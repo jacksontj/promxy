@@ -62,8 +62,8 @@ func NormalizePromError(err error) error {
 type MultiAPIMetricFunc func(i int, api, status string, took float64)
 
 // NewMustMultiAPI returns a MultiAPI
-func NewMustMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricFunc, requiredCount int) *MultiAPI {
-	a, err := NewMultiAPI(apis, antiAffinity, metricFunc, requiredCount)
+func NewMustMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricFunc, requiredCount int, preferMax bool) *MultiAPI {
+	a, err := NewMultiAPI(apis, antiAffinity, metricFunc, requiredCount, preferMax)
 	if err != nil {
 		panic(err)
 	}
@@ -71,7 +71,7 @@ func NewMustMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMet
 }
 
 // NewMultiAPI returns a MultiAPI
-func NewMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricFunc, requiredCount int) (*MultiAPI, error) {
+func NewMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricFunc, requiredCount int, preferMax bool) (*MultiAPI, error) {
 	fingerprintCounts := make(map[model.Fingerprint]int)
 	apiFingerprints := make([]model.Fingerprint, len(apis))
 	for i, api := range apis {
@@ -97,6 +97,7 @@ func NewMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricF
 		antiAffinity:    antiAffinity,
 		metricFunc:      metricFunc,
 		requiredCount:   requiredCount,
+		preferMax:       preferMax,
 	}, nil
 }
 
@@ -107,6 +108,7 @@ type MultiAPI struct {
 	antiAffinity    model.Time
 	metricFunc      MultiAPIMetricFunc
 	requiredCount   int // number "per key" that we require to respond
+	preferMax       bool
 }
 
 func (m *MultiAPI) recordMetric(i int, api, status string, took float64) {
@@ -335,7 +337,7 @@ func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) (model
 					result = ret.v
 				} else {
 					var err error
-					result, err = promhttputil.MergeValues(m.antiAffinity, result, ret.v)
+					result, err = promhttputil.MergeValues(m.antiAffinity, result, ret.v, m.preferMax)
 					if err != nil {
 						return nil, warnings.Warnings(), err
 					}
@@ -415,7 +417,7 @@ func (m *MultiAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 					result = ret.v
 				} else {
 					var err error
-					result, err = promhttputil.MergeValues(m.antiAffinity, result, ret.v)
+					result, err = promhttputil.MergeValues(m.antiAffinity, result, ret.v, m.preferMax)
 					if err != nil {
 						return nil, warnings.Warnings(), err
 					}
@@ -572,7 +574,7 @@ func (m *MultiAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 					result = ret.v
 				} else {
 					var err error
-					result, err = promhttputil.MergeValues(m.antiAffinity, result, ret.v)
+					result, err = promhttputil.MergeValues(m.antiAffinity, result, ret.v, m.preferMax)
 					if err != nil {
 						return nil, warnings.Warnings(), err
 					}
