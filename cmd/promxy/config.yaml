@@ -75,6 +75,9 @@ promxy:
         end: -1h
         truncate: false
 
+      # when merging sample streams, the max value at a given timestamp will be preferred
+      prefer_max: false
+
       # absolute_time_range defines an absolute time range that this server group contains.
       # this is completely optional and start/end are both optional as well
       # and example is if the servergroup has been deprecated and is no longer receiving data

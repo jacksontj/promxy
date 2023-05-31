@@ -129,7 +129,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		return fmt.Errorf("error applying config to one or more server group(s)")
 	}
 
-	multiApi, err := promclient.NewMultiAPI(apis, model.TimeFromUnix(0), nil, len(apis))
+	multiApi, err := promclient.NewMultiAPI(apis, model.TimeFromUnix(0), nil, len(apis), false)
 	if err != nil {
 		return err
 	}

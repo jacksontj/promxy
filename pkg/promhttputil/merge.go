@@ -70,7 +70,7 @@ func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
 }
 
 // MergeValues merges values `a` and `b` with the given antiAffinityBuffer
-func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, error) {
+func MergeValues(antiAffinityBuffer model.Time, a, b model.Value, preferMax bool) (model.Value, error) {
 	if a == nil {
 		return b, nil
 	}
@@ -146,7 +146,7 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, 
 			// If we've seen this fingerPrint before, lets make sure that a value exists
 			if index, ok := fingerPrintMap[finger]; ok {
 				// TODO: check this error? For now the only one is sig collision, which we check
-				newValue[index], _ = MergeSampleStream(antiAffinityBuffer, newValue[index], stream)
+				newValue[index], _ = MergeSampleStream(antiAffinityBuffer, newValue[index], stream, preferMax)
 			} else {
 				newValue = append(newValue, stream)
 				fingerPrintMap[finger] = len(newValue) - 1
@@ -175,7 +175,7 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value) (model.Value, 
 // this problem we're going to *not* merge any datapoint within antiAffinityBuffer of another point
 // we have. This means we can tolerate antiAffinityBuffer/2 on either side (which can be used by either
 // clock skew or from this scrape skew).
-func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream) (*model.SampleStream, error) {
+func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream, preferMax bool) (*model.SampleStream, error) {
 	if a.Metric.Fingerprint() != b.Metric.Fingerprint() {
 		return nil, fmt.Errorf("cannot merge mismatch fingerprints")
 	}
@@ -220,6 +220,8 @@ func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream) 
 
 	}
 
+	lastOffset := bOffset
+
 	for _, aValue := range a.Values {
 		// if we have no points, this one by definition is valid
 		if len(newValues) == 0 {
@@ -242,7 +244,36 @@ func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream) 
 				}
 			}
 		}
-		newValues = append(newValues, aValue)
+
+		if !preferMax {
+			newValues = append(newValues, aValue)
+		} else {
+			done := false
+
+			// see if there is a nearby sample from b that is larger than a
+			for i := lastOffset; i < len(b.Values); i++ {
+				bValue := b.Values[i]
+				// b is not within antiAffinityBuffer of a
+				if bValue.Timestamp > aValue.Timestamp+antiAffinityBuffer {
+					break
+				}
+				// b is within antiAffinityBuffer of a
+				if bValue.Timestamp > aValue.Timestamp-antiAffinityBuffer {
+					// no need to iterate b before this offset next time
+					lastOffset = i
+					if bValue.Value > aValue.Value {
+						// use the larger value from b
+						newValues = append(newValues, bValue)
+						done = true
+					}
+				}
+			}
+
+			if !done {
+				//use the larger value from a
+				newValues = append(newValues, aValue)
+			}
+		}
 	}
 
 	lastTime := newValues[len(newValues)-1].Timestamp

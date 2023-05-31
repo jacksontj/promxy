@@ -280,7 +280,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 	}
 
 	logrus.Debugf("Updating targets from discovery manager: %v", targets)
-	apiClient, err := promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc, 1)
+	apiClient, err := promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc, 1, s.Cfg.GetPreferMax())
 	if err != nil {
 		return err
 	}

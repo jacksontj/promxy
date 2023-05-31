@@ -20,6 +20,7 @@ var (
 		Scheme:         "http",
 		RemoteReadPath: "api/v1/read",
 		Timeout:        0,
+		PreferMax:      false,
 		HTTPConfig: HTTPClientConfig{
 			DialTimeout: time.Millisecond * 200, // Default dial timeout of 200ms
 		},
@@ -186,6 +187,8 @@ type Config struct {
 	//          - up
 
 	LabelFilterConfig *promclient.LabelFilterConfig `yaml:"label_filter"`
+
+	PreferMax bool `yaml:"prefer_max,omitempty"`
 }
 
 // GetScheme returns the scheme for this servergroup
@@ -196,6 +199,11 @@ func (c *Config) GetScheme() string {
 // GetAntiAffinity returns the AntiAffinity time for this servergroup
 func (c *Config) GetAntiAffinity() model.Time {
 	return model.TimeFromUnix(int64((c.AntiAffinity).Seconds()))
+}
+
+// GetPreferMax returns the PreferMax setting for this servergroup
+func (c *Config) GetPreferMax() bool {
+	return c.PreferMax
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface.
