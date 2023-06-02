@@ -88,6 +88,10 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value, preferMax bool
 	case *model.Scalar:
 		bTyped := b.(*model.Scalar)
 
+		if preferMax && bTyped.Value > aTyped.Value && bTyped.Timestamp != 0 {
+			return bTyped, nil
+		}
+
 		if aTyped.Value != 0 && aTyped.Timestamp != 0 {
 			return aTyped, nil
 		}
@@ -116,7 +120,8 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value, preferMax bool
 			// If we've seen this fingerPrint before, lets make sure that a value exists
 			if index, ok := fingerPrintMap[finger]; ok {
 				// Only replace if we have no value (which seems reasonable)
-				if newValue[index].Value == model.SampleValue(0) {
+				// Or we prefer max value and there is a bigger value
+				if newValue[index].Value == model.SampleValue(0) || preferMax && newValue[index].Value < item.Value {
 					newValue[index].Value = item.Value
 				}
 			} else {
