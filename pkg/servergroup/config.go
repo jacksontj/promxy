@@ -209,6 +209,11 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+// MarshalYAML implements the yaml.Marshaler interface.
+func (c *Config) MarshalYAML() (interface{}, error) {
+	return discovery.MarshalYAMLWithInlineConfigs(c)
+}
+
 // HTTPClientConfig extends prometheus' HTTPClientConfig
 type HTTPClientConfig struct {
 	DialTimeout time.Duration                `yaml:"dial_timeout"`
