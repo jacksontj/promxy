@@ -41,10 +41,10 @@ func (tf *AbsoluteTimeFilter) LabelValues(ctx context.Context, label string, mat
 	}
 
 	if tf.Truncate {
-		if startTime.Before(tf.Start) {
+		if !tf.Start.IsZero() && startTime.Before(tf.Start) {
 			startTime = tf.Start
 		}
-		if endTime.After(tf.End) {
+		if !tf.End.IsZero() && endTime.After(tf.End) {
 			endTime = tf.End
 		}
 	}
@@ -68,10 +68,10 @@ func (tf *AbsoluteTimeFilter) QueryRange(ctx context.Context, query string, r v1
 	}
 
 	if tf.Truncate {
-		if r.Start.Before(tf.Start) {
+		if !tf.Start.IsZero() && r.Start.Before(tf.Start) {
 			r.Start = tf.Start
 		}
-		if r.End.After(tf.End) {
+		if !tf.End.IsZero() && r.End.After(tf.End) {
 			r.End = tf.End
 		}
 	}
@@ -86,10 +86,10 @@ func (tf *AbsoluteTimeFilter) Series(ctx context.Context, matches []string, star
 	}
 
 	if tf.Truncate {
-		if startTime.Before(tf.Start) {
+		if !tf.Start.IsZero() && startTime.Before(tf.Start) {
 			startTime = tf.Start
 		}
-		if endTime.After(tf.End) {
+		if !tf.End.IsZero() && endTime.After(tf.End) {
 			endTime = tf.End
 		}
 	}
@@ -104,10 +104,10 @@ func (tf *AbsoluteTimeFilter) GetValue(ctx context.Context, start, end time.Time
 	}
 
 	if tf.Truncate {
-		if start.Before(tf.Start) {
+		if !tf.Start.IsZero() && start.Before(tf.Start) {
 			start = tf.Start
 		}
-		if end.After(tf.End) {
+		if !tf.End.IsZero() && end.After(tf.End) {
 			end = tf.End
 		}
 	}
@@ -144,10 +144,10 @@ func (tf *RelativeTimeFilter) LabelNames(ctx context.Context, matchers []string,
 	}
 
 	if tf.Truncate {
-		if startTime.Before(tfStart) {
+		if !tfStart.IsZero() && startTime.Before(tfStart) {
 			startTime = tfStart
 		}
-		if endTime.After(tfEnd) {
+		if !tfEnd.IsZero() && endTime.After(tfEnd) {
 			endTime = tfEnd
 		}
 	}
@@ -163,10 +163,10 @@ func (tf *RelativeTimeFilter) LabelValues(ctx context.Context, label string, mat
 	}
 
 	if tf.Truncate {
-		if startTime.Before(tfStart) {
+		if !tfStart.IsZero() && startTime.Before(tfStart) {
 			startTime = tfStart
 		}
-		if endTime.After(tfEnd) {
+		if !tfEnd.IsZero() && endTime.After(tfEnd) {
 			endTime = tfEnd
 		}
 	}
@@ -192,10 +192,10 @@ func (tf *RelativeTimeFilter) QueryRange(ctx context.Context, query string, r v1
 	}
 
 	if tf.Truncate {
-		if r.Start.Before(tfStart) {
+		if !tfStart.IsZero() && r.Start.Before(tfStart) {
 			r.Start = tfStart
 		}
-		if r.End.After(tfEnd) {
+		if !tfEnd.IsZero() && r.End.After(tfEnd) {
 			r.End = tfEnd
 		}
 	}
@@ -211,10 +211,10 @@ func (tf *RelativeTimeFilter) Series(ctx context.Context, matches []string, star
 	}
 
 	if tf.Truncate {
-		if startTime.Before(tfStart) {
+		if !tfStart.IsZero() && startTime.Before(tfStart) {
 			startTime = tfStart
 		}
-		if endTime.After(tfEnd) {
+		if !tfEnd.IsZero() && endTime.Before(tfEnd) {
 			endTime = tfEnd
 		}
 	}
@@ -230,10 +230,10 @@ func (tf *RelativeTimeFilter) GetValue(ctx context.Context, start, end time.Time
 	}
 
 	if tf.Truncate {
-		if start.Before(tfStart) {
+		if !tfStart.IsZero() && start.Before(tfStart) {
 			start = tfStart
 		}
-		if end.After(tfEnd) {
+		if !tfEnd.IsZero() && end.Before(tfEnd) {
 			end = tfEnd
 		}
 	}
