@@ -107,30 +107,61 @@ func TestAbsoluteTimeFilter(t *testing.T) {
 	start := now.Add(time.Hour * -2)
 	end := now.Add(time.Hour * -1)
 
-	api := &AbsoluteTimeFilter{
-		API:   &recoverAPI{nil},
-		Start: start,
-		End:   end,
-	}
-	timefilterTest(t, api, timeFilterTestCase{
-		validTimes: []time.Time{
-			start,
-			end,
-			start.Add(time.Minute),
-		},
-		invalidTimes: []time.Time{
-			now,
-			start.Add(time.Minute * -1),
-		},
-		validRanges: []v1.Range{
-			{Start: start, End: end},
-			{Start: start.Add(time.Hour * -1), End: end},
-			{Start: start, End: end.Add(time.Hour)},
-		},
-		invalidRanges: []v1.Range{
-			{Start: now, End: now},
-			{Start: start.Add(time.Hour * -10), End: end.Add(time.Hour * -9)},
-		},
+	t.Run(fmt.Sprintf("start=%s end=%s", start, end), func(t *testing.T) {
+		api := &AbsoluteTimeFilter{
+			API:   &recoverAPI{nil},
+			Start: start,
+			End:   end,
+		}
+		timefilterTest(t, api, timeFilterTestCase{
+			validTimes: []time.Time{
+				start,
+				end,
+				start.Add(time.Minute),
+			},
+			invalidTimes: []time.Time{
+				now,
+				start.Add(time.Minute * -1),
+			},
+			validRanges: []v1.Range{
+				{Start: start, End: end},
+				{Start: start.Add(time.Hour * -1), End: end},
+				{Start: start, End: end.Add(time.Hour)},
+			},
+			invalidRanges: []v1.Range{
+				{Start: now, End: now},
+				{Start: start.Add(time.Hour * -10), End: end.Add(time.Hour * -9)},
+			},
+		})
+	})
+
+	end = time.Time{}
+
+	t.Run(fmt.Sprintf("start=%s end=%s", start, end), func(t *testing.T) {
+		api := &AbsoluteTimeFilter{
+			API:   &recoverAPI{nil},
+			Start: start,
+			End:   end,
+		}
+		timefilterTest(t, api, timeFilterTestCase{
+			validTimes: []time.Time{
+				start,
+				start.Add(time.Minute),
+				now,
+			},
+			invalidTimes: []time.Time{
+				start.Add(time.Minute * -1),
+			},
+			validRanges: []v1.Range{
+				{Start: start, End: now},
+				{Start: start.Add(time.Hour * -1), End: now},
+				{Start: start, End: now.Add(time.Hour)},
+				{Start: now, End: now},
+			},
+			invalidRanges: []v1.Range{
+				{Start: start.Add(time.Hour * -10), End: now.Add(time.Hour * -9)},
+			},
+		})
 	})
 }
 
