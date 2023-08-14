@@ -536,6 +536,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			}
 
 			ret := &parser.VectorSelector{OriginalOffset: offset}
+			if s.Interval > 0 {
+				ret.LookbackDelta = s.Interval - time.Duration(1)
+			}
 			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
 
 			// Replace with sum(count_values()) BY (label)
@@ -571,6 +574,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			}
 
 			ret := &parser.VectorSelector{OriginalOffset: offset}
+			if s.Interval > 0 {
+				ret.LookbackDelta = s.Interval - time.Duration(1)
+			}
 			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
 			n.Expr = ret
 
@@ -616,6 +622,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		}
 
 		ret := &parser.VectorSelector{OriginalOffset: offset}
+		if s.Interval > 0 {
+			ret.LookbackDelta = s.Interval - time.Duration(1)
+		}
 		ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
 
 		// Some functions require specific handling which we'll catch here
