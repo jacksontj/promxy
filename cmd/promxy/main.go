@@ -72,7 +72,8 @@ func init() {
 }
 
 type cliOpts struct {
-	Version bool `long:"version" short:"v" description:"print out version and exit"`
+	Version     bool `long:"version" short:"v" description:"print out version and exit"`
+	CheckConfig bool `long:"check-config" description:"check config files and exit"`
 
 	BindAddr         string `long:"bind-addr" description:"address for promxy to listen on" default:":8082"`
 	ConfigFile       string `long:"config" description:"path to the config file" default:"config.yaml"`
@@ -171,6 +172,15 @@ func main() {
 
 	if opts.Version {
 		fmt.Println(version.Print("promxy"))
+		os.Exit(0)
+	}
+
+	// CheckConfig simply will load the config, check for errors, and exit
+	if opts.CheckConfig {
+		if _, err := proxyconfig.ConfigFromFile(opts.ConfigFile); err != nil {
+			logrus.Fatalf("Error loading cfg: %v", err)
+		}
+		fmt.Printf("%s if valid promxy config file syntax\n", opts.ConfigFile)
 		os.Exit(0)
 	}
 
