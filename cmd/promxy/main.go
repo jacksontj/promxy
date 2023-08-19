@@ -44,6 +44,7 @@ import (
 	"go.uber.org/atomic"
 	"k8s.io/klog"
 
+	"github.com/jacksontj/promxy/pkg/alertbackfill"
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/logging"
 	"github.com/jacksontj/promxy/pkg/middleware"
@@ -104,6 +105,7 @@ type cliOpts struct {
 	ForOutageTolerance        time.Duration `long:"rules.alert.for-outage-tolerance" description:"Max time to tolerate prometheus outage for restoring for state of alert." default:"1h"`
 	ForGracePeriod            time.Duration `long:"rules.alert.for-grace-period" description:"Minimum duration between alert and restored for state. This is maintained only for alerts with configured for time greater than grace period." default:"10m"`
 	ResendDelay               time.Duration `long:"rules.alert.resend-delay" description:"Minimum amount of time to wait before resending an alert to Alertmanager." default:"1m"`
+	AlertBackfill             bool          `long:"rules.alertbackfill" description:"Enable promxy to recalculate alert state on startup when the downstream datastore doesn't have an ALERTS_FOR_STATE"`
 
 	ShutdownDelay   time.Duration `long:"http.shutdown-delay" description:"time to wait before shutting down the http server, this allows for a grace period for upstreams (e.g. LoadBalancers) to discover the new stopping status through healthchecks" default:"10s"`
 	ShutdownTimeout time.Duration `long:"http.shutdown-timeout" description:"max time to wait for a graceful shutdown of the HTTP server" default:"60s"`
@@ -307,19 +309,31 @@ func main() {
 		logrus.Infof("Notifier manager stopped")
 	}()
 
+	var ruleQueryable storage.Queryable
+	// If alertbackfill is enabled; wire it up!
+	if opts.AlertBackfill {
+		ruleQueryable = alertbackfill.NewAlertBackfillQueryable(engine, proxyStorage)
+	} else {
+		ruleQueryable = proxyStorage
+	}
 	ruleManager := rules.NewManager(&rules.ManagerOptions{
 		Context:         ctx,         // base context for all background tasks
 		ExternalURL:     externalUrl, // URL listed as URL for "who fired this alert"
 		QueryFunc:       rules.EngineQueryFunc(engine, proxyStorage),
 		NotifyFunc:      sendAlerts(notifierManager, externalUrl.String()),
 		Appendable:      proxyStorage,
-		Queryable:       proxyStorage,
+		Queryable:       ruleQueryable,
 		Logger:          logger,
 		Registerer:      prometheus.DefaultRegisterer,
 		OutageTolerance: opts.ForOutageTolerance,
 		ForGracePeriod:  opts.ForGracePeriod,
 		ResendDelay:     opts.ResendDelay,
 	})
+
+	if q, ok := ruleQueryable.(*alertbackfill.AlertBackfillQueryable); ok {
+		q.SetRuleGroupFetcher(ruleManager.RuleGroups)
+	}
+
 	go ruleManager.Run()
 
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(&proxyconfig.ApplyConfigFunc{func(cfg *config.Config) error {
@@ -413,7 +427,7 @@ func main() {
 	r.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Have our fallback rules
 		if strings.HasPrefix(r.URL.Path, path.Join(webOptions.RoutePrefix, "/debug")) {
-			http.DefaultServeMux.ServeHTTP(w, r)
+			http.StripPrefix(webOptions.RoutePrefix, http.DefaultServeMux).ServeHTTP(w, r)
 		} else if r.URL.Path == path.Join(webOptions.RoutePrefix, "/-/ready") {
 			if stopping {
 				w.WriteHeader(http.StatusServiceUnavailable)

@@ -1,7 +1,0 @@
-# This get evaluated, but since prometheus has no API for appending
-# datapoints this is a no-op
-groups:
-  - name: example
-    rules:
-      - record: query_qps
-        expr: irate(http_requests_total{handler="query"}[1m])
