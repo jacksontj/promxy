@@ -9,4 +9,10 @@ groups:
       severity: page
     annotations:
       summary: High request latency
-
+  - alert: testAlert
+    expr: prometheus_build_info == 1
+    for: 10m
+    labels:
+      severity: page
+    annotations:
+      summary: example always-firing alert
