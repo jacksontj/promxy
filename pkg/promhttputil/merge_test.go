@@ -23,6 +23,7 @@ func TestMergeValues(t *testing.T) {
 		b            model.Value
 		r            model.Value
 		antiAffinity model.Time
+		preferMax    bool
 		err          error
 	}{
 		//
@@ -771,11 +772,371 @@ func TestMergeValues(t *testing.T) {
 			}),
 			antiAffinity: model.Time(10),
 		},
+		// preferMax with antiAffinity set to 0
+		{
+			name: "preferMax with antiAffinity set to 0",
+			a: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(1),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(3),
+							model.SampleValue(20),
+						},
+						{
+							model.Time(6),
+							model.SampleValue(10),
+						},
+					},
+					nil,
+				},
+			}),
+			b: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(1),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(2),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(3),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(4),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(5),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(6),
+							model.SampleValue(10),
+						},
+					},
+					nil,
+				},
+			}),
+			r: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(1),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(2),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(3),
+							model.SampleValue(20),
+						},
+						{
+							model.Time(4),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(5),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(6),
+							model.SampleValue(10),
+						},
+					},
+					nil,
+				},
+			}),
+			antiAffinity: model.Time(0),
+			preferMax:    true,
+		},
+		// preferMax with antiAffinity equal to scrape interval
+		{
+			name: "preferMax with antiAffinity equal to scrape interval",
+			a: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(1),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(3),
+							model.SampleValue(20),
+						},
+						{
+							model.Time(6),
+							model.SampleValue(20),
+						},
+					},
+					nil,
+				},
+			}),
+			b: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(1),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(2),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(3),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(4),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(5),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(6),
+							model.SampleValue(10),
+						},
+					},
+					nil,
+				},
+			}),
+			r: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(1),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(2),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(3),
+							model.SampleValue(20),
+						},
+						{
+							model.Time(4),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(5),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(6),
+							model.SampleValue(20),
+						},
+					},
+					nil,
+				},
+			}),
+			antiAffinity: model.Time(1),
+			preferMax:    true,
+		},
+		// preferMax with antiAffinity smaller than scrape interval
+		{
+			name: "preferMax with antiAffinity smaller than scrape interval",
+			a: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(10),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(30),
+							model.SampleValue(20),
+						},
+						{
+							model.Time(60),
+							model.SampleValue(20),
+						},
+					},
+					nil,
+				},
+			}),
+			b: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(10),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(20),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(30),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(40),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(50),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(60),
+							model.SampleValue(10),
+						},
+					},
+					nil,
+				},
+			}),
+			r: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(10),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(20),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(30),
+							model.SampleValue(20),
+						},
+						{
+							model.Time(40),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(50),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(60),
+							model.SampleValue(20),
+						},
+					},
+					nil,
+				},
+			}),
+			antiAffinity: model.Time(1),
+			preferMax:    true,
+		},
+		// preferMax with antiAffinity larger than scrape interval
+		{
+			name: "preferMax with antiAffinity larger than scrape interval",
+			a: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(1),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(3),
+							model.SampleValue(20),
+						},
+						{
+							model.Time(6),
+							model.SampleValue(20),
+						},
+					},
+					nil,
+				},
+			}),
+			b: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(1),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(2),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(3),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(4),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(5),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(6),
+							model.SampleValue(10),
+						},
+					},
+					nil,
+				},
+			}),
+			r: model.Matrix([]*model.SampleStream{
+				{
+					model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")}),
+					[]model.SamplePair{
+						{
+							model.Time(1),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(2),
+							model.SampleValue(10),
+						},
+						{
+							model.Time(3),
+							model.SampleValue(20),
+						},
+						{
+							model.Time(4),
+							model.SampleValue(20),
+						},
+						{
+							model.Time(5),
+							model.SampleValue(20),
+						},
+						{
+							model.Time(6),
+							model.SampleValue(20),
+						},
+					},
+					nil,
+				},
+			}),
+			antiAffinity: model.Time(2),
+			preferMax:    true,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := MergeValues(test.antiAffinity, test.a, test.b)
+			result, err := MergeValues(test.antiAffinity, test.a, test.b, test.preferMax)
 			if err != test.err {
 				t.Fatalf("mismatch err in %s expected=%v actual=%v", test.name, test.err, err)
 			}

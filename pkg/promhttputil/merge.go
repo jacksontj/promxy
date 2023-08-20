@@ -255,19 +255,22 @@ func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream, 
 		} else {
 			done := false
 
-			// see if there is a nearby sample from b that is larger than a
+			// see if there is a sample from b within antiAffinityBuffer, that is larger than a
 			for i := lastOffset; i < len(b.Values); i++ {
 				bValue := b.Values[i]
 				// b is not within antiAffinityBuffer of a
-				if bValue.Timestamp > aValue.Timestamp+antiAffinityBuffer {
+				if bValue.Timestamp >= (aValue.Timestamp+antiAffinityBuffer) && bValue.Timestamp != aValue.Timestamp {
 					break
 				}
 				// b is within antiAffinityBuffer of a
-				if bValue.Timestamp > aValue.Timestamp-antiAffinityBuffer {
+				if bValue.Timestamp == aValue.Timestamp || bValue.Timestamp > (aValue.Timestamp-antiAffinityBuffer) {
 					// no need to iterate b before this offset next time
 					lastOffset = i
 					if bValue.Value > aValue.Value {
 						// use the larger value from b
+						// note: there may be larger values from b after this, we will choose the first one we find
+						// within the antiAffinityBuffer
+						bValue.Timestamp = aValue.Timestamp
 						newValues = append(newValues, bValue)
 						done = true
 					}
