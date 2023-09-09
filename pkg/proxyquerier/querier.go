@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
@@ -55,7 +54,7 @@ func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*l
 		labelsets, w, err := h.Client.Series(h.Ctx, []string{matcherString}, h.Start, h.End)
 		warnings = promhttputil.WarningsConvert(w)
 		if err != nil {
-			return NewSeriesSet(nil, warnings, errors.Cause(err))
+			return NewSeriesSet(nil, warnings, err)
 		}
 		// Convert labelsets to vectors
 		// convert to vector (there aren't points, but this way we don't have to make more merging functions)
@@ -72,7 +71,7 @@ func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*l
 		warnings = promhttputil.WarningsConvert(w)
 	}
 	if err != nil {
-		return NewSeriesSet(nil, warnings, errors.Cause(err))
+		return NewSeriesSet(nil, warnings, err)
 	}
 
 	iterators := promclient.IteratorsForValue(result)
@@ -108,7 +107,7 @@ func (h *ProxyQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]
 	result, w, err := h.Client.LabelValues(h.Ctx, name, matchersStrings, h.Start, h.End)
 	warnings := promhttputil.WarningsConvert(w)
 	if err != nil {
-		return nil, warnings, errors.Cause(err)
+		return nil, warnings, err
 	}
 
 	ret := make([]string, len(result))
