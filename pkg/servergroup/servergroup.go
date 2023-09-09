@@ -270,7 +270,8 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 					}
 				}
 
-				apiClients = append(apiClients, apiClient)
+				// Add wrap for the specific target, and add to the list
+				apiClients = append(apiClients, &promclient.ErrorWrap{apiClient, "error in target=" + u.String()})
 			}
 		}
 	}
@@ -286,8 +287,9 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 	}
 
 	newState := &ServerGroupState{
-		Targets:   targets,
-		apiClient: apiClient,
+		Targets: targets,
+		// Add error wrap for this specific servergroup
+		apiClient: &promclient.ErrorWrap{apiClient, fmt.Sprintf("error in servergroup ord=%d", s.Cfg.Ordinal)},
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
 	}
