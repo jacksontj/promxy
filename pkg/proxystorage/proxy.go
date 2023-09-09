@@ -105,6 +105,7 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		cfg: c,
 	}
 	for i, sgCfg := range c.ServerGroups {
+		sgCfg.Ordinal = i
 		tmp, err := servergroup.NewServerGroup()
 		if err != nil {
 			failed = true
