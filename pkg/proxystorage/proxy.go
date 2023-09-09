@@ -420,7 +420,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			}
 
 			if err != nil {
-				return nil, errors.Cause(err)
+				return nil, err
 			}
 
 		// Convert avg into sum() / count()
@@ -506,7 +506,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			}
 
 			if err != nil {
-				return nil, errors.Cause(err)
+				return nil, err
 			}
 			n.Op = parser.SUM
 
@@ -525,7 +525,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			}
 
 			if err != nil {
-				return nil, errors.Cause(err)
+				return nil, err
 			}
 
 			iterators := promclient.IteratorsForValue(result)
@@ -612,7 +612,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		}
 
 		if err != nil {
-			return nil, errors.Cause(err)
+			return nil, err
 		}
 
 		iterators := promclient.IteratorsForValue(result)
@@ -683,7 +683,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		}
 
 		if err != nil {
-			return nil, errors.Cause(err)
+			return nil, err
 		}
 
 		iterators := promclient.IteratorsForValue(result)
