@@ -201,13 +201,14 @@ func (p *ProxyStorage) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 // MetadataHandler is an implementation of the metadata handler within the prometheus API
 func (p *ProxyStorage) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	// Check that "limit" is valid
-	var limit int
+	var limit *int
 	if s := r.FormValue("limit"); s != "" {
-		var err error
-		if limit, err = strconv.Atoi(s); err != nil {
+		i, err := strconv.Atoi(s)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		limit = &i
 	}
 
 	// Do the metadata lookup
@@ -215,10 +216,10 @@ func (p *ProxyStorage) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	metadata, err := state.client.Metadata(r.Context(), r.FormValue("metric"), r.FormValue("limit"))
 
 	// Trim the results to the requested limit
-	if len(metadata) > limit {
+	if limit != nil && len(metadata) > *limit {
 		count := 0
 		for k := range metadata {
-			if count < limit {
+			if count < *limit {
 				count++
 			} else {
 				delete(metadata, k)
