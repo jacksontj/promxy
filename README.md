@@ -25,7 +25,7 @@ can have a single source and you can have globally aggregated promql queries.
 ## Quickstart
 Release binaries are available on the [releases](https://github.com/jacksontj/promxy/releases) page.
 
-If you are interested in hacking on promxy (or just running your own build), you can clone and build`:
+If you are interested in hacking on promxy (or just running your own build), you can clone and build:
 
 ```
 git clone git@github.com:jacksontj/promxy.git
@@ -60,7 +60,7 @@ Promxy is currently using a fork based on prometheus 2.24. This version isn't su
 but it is relevant for promql features (e.g. subqueries) and sd config options.
 
 ### What changes are required to my prometheus infra for promxy?
-None. Promxy is simply an aggregating proxy that sends requests to prometheus-- meaning
+None. Promxy is simply an aggregating proxy that sends requests to prometheus -- meaning
 it requires no changes to your existing prometheus install.
 
 ### Can I have promxy as a downstream of promxy?
@@ -73,7 +73,7 @@ Promxy's goal is to be the same performance as the slowest prometheus server it
 has to talk to. If you have a query that is significantly slower through promxy
 than on prometheus direct please open up an issue so we can get that taken care of.
 
-**Note**: if you are running prometheus <2.2 you may notice "slow" performance when running queries that access large amounts of data. This is due to inefficient json marshaling in prometheus. You can workaround this by configuring promxy to use the [remote_read](https://github.com/jacksontj/promxy/blob/master/pkg/servergroup/config.go#L27) API
+**Note**: if you are running prometheus <2.2 you may notice "slow" performance when running queries that access large amounts of data. This is due to inefficient json marshaling in prometheus. You can workaround this by configuring promxy to use the [remote_read](https://github.com/jacksontj/promxy/blob/master/pkg/servergroup/config.go#L27) API.
 
 ### How does Promxy know what prometheus server to route to?
 Promxy currently does a complete scatter-gather to all configured server groups.
@@ -92,7 +92,7 @@ endpoint must be defined in the promxy config (which is where it will send those
 
 ### What happens when an entire ServerGroup is unavailable?
 The default behavior in the event of a servergroup being down is to return an error. If all nodes in a servergroup
-are down the resulting data can be inaccurate (missing data, etc.) -- so we'd rather by default return an error rather
+are down the resulting data can be inaccurate (missing data, etc.) -- so we'd rather by default return an error 
 than an inaccurate value (since alerting etc. might rely on it, we don't want to hide a problem).
 
 Now with that said if you'd like to make some or all servergroups "optional" (meaning the errors will
