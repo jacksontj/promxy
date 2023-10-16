@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"sort"
+	"sync"
 )
 
 type (
@@ -38,13 +39,6 @@ type (
 		iface interface{}
 	}
 
-	// Filter supports removing certain attributes from attribute sets. When
-	// the filter returns true, the attribute will be kept in the filtered
-	// attribute set. When the filter returns false, the attribute is excluded
-	// from the filtered attribute set, and the attribute instead appears in
-	// the removed list of excluded attributes.
-	Filter func(KeyValue) bool
-
 	// Sortable implements sort.Interface, used for sorting KeyValue. This is
 	// an exported type to support a memory optimization. A pointer to one of
 	// these is needed for the call to sort.Stable(), which the caller may
@@ -62,6 +56,12 @@ var (
 			iface: [0]KeyValue{},
 		},
 	}
+
+	// sortables is a pool of Sortables used to create Sets with a user does
+	// not provide one.
+	sortables = sync.Pool{
+		New: func() interface{} { return new(Sortable) },
+	}
 )
 
 // EmptySet returns a reference to a Set with no elements.
@@ -71,8 +71,8 @@ func EmptySet() *Set {
 	return emptySet
 }
 
-// reflect abbreviates reflect.ValueOf.
-func (d Distinct) reflect() reflect.Value {
+// reflectValue abbreviates reflect.ValueOf(d).
+func (d Distinct) reflectValue() reflect.Value {
 	return reflect.ValueOf(d.iface)
 }
 
@@ -86,15 +86,15 @@ func (l *Set) Len() int {
 	if l == nil || !l.equivalent.Valid() {
 		return 0
 	}
-	return l.equivalent.reflect().Len()
+	return l.equivalent.reflectValue().Len()
 }
 
 // Get returns the KeyValue at ordered position idx in this set.
 func (l *Set) Get(idx int) (KeyValue, bool) {
-	if l == nil {
+	if l == nil || !l.equivalent.Valid() {
 		return KeyValue{}, false
 	}
-	value := l.equivalent.reflect()
+	value := l.equivalent.reflectValue()
 
 	if idx >= 0 && idx < value.Len() {
 		// Note: The Go compiler successfully avoids an allocation for
@@ -107,10 +107,10 @@ func (l *Set) Get(idx int) (KeyValue, bool) {
 
 // Value returns the value of a specified key in this set.
 func (l *Set) Value(k Key) (Value, bool) {
-	if l == nil {
+	if l == nil || !l.equivalent.Valid() {
 		return Value{}, false
 	}
-	rValue := l.equivalent.reflect()
+	rValue := l.equivalent.reflectValue()
 	vlen := rValue.Len()
 
 	idx := sort.Search(vlen, func(idx int) bool {
@@ -191,7 +191,9 @@ func NewSet(kvs ...KeyValue) Set {
 	if len(kvs) == 0 {
 		return empty()
 	}
-	s, _ := NewSetWithSortableFiltered(kvs, new(Sortable), nil)
+	srt := sortables.Get().(*Sortable)
+	s, _ := NewSetWithSortableFiltered(kvs, srt, nil)
+	sortables.Put(srt)
 	return s
 }
 
@@ -218,7 +220,10 @@ func NewSetWithFiltered(kvs []KeyValue, filter Filter) (Set, []KeyValue) {
 	if len(kvs) == 0 {
 		return empty(), nil
 	}
-	return NewSetWithSortableFiltered(kvs, new(Sortable), filter)
+	srt := sortables.Get().(*Sortable)
+	s, filtered := NewSetWithSortableFiltered(kvs, srt, filter)
+	sortables.Put(srt)
+	return s, filtered
 }
 
 // NewSetWithSortableFiltered returns a new Set.
