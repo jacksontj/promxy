@@ -90,6 +90,7 @@ type cliOpts struct {
 	ProxyHeaders []string `long:"proxy-headers" env:"PROXY_HEADERS" description:"a list of headers to proxy to downstream servergroups."`
 
 	ExternalURL     string `long:"web.external-url" description:"The URL under which Prometheus is externally reachable (for example, if Prometheus is served via a reverse proxy). Used for generating relative and absolute links back to Prometheus itself. If the URL has a path portion, it will be used to prefix all HTTP endpoints served by Prometheus. If omitted, relevant URL components will be derived automatically."`
+	RoutePrefix     string `long:"web.route-prefix" description:"Prefix for the internal routes of web endpoints. Defaults to path of --web.external-url."`
 	EnableLifecycle bool   `long:"web.enable-lifecycle" description:"Enable shutdown and reload via HTTP request."`
 
 	QueryTimeout        time.Duration `long:"query.timeout" description:"Maximum time a query may take before being aborted." default:"2m"`
@@ -389,7 +390,7 @@ func main() {
 		EnableLifecycle: opts.EnableLifecycle,
 
 		Flags:       opts.ToFlags(),
-		RoutePrefix: "/",
+		RoutePrefix: opts.RoutePrefix,
 		ExternalURL: externalUrl,
 		Version: &web.PrometheusVersion{
 			Version:   version.Version,
@@ -406,9 +407,12 @@ func main() {
 		logrus.Fatalf("Error parsing CORS regex: %v", err)
 	}
 
-	if externalUrl != nil && externalUrl.Path != "" {
+	// Default -web.route-prefix to path of -web.external-url.
+	if webOptions.RoutePrefix == "" {
 		webOptions.RoutePrefix = externalUrl.Path
 	}
+	// RoutePrefix must always be at least '/'.
+	webOptions.RoutePrefix = "/" + strings.Trim(webOptions.RoutePrefix, "/")
 
 	webHandler := web.New(logger, webOptions)
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(webHandler))
