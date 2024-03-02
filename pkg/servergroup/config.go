@@ -153,6 +153,11 @@ type Config struct {
 	// Note: this allows you to make the tradeoff between availability of queries and consistency of results
 	IgnoreError bool `yaml:"ignore_error"`
 
+	// DowngradeError converts all errors to warnings from this given servergroup effectively making
+	// the responses from this servergroup "not required" for the result.
+	// Note: this allows you to make the tradeoff between availability of queries and consistency of results
+	DowngradeError bool `yaml:"downgrade_error"`
+
 	// RelativeTimeRangeConfig defines a relative time range that this servergroup will respond to
 	// An example use-case would be if a specific servergroup was long-term storage, it might only
 	// have data 3d old and retain 90d of data.

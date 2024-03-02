@@ -298,6 +298,10 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 		newState.apiClient = &promclient.IgnoreErrorAPI{newState.apiClient}
 	}
 
+	if s.Cfg.DowngradeError {
+		newState.apiClient = &promclient.DowngradeErrorAPI{newState.apiClient}
+	}
+
 	oldState := s.State()   // Fetch the current state (so we can stop it)
 	s.state.Store(newState) // Store new state
 	if oldState != nil {
