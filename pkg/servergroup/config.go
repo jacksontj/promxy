@@ -195,6 +195,12 @@ type Config struct {
 	LabelFilterConfig *promclient.LabelFilterConfig `yaml:"label_filter"`
 
 	PreferMax bool `yaml:"prefer_max,omitempty"`
+
+	// HTTPClientHeaders are a map of HTTP headers to add to remote read HTTP calls made to this downstream
+	// the main use-case for this is to support the X-Scope-OrgID header required by Mimir and Cortex
+	// in multi-tenancy mode
+	// (see https://github.com/jacksontj/promxy/issues/643)
+	HTTPClientHeaders map[string]string `yaml:"http_headers"`
 }
 
 // GetScheme returns the scheme for this servergroup
