@@ -106,6 +106,10 @@ func (s *ServerGroup) RoundTrip(r *http.Request) (*http.Response, error) {
 	for k, v := range middleware.GetHeaders(r.Context()) {
 		r.Header.Set(k, v)
 	}
+	for k, v := range s.Cfg.HTTPClientHeaders {
+		r.Header.Set(k, v)
+		logrus.Tracef("Set ServerGroup custom header %s: %s", k, v)
+	}
 	return s.client.Transport.RoundTrip(r)
 }
 
