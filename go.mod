@@ -3,8 +3,8 @@ module github.com/jacksontj/promxy
 go 1.21
 
 require (
-	github.com/Azure/go-autorest/autorest v0.11.27
-	github.com/go-kit/kit v0.10.0
+	github.com/Azure/go-autorest/autorest v0.11.29
+	github.com/go-kit/kit v0.12.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/glog v1.1.0
 	github.com/golang/snappy v0.0.4
@@ -14,14 +14,14 @@ require (
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.15.1-0.20230416124134-0392dffd0e08
-	github.com/prometheus/client_model v0.3.0
+	github.com/prometheus/client_model v0.4.0
 	github.com/prometheus/common v0.42.0
 	github.com/prometheus/exporter-toolkit v0.7.3
 	github.com/prometheus/prometheus v1.8.2-0.20210707132820-dc8f50559534
-	github.com/sirupsen/logrus v1.8.1
+	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.4
-	go.uber.org/atomic v1.9.0
-	golang.org/x/time v0.0.0-20220609170525-579cf78fd858
+	go.uber.org/atomic v1.10.0
+	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/klog v1.0.0
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
@@ -33,7 +33,7 @@ require (
 	github.com/Azure/azure-sdk-for-go v65.0.0+incompatible // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
-	github.com/Azure/go-autorest/autorest/adal v0.9.20 // indirect
+	github.com/Azure/go-autorest/autorest/adal v0.9.23 // indirect
 	github.com/Azure/go-autorest/autorest/date v0.3.0 // indirect
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
@@ -43,7 +43,7 @@ require (
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
-	github.com/armon/go-metrics v0.3.3 // indirect
+	github.com/armon/go-metrics v0.3.9 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
 	github.com/aws/aws-sdk-go v1.44.45 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -79,7 +79,7 @@ require (
 	github.com/go-resty/resty/v2 v2.1.1-0.20191201195748-d7b97669fe48 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/go-zookeeper/zk v1.0.2 // indirect
-	github.com/golang-jwt/jwt/v4 v4.2.0 // indirect
+	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
@@ -94,8 +94,8 @@ require (
 	github.com/hashicorp/consul/api v1.13.0 // indirect
 	github.com/hashicorp/cronexpr v1.1.1 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-hclog v0.12.2 // indirect
-	github.com/hashicorp/go-immutable-radix v1.2.0 // indirect
+	github.com/hashicorp/go-hclog v0.16.2 // indirect
+	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.1 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
@@ -138,14 +138,14 @@ require (
 	go.opentelemetry.io/otel/metric v1.18.0 // indirect
 	go.opentelemetry.io/otel/trace v1.18.0 // indirect
 	go.uber.org/goleak v1.1.12 // indirect
-	golang.org/x/crypto v0.21.0 // indirect
+	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/mod v0.9.0 // indirect
 	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/oauth2 v0.7.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
-	golang.org/x/term v0.18.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/term v0.20.0 // indirect
+	golang.org/x/text v0.15.0 // indirect
 	golang.org/x/tools v0.7.0 // indirect
 	google.golang.org/api v0.114.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
