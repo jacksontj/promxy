@@ -98,7 +98,7 @@ promxy:
       http_client:
         tls_config:
           insecure_skip_verify: true
-      # ignore_error will make the given security group's response "optional"
+      # ignore_error will make the given server group's response "optional"
       # meaning if this servergroup returns and error and others don't the overall
       # query can still succeed
       ignore_error: true
