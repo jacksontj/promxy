@@ -69,7 +69,12 @@ func (tf *AbsoluteTimeFilter) QueryRange(ctx context.Context, query string, r v1
 
 	if tf.Truncate {
 		if !tf.Start.IsZero() && r.Start.Before(tf.Start) {
-			r.Start = tf.Start
+			remainder := tf.Start.Sub(r.Start) % r.Step
+			if remainder > 0 {
+				r.Start = tf.Start.Add(r.Step - remainder)
+			} else {
+				r.Start = tf.Start
+			}
 		}
 		if !tf.End.IsZero() && r.End.After(tf.End) {
 			r.End = tf.End
@@ -193,7 +198,12 @@ func (tf *RelativeTimeFilter) QueryRange(ctx context.Context, query string, r v1
 
 	if tf.Truncate {
 		if !tfStart.IsZero() && r.Start.Before(tfStart) {
-			r.Start = tfStart
+			remainder := tfStart.Sub(r.Start) % r.Step
+			if remainder > 0 {
+				r.Start = tfStart.Add(r.Step - remainder)
+			} else {
+				r.Start = tfStart
+			}
 		}
 		if !tfEnd.IsZero() && r.End.After(tfEnd) {
 			r.End = tfEnd

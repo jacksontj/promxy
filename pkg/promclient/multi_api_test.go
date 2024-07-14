@@ -16,7 +16,7 @@ type stubAPI struct {
 	labelNames  func() []string
 	labelValues func(label string) model.LabelValues
 	query       func() model.Value
-	queryRange  func() model.Value
+	queryRange  func(q string, r v1.Range) model.Value
 	series      func() []model.LabelSet
 	getValue    func() model.Value
 	metadata    func() map[string][]v1.Metadata
@@ -51,7 +51,7 @@ func (s *stubAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mod
 	if s.queryRange == nil {
 		return nil, nil, nil
 	}
-	return s.queryRange(), nil, nil
+	return s.queryRange(query, r), nil, nil
 }
 
 // Series finds series by label matchers.
@@ -159,7 +159,7 @@ func TestMultiAPIMerging(t *testing.T) {
 				getSample(model.LabelSet{model.MetricNameLabel: "testmetric"}),
 			}
 		},
-		queryRange: func() model.Value {
+		queryRange: func(_ string, _ v1.Range) model.Value {
 			return model.Vector{
 				getSample(model.LabelSet{model.MetricNameLabel: "testmetric"}),
 			}
