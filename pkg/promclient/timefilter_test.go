@@ -7,6 +7,7 @@ import (
 	"time"
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/common/model"
 )
 
 type timeFilterTestCase struct {
@@ -199,4 +200,69 @@ func TestRelativeTimeFilter(t *testing.T) {
 		},
 	})
 
+}
+
+// For time truncation we need to ensure that any new range's start aligns with a multiple of the step from the overall query start
+// otherwise we get into a LOT of trouble with LookbackDelta as the timestamps of the result won't align properly
+func TestAbsoluteTimeFilterStepAlignment(t *testing.T) {
+	var r v1.Range
+	stub := &stubAPI{
+		queryRange: func(_ string, rng v1.Range) model.Value {
+			r = rng
+			return nil
+		},
+	}
+	filterStart, _ := time.Parse(time.RFC3339, "2024-07-01T00:00:00Z")
+	api := &AbsoluteTimeFilter{
+		API:      stub,
+		Start:    filterStart,
+		Truncate: true,
+	}
+
+	start := time.Unix(1719738435, 0)
+	end := time.Unix(1719879274, 0)
+
+	api.QueryRange(context.TODO(), "foo", v1.Range{
+		Start: start,
+		End:   end,
+		Step:  563 * time.Second,
+	})
+
+	remainder := r.Start.Sub(start) % r.Step
+	if remainder > 0 {
+		t.Fatalf("unexpected step misalignment!")
+	}
+}
+
+// For time truncation we need to ensure that any new range's start aligns with a multiple of the step from the overall query start
+// otherwise we get into a LOT of trouble with LookbackDelta as the timestamps of the result won't align properly
+func TestRelativeTimeFilterStepAlignment(t *testing.T) {
+	var r v1.Range
+	stub := &stubAPI{
+		queryRange: func(_ string, rng v1.Range) model.Value {
+			r = rng
+			return nil
+		},
+	}
+	dur, _ := time.ParseDuration("-2h")
+	api := &RelativeTimeFilter{
+		API:      stub,
+		Start:    &dur,
+		Truncate: true,
+	}
+
+	now := time.Now()
+	start := now.Add(-1 * time.Hour * 24)
+	end := now
+
+	api.QueryRange(context.TODO(), "foo", v1.Range{
+		Start: start,
+		End:   end,
+		Step:  563 * time.Second,
+	})
+
+	remainder := r.Start.Sub(start) % r.Step
+	if remainder > 0 {
+		t.Fatalf("unexpected step misalignment!")
+	}
 }
