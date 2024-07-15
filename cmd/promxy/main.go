@@ -18,7 +18,7 @@ import (
 
 	_ "net/http/pprof"
 
-	kitlog "github.com/go-kit/kit/log"
+	kitlog "github.com/go-kit/log"
 	"github.com/golang/glog"
 	"github.com/grafana/regexp"
 	"github.com/jessevdk/go-flags"
