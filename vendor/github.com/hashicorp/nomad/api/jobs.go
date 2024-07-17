@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"sort"
@@ -44,6 +45,16 @@ const (
 	RegisterEnforceIndexErrPrefix = "Enforcing job modify index"
 )
 
+const (
+	// JobPeriodicLaunchSuffix is the string appended to the periodic jobs ID
+	// when launching derived instances of it.
+	JobPeriodicLaunchSuffix = "/periodic-"
+
+	// JobDispatchLaunchSuffix is the string appended to the parameterized job's ID
+	// when dispatching instances of it.
+	JobDispatchLaunchSuffix = "/dispatch-"
+)
+
 // Jobs is used to access the job-specific endpoints.
 type Jobs struct {
 	client *Client
@@ -84,7 +95,7 @@ func (j *Jobs) ParseHCL(jobHCL string, canonicalize bool) (*Job, error) {
 // ParseHCL is an alternative convenience API for HCLv2 users.
 func (j *Jobs) ParseHCLOpts(req *JobsParseRequest) (*Job, error) {
 	var job Job
-	_, err := j.client.write("/v1/jobs/parse", req, &job, nil)
+	_, err := j.client.put("/v1/jobs/parse", req, &job, nil)
 	return &job, err
 }
 
@@ -94,7 +105,7 @@ func (j *Jobs) Validate(job *Job, q *WriteOptions) (*JobValidateResponse, *Write
 	if q != nil {
 		req.WriteRequest = WriteRequest{Region: q.Region}
 	}
-	wm, err := j.client.write("/v1/validate/job", req, &resp, q)
+	wm, err := j.client.put("/v1/validate/job", req, &resp, q)
 	return &resp, wm, err
 }
 
@@ -137,17 +148,38 @@ func (j *Jobs) RegisterOpts(job *Job, opts *RegisterOptions, q *WriteOptions) (*
 	}
 
 	var resp JobRegisterResponse
-	wm, err := j.client.write("/v1/jobs", req, &resp, q)
+	wm, err := j.client.put("/v1/jobs", req, &resp, q)
 	if err != nil {
 		return nil, nil, err
 	}
 	return &resp, wm, nil
 }
 
+type JobListFields struct {
+	Meta bool
+}
+type JobListOptions struct {
+	Fields *JobListFields
+}
+
 // List is used to list all of the existing jobs.
 func (j *Jobs) List(q *QueryOptions) ([]*JobListStub, *QueryMeta, error) {
+	return j.ListOptions(nil, q)
+}
+
+// List is used to list all of the existing jobs.
+func (j *Jobs) ListOptions(opts *JobListOptions, q *QueryOptions) ([]*JobListStub, *QueryMeta, error) {
 	var resp []*JobListStub
-	qm, err := j.client.query("/v1/jobs", &resp, q)
+
+	destinationURL := "/v1/jobs"
+
+	if opts != nil && opts.Fields != nil {
+		qp := url.Values{}
+		qp.Add("meta", fmt.Sprint(opts.Fields.Meta))
+		destinationURL = destinationURL + "?" + qp.Encode()
+	}
+
+	qm, err := j.client.query(destinationURL, &resp, q)
 	if err != nil {
 		return nil, qm, err
 	}
@@ -178,7 +210,7 @@ func (j *Jobs) Scale(jobID, group string, count *int, message string, error bool
 
 	var count64 *int64
 	if count != nil {
-		count64 = int64ToPtr(int64(*count))
+		count64 = pointerOf(int64(*count))
 	}
 	req := &ScalingRequest{
 		Count: count64,
@@ -191,7 +223,7 @@ func (j *Jobs) Scale(jobID, group string, count *int, message string, error bool
 		Meta:    meta,
 	}
 	var resp JobRegisterResponse
-	qm, err := j.client.write(fmt.Sprintf("/v1/job/%s/scale", url.PathEscape(jobID)), req, &resp, q)
+	qm, err := j.client.put(fmt.Sprintf("/v1/job/%s/scale", url.PathEscape(jobID)), req, &resp, q)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -288,7 +320,7 @@ func (j *Jobs) Evaluations(jobID string, q *QueryOptions) ([]*Evaluation, *Query
 // eventually GC'ed from the system. Most callers should not specify purge.
 func (j *Jobs) Deregister(jobID string, purge bool, q *WriteOptions) (string, *WriteMeta, error) {
 	var resp JobDeregisterResponse
-	wm, err := j.client.delete(fmt.Sprintf("/v1/job/%v?purge=%t", url.PathEscape(jobID), purge), &resp, q)
+	wm, err := j.client.delete(fmt.Sprintf("/v1/job/%v?purge=%t", url.PathEscape(jobID), purge), nil, &resp, q)
 	if err != nil {
 		return "", nil, err
 	}
@@ -334,7 +366,7 @@ func (j *Jobs) DeregisterOpts(jobID string, opts *DeregisterOptions, q *WriteOpt
 			opts.Purge, opts.Global, opts.EvalPriority, opts.NoShutdownDelay)
 	}
 
-	wm, err := j.client.delete(endpoint, &resp, q)
+	wm, err := j.client.delete(endpoint, nil, &resp, q)
 	if err != nil {
 		return "", nil, err
 	}
@@ -344,7 +376,7 @@ func (j *Jobs) DeregisterOpts(jobID string, opts *DeregisterOptions, q *WriteOpt
 // ForceEvaluate is used to force-evaluate an existing job.
 func (j *Jobs) ForceEvaluate(jobID string, q *WriteOptions) (string, *WriteMeta, error) {
 	var resp JobRegisterResponse
-	wm, err := j.client.write("/v1/job/"+url.PathEscape(jobID)+"/evaluate", nil, &resp, q)
+	wm, err := j.client.put("/v1/job/"+url.PathEscape(jobID)+"/evaluate", nil, &resp, q)
 	if err != nil {
 		return "", nil, err
 	}
@@ -360,7 +392,7 @@ func (j *Jobs) EvaluateWithOpts(jobID string, opts EvalOptions, q *WriteOptions)
 	}
 
 	var resp JobRegisterResponse
-	wm, err := j.client.write("/v1/job/"+url.PathEscape(jobID)+"/evaluate", req, &resp, q)
+	wm, err := j.client.put("/v1/job/"+url.PathEscape(jobID)+"/evaluate", req, &resp, q)
 	if err != nil {
 		return "", nil, err
 	}
@@ -370,7 +402,7 @@ func (j *Jobs) EvaluateWithOpts(jobID string, opts EvalOptions, q *WriteOptions)
 // PeriodicForce spawns a new instance of the periodic job and returns the eval ID
 func (j *Jobs) PeriodicForce(jobID string, q *WriteOptions) (string, *WriteMeta, error) {
 	var resp periodicForceResponse
-	wm, err := j.client.write("/v1/job/"+url.PathEscape(jobID)+"/periodic/force", nil, &resp, q)
+	wm, err := j.client.put("/v1/job/"+url.PathEscape(jobID)+"/periodic/force", nil, &resp, q)
 	if err != nil {
 		return "", nil, err
 	}
@@ -390,7 +422,7 @@ func (j *Jobs) Plan(job *Job, diff bool, q *WriteOptions) (*JobPlanResponse, *Wr
 
 func (j *Jobs) PlanOpts(job *Job, opts *PlanOptions, q *WriteOptions) (*JobPlanResponse, *WriteMeta, error) {
 	if job == nil {
-		return nil, nil, fmt.Errorf("must pass non-nil job")
+		return nil, nil, errors.New("must pass non-nil job")
 	}
 
 	// Setup the request
@@ -403,7 +435,7 @@ func (j *Jobs) PlanOpts(job *Job, opts *PlanOptions, q *WriteOptions) (*JobPlanR
 	}
 
 	var resp JobPlanResponse
-	wm, err := j.client.write("/v1/job/"+url.PathEscape(*job.ID)+"/plan", req, &resp, q)
+	wm, err := j.client.put("/v1/job/"+url.PathEscape(*job.ID)+"/plan", req, &resp, q)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -420,14 +452,15 @@ func (j *Jobs) Summary(jobID string, q *QueryOptions) (*JobSummary, *QueryMeta, 
 }
 
 func (j *Jobs) Dispatch(jobID string, meta map[string]string,
-	payload []byte, q *WriteOptions) (*JobDispatchResponse, *WriteMeta, error) {
+	payload []byte, idPrefixTemplate string, q *WriteOptions) (*JobDispatchResponse, *WriteMeta, error) {
 	var resp JobDispatchResponse
 	req := &JobDispatchRequest{
-		JobID:   jobID,
-		Meta:    meta,
-		Payload: payload,
+		JobID:            jobID,
+		Meta:             meta,
+		Payload:          payload,
+		IdPrefixTemplate: idPrefixTemplate,
 	}
-	wm, err := j.client.write("/v1/job/"+url.PathEscape(jobID)+"/dispatch", req, &resp, q)
+	wm, err := j.client.put("/v1/job/"+url.PathEscape(jobID)+"/dispatch", req, &resp, q)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -448,7 +481,7 @@ func (j *Jobs) Revert(jobID string, version uint64, enforcePriorVersion *uint64,
 		ConsulToken:         consulToken,
 		VaultToken:          vaultToken,
 	}
-	wm, err := j.client.write("/v1/job/"+url.PathEscape(jobID)+"/revert", req, &resp, q)
+	wm, err := j.client.put("/v1/job/"+url.PathEscape(jobID)+"/revert", req, &resp, q)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -465,7 +498,7 @@ func (j *Jobs) Stable(jobID string, version uint64, stable bool,
 		JobVersion: version,
 		Stable:     stable,
 	}
-	wm, err := j.client.write("/v1/job/"+url.PathEscape(jobID)+"/stable", req, &resp, q)
+	wm, err := j.client.put("/v1/job/"+url.PathEscape(jobID)+"/stable", req, &resp, q)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -502,15 +535,15 @@ type UpdateStrategy struct {
 // jobs with the old policy or for populating field defaults.
 func DefaultUpdateStrategy() *UpdateStrategy {
 	return &UpdateStrategy{
-		Stagger:          timeToPtr(30 * time.Second),
-		MaxParallel:      intToPtr(1),
-		HealthCheck:      stringToPtr("checks"),
-		MinHealthyTime:   timeToPtr(10 * time.Second),
-		HealthyDeadline:  timeToPtr(5 * time.Minute),
-		ProgressDeadline: timeToPtr(10 * time.Minute),
-		AutoRevert:       boolToPtr(false),
-		Canary:           intToPtr(0),
-		AutoPromote:      boolToPtr(false),
+		Stagger:          pointerOf(30 * time.Second),
+		MaxParallel:      pointerOf(1),
+		HealthCheck:      pointerOf("checks"),
+		MinHealthyTime:   pointerOf(10 * time.Second),
+		HealthyDeadline:  pointerOf(5 * time.Minute),
+		ProgressDeadline: pointerOf(10 * time.Minute),
+		AutoRevert:       pointerOf(false),
+		Canary:           pointerOf(0),
+		AutoPromote:      pointerOf(false),
 	}
 }
 
@@ -522,39 +555,39 @@ func (u *UpdateStrategy) Copy() *UpdateStrategy {
 	copy := new(UpdateStrategy)
 
 	if u.Stagger != nil {
-		copy.Stagger = timeToPtr(*u.Stagger)
+		copy.Stagger = pointerOf(*u.Stagger)
 	}
 
 	if u.MaxParallel != nil {
-		copy.MaxParallel = intToPtr(*u.MaxParallel)
+		copy.MaxParallel = pointerOf(*u.MaxParallel)
 	}
 
 	if u.HealthCheck != nil {
-		copy.HealthCheck = stringToPtr(*u.HealthCheck)
+		copy.HealthCheck = pointerOf(*u.HealthCheck)
 	}
 
 	if u.MinHealthyTime != nil {
-		copy.MinHealthyTime = timeToPtr(*u.MinHealthyTime)
+		copy.MinHealthyTime = pointerOf(*u.MinHealthyTime)
 	}
 
 	if u.HealthyDeadline != nil {
-		copy.HealthyDeadline = timeToPtr(*u.HealthyDeadline)
+		copy.HealthyDeadline = pointerOf(*u.HealthyDeadline)
 	}
 
 	if u.ProgressDeadline != nil {
-		copy.ProgressDeadline = timeToPtr(*u.ProgressDeadline)
+		copy.ProgressDeadline = pointerOf(*u.ProgressDeadline)
 	}
 
 	if u.AutoRevert != nil {
-		copy.AutoRevert = boolToPtr(*u.AutoRevert)
+		copy.AutoRevert = pointerOf(*u.AutoRevert)
 	}
 
 	if u.Canary != nil {
-		copy.Canary = intToPtr(*u.Canary)
+		copy.Canary = pointerOf(*u.Canary)
 	}
 
 	if u.AutoPromote != nil {
-		copy.AutoPromote = boolToPtr(*u.AutoPromote)
+		copy.AutoPromote = pointerOf(*u.AutoPromote)
 	}
 
 	return copy
@@ -566,39 +599,39 @@ func (u *UpdateStrategy) Merge(o *UpdateStrategy) {
 	}
 
 	if o.Stagger != nil {
-		u.Stagger = timeToPtr(*o.Stagger)
+		u.Stagger = pointerOf(*o.Stagger)
 	}
 
 	if o.MaxParallel != nil {
-		u.MaxParallel = intToPtr(*o.MaxParallel)
+		u.MaxParallel = pointerOf(*o.MaxParallel)
 	}
 
 	if o.HealthCheck != nil {
-		u.HealthCheck = stringToPtr(*o.HealthCheck)
+		u.HealthCheck = pointerOf(*o.HealthCheck)
 	}
 
 	if o.MinHealthyTime != nil {
-		u.MinHealthyTime = timeToPtr(*o.MinHealthyTime)
+		u.MinHealthyTime = pointerOf(*o.MinHealthyTime)
 	}
 
 	if o.HealthyDeadline != nil {
-		u.HealthyDeadline = timeToPtr(*o.HealthyDeadline)
+		u.HealthyDeadline = pointerOf(*o.HealthyDeadline)
 	}
 
 	if o.ProgressDeadline != nil {
-		u.ProgressDeadline = timeToPtr(*o.ProgressDeadline)
+		u.ProgressDeadline = pointerOf(*o.ProgressDeadline)
 	}
 
 	if o.AutoRevert != nil {
-		u.AutoRevert = boolToPtr(*o.AutoRevert)
+		u.AutoRevert = pointerOf(*o.AutoRevert)
 	}
 
 	if o.Canary != nil {
-		u.Canary = intToPtr(*o.Canary)
+		u.Canary = pointerOf(*o.Canary)
 	}
 
 	if o.AutoPromote != nil {
-		u.AutoPromote = boolToPtr(*o.AutoPromote)
+		u.AutoPromote = pointerOf(*o.AutoPromote)
 	}
 }
 
@@ -695,15 +728,15 @@ type Multiregion struct {
 func (m *Multiregion) Canonicalize() {
 	if m.Strategy == nil {
 		m.Strategy = &MultiregionStrategy{
-			MaxParallel: intToPtr(0),
-			OnFailure:   stringToPtr(""),
+			MaxParallel: pointerOf(0),
+			OnFailure:   pointerOf(""),
 		}
 	} else {
 		if m.Strategy.MaxParallel == nil {
-			m.Strategy.MaxParallel = intToPtr(0)
+			m.Strategy.MaxParallel = pointerOf(0)
 		}
 		if m.Strategy.OnFailure == nil {
-			m.Strategy.OnFailure = stringToPtr("")
+			m.Strategy.OnFailure = pointerOf("")
 		}
 	}
 	if m.Regions == nil {
@@ -711,7 +744,7 @@ func (m *Multiregion) Canonicalize() {
 	}
 	for _, region := range m.Regions {
 		if region.Count == nil {
-			region.Count = intToPtr(1)
+			region.Count = pointerOf(1)
 		}
 		if region.Datacenters == nil {
 			region.Datacenters = []string{}
@@ -729,13 +762,13 @@ func (m *Multiregion) Copy() *Multiregion {
 	copy := new(Multiregion)
 	if m.Strategy != nil {
 		copy.Strategy = new(MultiregionStrategy)
-		copy.Strategy.MaxParallel = intToPtr(*m.Strategy.MaxParallel)
-		copy.Strategy.OnFailure = stringToPtr(*m.Strategy.OnFailure)
+		copy.Strategy.MaxParallel = pointerOf(*m.Strategy.MaxParallel)
+		copy.Strategy.OnFailure = pointerOf(*m.Strategy.OnFailure)
 	}
 	for _, region := range m.Regions {
 		copyRegion := new(MultiregionRegion)
 		copyRegion.Name = region.Name
-		copyRegion.Count = intToPtr(*region.Count)
+		copyRegion.Count = pointerOf(*region.Count)
 		copyRegion.Datacenters = append(copyRegion.Datacenters, region.Datacenters...)
 		for k, v := range region.Meta {
 			copyRegion.Meta[k] = v
@@ -768,19 +801,19 @@ type PeriodicConfig struct {
 
 func (p *PeriodicConfig) Canonicalize() {
 	if p.Enabled == nil {
-		p.Enabled = boolToPtr(true)
+		p.Enabled = pointerOf(true)
 	}
 	if p.Spec == nil {
-		p.Spec = stringToPtr("")
+		p.Spec = pointerOf("")
 	}
 	if p.SpecType == nil {
-		p.SpecType = stringToPtr(PeriodicSpecCron)
+		p.SpecType = pointerOf(PeriodicSpecCron)
 	}
 	if p.ProhibitOverlap == nil {
-		p.ProhibitOverlap = boolToPtr(false)
+		p.ProhibitOverlap = pointerOf(false)
 	}
 	if p.TimeZone == nil || *p.TimeZone == "" {
-		p.TimeZone = stringToPtr("UTC")
+		p.TimeZone = pointerOf("UTC")
 	}
 }
 
@@ -789,7 +822,7 @@ func (p *PeriodicConfig) Canonicalize() {
 // returned. The `time.Location` of the returned value matches that of the
 // passed time.
 func (p *PeriodicConfig) Next(fromTime time.Time) (time.Time, error) {
-	if *p.SpecType == PeriodicSpecCron {
+	if p != nil && *p.SpecType == PeriodicSpecCron {
 		e, err := cronexpr.Parse(*p.Spec)
 		if err != nil {
 			return time.Time{}, fmt.Errorf("failed parsing cron expression %q: %v", *p.Spec, err)
@@ -893,70 +926,70 @@ func (j *Job) IsMultiregion() bool {
 
 func (j *Job) Canonicalize() {
 	if j.ID == nil {
-		j.ID = stringToPtr("")
+		j.ID = pointerOf("")
 	}
 	if j.Name == nil {
-		j.Name = stringToPtr(*j.ID)
+		j.Name = pointerOf(*j.ID)
 	}
 	if j.ParentID == nil {
-		j.ParentID = stringToPtr("")
+		j.ParentID = pointerOf("")
 	}
 	if j.Namespace == nil {
-		j.Namespace = stringToPtr(DefaultNamespace)
+		j.Namespace = pointerOf(DefaultNamespace)
 	}
 	if j.Priority == nil {
-		j.Priority = intToPtr(50)
+		j.Priority = pointerOf(0)
 	}
 	if j.Stop == nil {
-		j.Stop = boolToPtr(false)
+		j.Stop = pointerOf(false)
 	}
 	if j.Region == nil {
-		j.Region = stringToPtr(GlobalRegion)
+		j.Region = pointerOf(GlobalRegion)
 	}
 	if j.Namespace == nil {
-		j.Namespace = stringToPtr("default")
+		j.Namespace = pointerOf("default")
 	}
 	if j.Type == nil {
-		j.Type = stringToPtr("service")
+		j.Type = pointerOf("service")
 	}
 	if j.AllAtOnce == nil {
-		j.AllAtOnce = boolToPtr(false)
+		j.AllAtOnce = pointerOf(false)
 	}
 	if j.ConsulToken == nil {
-		j.ConsulToken = stringToPtr("")
+		j.ConsulToken = pointerOf("")
 	}
 	if j.ConsulNamespace == nil {
-		j.ConsulNamespace = stringToPtr("")
+		j.ConsulNamespace = pointerOf("")
 	}
 	if j.VaultToken == nil {
-		j.VaultToken = stringToPtr("")
+		j.VaultToken = pointerOf("")
 	}
 	if j.VaultNamespace == nil {
-		j.VaultNamespace = stringToPtr("")
+		j.VaultNamespace = pointerOf("")
 	}
 	if j.NomadTokenID == nil {
-		j.NomadTokenID = stringToPtr("")
+		j.NomadTokenID = pointerOf("")
 	}
 	if j.Status == nil {
-		j.Status = stringToPtr("")
+		j.Status = pointerOf("")
 	}
 	if j.StatusDescription == nil {
-		j.StatusDescription = stringToPtr("")
+		j.StatusDescription = pointerOf("")
 	}
 	if j.Stable == nil {
-		j.Stable = boolToPtr(false)
+		j.Stable = pointerOf(false)
 	}
 	if j.Version == nil {
-		j.Version = uint64ToPtr(0)
+		j.Version = pointerOf(uint64(0))
 	}
 	if j.CreateIndex == nil {
-		j.CreateIndex = uint64ToPtr(0)
+		j.CreateIndex = pointerOf(uint64(0))
 	}
 	if j.ModifyIndex == nil {
-		j.ModifyIndex = uint64ToPtr(0)
+		j.ModifyIndex = pointerOf(uint64(0))
 	}
 	if j.JobModifyIndex == nil {
-		j.JobModifyIndex = uint64ToPtr(0)
+		j.JobModifyIndex = pointerOf(uint64(0))
 	}
 	if j.Periodic != nil {
 		j.Periodic.Canonicalize()
@@ -1051,6 +1084,7 @@ type JobListStub struct {
 	ModifyIndex       uint64
 	JobModifyIndex    uint64
 	SubmitTime        int64
+	Meta              map[string]string `json:",omitempty"`
 }
 
 // JobIDSort is used to sort jobs by their job ID's.
@@ -1331,9 +1365,10 @@ type DesiredUpdates struct {
 }
 
 type JobDispatchRequest struct {
-	JobID   string
-	Payload []byte
-	Meta    map[string]string
+	JobID            string
+	Payload          []byte
+	Meta             map[string]string
+	IdPrefixTemplate string
 }
 
 type JobDispatchResponse struct {
