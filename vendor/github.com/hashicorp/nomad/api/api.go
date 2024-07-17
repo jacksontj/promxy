@@ -25,7 +25,9 @@ import (
 var (
 	// ClientConnTimeout is the timeout applied when attempting to contact a
 	// client directly before switching to a connection through the Nomad
-	// server.
+	// server. For cluster topologies where API consumers don't have network
+	// access to Nomad clients, set this to a small value (ex 1ms) to avoid
+	// pausing on client APIs such as AllocFS.
 	ClientConnTimeout = 1 * time.Second
 )
 
@@ -33,6 +35,11 @@ const (
 	// AllNamespacesNamespace is a sentinel Namespace value to indicate that api should search for
 	// jobs and allocations in all the namespaces the requester can access.
 	AllNamespacesNamespace = "*"
+
+	// PermissionDeniedErrorContent is the string content of an error returned
+	// by the API which indicates the caller does not have permission to
+	// perform the action.
+	PermissionDeniedErrorContent = "Permission denied"
 )
 
 // QueryOptions are used to parametrize a query
@@ -340,9 +347,9 @@ func DefaultConfig() *Config {
 // otherwise, returns the same client
 func cloneWithTimeout(httpClient *http.Client, t time.Duration) (*http.Client, error) {
 	if httpClient == nil {
-		return nil, fmt.Errorf("nil HTTP client")
+		return nil, errors.New("nil HTTP client")
 	} else if httpClient.Transport == nil {
-		return nil, fmt.Errorf("nil HTTP client transport")
+		return nil, errors.New("nil HTTP client transport")
 	}
 
 	if t.Nanoseconds() < 0 {
@@ -393,7 +400,7 @@ func ConfigureTLS(httpClient *http.Client, tlsConfig *TLSConfig) error {
 		return nil
 	}
 	if httpClient == nil {
-		return fmt.Errorf("config HTTP Client must be set")
+		return errors.New("config HTTP Client must be set")
 	}
 
 	var clientCert tls.Certificate
@@ -407,7 +414,7 @@ func ConfigureTLS(httpClient *http.Client, tlsConfig *TLSConfig) error {
 			}
 			foundClientCert = true
 		} else {
-			return fmt.Errorf("Both client cert and client key must be provided")
+			return errors.New("Both client cert and client key must be provided")
 		}
 	} else if len(tlsConfig.ClientCertPEM) != 0 || len(tlsConfig.ClientKeyPEM) != 0 {
 		if len(tlsConfig.ClientCertPEM) != 0 && len(tlsConfig.ClientKeyPEM) != 0 {
@@ -418,7 +425,7 @@ func ConfigureTLS(httpClient *http.Client, tlsConfig *TLSConfig) error {
 			}
 			foundClientCert = true
 		} else {
-			return fmt.Errorf("Both client cert and client key must be provided")
+			return errors.New("Both client cert and client key must be provided")
 		}
 	}
 
@@ -844,7 +851,7 @@ func (c *Client) websocket(endpoint string, q *QueryOptions) (*websocket.Conn, *
 
 	transport, ok := c.httpClient.Transport.(*http.Transport)
 	if !ok {
-		return nil, nil, fmt.Errorf("unsupported transport")
+		return nil, nil, errors.New("unsupported transport")
 	}
 	dialer := websocket.Dialer{
 		ReadBufferSize:   4096,
@@ -908,7 +915,7 @@ func (c *Client) websocket(endpoint string, q *QueryOptions) (*websocket.Conn, *
 // query is used to do a GET request against an endpoint
 // and deserialize the response into an interface using
 // standard Nomad conventions.
-func (c *Client) query(endpoint string, out interface{}, q *QueryOptions) (*QueryMeta, error) {
+func (c *Client) query(endpoint string, out any, q *QueryOptions) (*QueryMeta, error) {
 	r, err := c.newRequest("GET", endpoint)
 	if err != nil {
 		return nil, err
@@ -930,10 +937,9 @@ func (c *Client) query(endpoint string, out interface{}, q *QueryOptions) (*Quer
 	return qm, nil
 }
 
-// putQuery is used to do a PUT request when doing a read against an endpoint
-// and deserialize the response into an interface using standard Nomad
-// conventions.
-func (c *Client) putQuery(endpoint string, in, out interface{}, q *QueryOptions) (*QueryMeta, error) {
+// putQuery is used to do a PUT request when doing a "write" to a Client RPC.
+// Client RPCs must use QueryOptions to allow setting AllowStale=true.
+func (c *Client) putQuery(endpoint string, in, out any, q *QueryOptions) (*QueryMeta, error) {
 	r, err := c.newRequest("PUT", endpoint)
 	if err != nil {
 		return nil, err
@@ -956,10 +962,49 @@ func (c *Client) putQuery(endpoint string, in, out interface{}, q *QueryOptions)
 	return qm, nil
 }
 
-// write is used to do a PUT request against an endpoint
-// and serialize/deserialized using the standard Nomad conventions.
-func (c *Client) write(endpoint string, in, out interface{}, q *WriteOptions) (*WriteMeta, error) {
-	r, err := c.newRequest("PUT", endpoint)
+// put is used to do a PUT request against an endpoint and
+// serialize/deserialized using the standard Nomad conventions.
+func (c *Client) put(endpoint string, in, out any, q *WriteOptions) (*WriteMeta, error) {
+	return c.write(http.MethodPut, endpoint, in, out, q)
+}
+
+// postQuery is used to do a POST request when doing a "write" to a Client RPC.
+// Client RPCs must use QueryOptions to allow setting AllowStale=true.
+func (c *Client) postQuery(endpoint string, in, out any, q *QueryOptions) (*QueryMeta, error) {
+	r, err := c.newRequest("POST", endpoint)
+	if err != nil {
+		return nil, err
+	}
+	r.setQueryOptions(q)
+	r.obj = in
+	rtt, resp, err := requireOK(c.doRequest(r))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	qm := &QueryMeta{}
+	parseQueryMeta(resp, qm)
+	qm.RequestTime = rtt
+
+	if err := decodeBody(resp, out); err != nil {
+		return nil, err
+	}
+	return qm, nil
+}
+
+// post is used to do a POST request against an endpoint and
+// serialize/deserialized using the standard Nomad conventions.
+func (c *Client) post(endpoint string, in, out any, q *WriteOptions) (*WriteMeta, error) {
+	return c.write(http.MethodPost, endpoint, in, out, q)
+}
+
+// write is used to do a write request against an endpoint and
+// serialize/deserialized using the standard Nomad conventions.
+//
+// You probably want the delete, post, or put methods.
+func (c *Client) write(verb, endpoint string, in, out any, q *WriteOptions) (*WriteMeta, error) {
+	r, err := c.newRequest(verb, endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -982,14 +1027,15 @@ func (c *Client) write(endpoint string, in, out interface{}, q *WriteOptions) (*
 	return wm, nil
 }
 
-// delete is used to do a DELETE request against an endpoint
-// and serialize/deserialized using the standard Nomad conventions.
-func (c *Client) delete(endpoint string, out interface{}, q *WriteOptions) (*WriteMeta, error) {
+// delete is used to do a DELETE request against an endpoint and
+// serialize/deserialized using the standard Nomad conventions.
+func (c *Client) delete(endpoint string, in, out any, q *WriteOptions) (*WriteMeta, error) {
 	r, err := c.newRequest("DELETE", endpoint)
 	if err != nil {
 		return nil, err
 	}
 	r.setWriteOptions(q)
+	r.obj = in
 	rtt, resp, err := requireOK(c.doRequest(r))
 	if err != nil {
 		return nil, err
@@ -1090,9 +1136,10 @@ func requireOK(d time.Duration, resp *http.Response, e error) (time.Duration, *h
 	}
 	if resp.StatusCode != 200 {
 		var buf bytes.Buffer
-		io.Copy(&buf, resp.Body)
-		resp.Body.Close()
-		return d, nil, fmt.Errorf("Unexpected response code: %d (%s)", resp.StatusCode, buf.Bytes())
+		_, _ = io.Copy(&buf, resp.Body)
+		_ = resp.Body.Close()
+		body := strings.TrimSpace(buf.String())
+		return d, nil, fmt.Errorf("Unexpected response code: %d (%s)", resp.StatusCode, body)
 	}
 	return d, resp, nil
 }
