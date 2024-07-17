@@ -6,8 +6,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/log/level"
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 )
 
 var maxLevel Level = math.MaxInt32
@@ -36,6 +36,8 @@ type Verbose bool
 
 func V(level Level) Verbose { return level <= maxLevel }
 
+func (v Verbose) Enabled() bool { return bool(v) }
+
 func (v Verbose) Info(args ...interface{}) {
 	if v {
 		level.Debug(logger).Log("func", "Verbose.Info", "msg", fmt.Sprint(args...))
@@ -54,11 +56,23 @@ func (v Verbose) Infof(format string, args ...interface{}) {
 	}
 }
 
+func (v Verbose) InfoS(msg string, keysAndValues ...interface{}) {
+	if v {
+		level.Debug(logger).Log("func", "Verbose.InfoS", "msg", msg, keysAndValues)
+	}
+}
+
+func (v Verbose) InfoSDepth(_ int, msg string, keysAndValues ...interface{}) {
+	if v {
+		level.Debug(logger).Log("func", "Verbose.InfoSDepth", "msg", msg, keysAndValues)
+	}
+}
+
 func Info(args ...interface{}) {
 	level.Debug(logger).Log("func", "Info", "msg", fmt.Sprint(args...))
 }
 
-func InfoDepth(depth int, args ...interface{}) {
+func InfoDepth(_ int, args ...interface{}) {
 	level.Debug(logger).Log("func", "InfoDepth", "msg", fmt.Sprint(args...))
 }
 
@@ -70,11 +84,19 @@ func Infof(format string, args ...interface{}) {
 	level.Debug(logger).Log("func", "Infof", "msg", fmt.Sprintf(format, args...))
 }
 
+func InfoS(msg string, keysAndValues ...interface{}) {
+	level.Debug(logger).Log("func", "InfoS", "msg", msg, keysAndValues)
+}
+
+func InfoSDepth(_ int, msg string, keysAndValues ...interface{}) {
+	level.Debug(logger).Log("func", "InfoS", "msg", msg, keysAndValues)
+}
+
 func Warning(args ...interface{}) {
 	level.Warn(logger).Log("func", "Warning", "msg", fmt.Sprint(args...))
 }
 
-func WarningDepth(depth int, args ...interface{}) {
+func WarningDepth(_ int, args ...interface{}) {
 	level.Warn(logger).Log("func", "WarningDepth", "msg", fmt.Sprint(args...))
 }
 
@@ -90,7 +112,7 @@ func Error(args ...interface{}) {
 	level.Error(logger).Log("func", "Error", "msg", fmt.Sprint(args...))
 }
 
-func ErrorDepth(depth int, args ...interface{}) {
+func ErrorDepth(_ int, args ...interface{}) {
 	level.Error(logger).Log("func", "ErrorDepth", "msg", fmt.Sprint(args...))
 }
 
@@ -107,7 +129,7 @@ func Fatal(args ...interface{}) {
 	os.Exit(255)
 }
 
-func FatalDepth(depth int, args ...interface{}) {
+func FatalDepth(_ int, args ...interface{}) {
 	level.Error(logger).Log("func", "FatalDepth", "msg", fmt.Sprint(args...))
 	os.Exit(255)
 }
@@ -127,7 +149,7 @@ func Exit(args ...interface{}) {
 	os.Exit(1)
 }
 
-func ExitDepth(depth int, args ...interface{}) {
+func ExitDepth(_ int, args ...interface{}) {
 	level.Error(logger).Log("func", "ExitDepth", "msg", fmt.Sprint(args...))
 	os.Exit(1)
 }

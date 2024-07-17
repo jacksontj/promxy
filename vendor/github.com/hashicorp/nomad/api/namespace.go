@@ -49,7 +49,7 @@ func (n *Namespaces) Info(name string, q *QueryOptions) (*Namespace, *QueryMeta,
 
 // Register is used to register a namespace.
 func (n *Namespaces) Register(namespace *Namespace, q *WriteOptions) (*WriteMeta, error) {
-	wm, err := n.client.write("/v1/namespace", namespace, nil, q)
+	wm, err := n.client.put("/v1/namespace", namespace, nil, q)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (n *Namespaces) Register(namespace *Namespace, q *WriteOptions) (*WriteMeta
 
 // Delete is used to delete a namespace
 func (n *Namespaces) Delete(namespace string, q *WriteOptions) (*WriteMeta, error) {
-	wm, err := n.client.delete(fmt.Sprintf("/v1/namespace/%s", namespace), nil, q)
+	wm, err := n.client.delete(fmt.Sprintf("/v1/namespace/%s", namespace), nil, nil, q)
 	if err != nil {
 		return nil, err
 	}
