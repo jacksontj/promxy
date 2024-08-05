@@ -29,7 +29,7 @@ If you are interested in hacking on promxy (or just running your own build), you
 
 ```
 git clone git@github.com:jacksontj/promxy.git
-cd promxy/cmd/promxy && go build
+cd promxy/cmd/promxy && go build -mod=vendor -tags netgo,builtinassets
 ```
 
 An example configuration file is available in the [repo](https://github.com/jacksontj/promxy/blob/master/cmd/promxy/config.yaml).
