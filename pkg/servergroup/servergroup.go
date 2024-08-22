@@ -340,7 +340,7 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 		TLSClientConfig:     tlsConfig,
 		// 5 minutes is typically above the maximum sane scrape interval. So we can
 		// use keepalive for all configurations.
-		IdleConnTimeout:       5 * time.Minute,
+		IdleConnTimeout:       cfg.IdleConnTimeout,
 		DialContext:           (&net.Dialer{Timeout: cfg.HTTPConfig.DialTimeout}).DialContext,
 		ResponseHeaderTimeout: cfg.Timeout,
 	}
