@@ -16,11 +16,12 @@ import (
 var (
 	// DefaultConfig is the Default base promxy configuration
 	DefaultConfig = Config{
-		AntiAffinity:   time.Second * 10,
-		Scheme:         "http",
-		RemoteReadPath: "api/v1/read",
-		Timeout:        0,
-		PreferMax:      false,
+		AntiAffinity:    time.Second * 10,
+		Scheme:          "http",
+		RemoteReadPath:  "api/v1/read",
+		Timeout:         0,
+		IdleConnTimeout: 5 * time.Minute,
+		PreferMax:       false,
 		HTTPConfig: HTTPClientConfig{
 			DialTimeout: time.Millisecond * 200, // Default dial timeout of 200ms
 		},
@@ -147,6 +148,9 @@ type Config struct {
 	// writing the request (including its body, if any). This
 	// time does not include the time to read the response body.
 	Timeout time.Duration `yaml:"timeout,omitempty"`
+
+	// IdleConnTimeout, if non-zero, time wait to close a idle connections.
+	IdleConnTimeout time.Duration `yaml:"idle_conn_timeout,omitempty"`
 
 	// IgnoreError will hide all errors from this given servergroup effectively making
 	// the responses from this servergroup "not required" for the result.
