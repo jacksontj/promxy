@@ -334,8 +334,8 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	// It is applied on request. So we leave out any timings here.
 	var rt http.RoundTripper = &http.Transport{
 		Proxy:               http.ProxyURL(cfg.HTTPConfig.HTTPConfig.ProxyURL.URL),
-		MaxIdleConns:        20000,
-		MaxIdleConnsPerHost: 1000, // see https://github.com/golang/go/issues/13801
+		MaxIdleConns:        cfg.MaxIdleConns,
+		MaxIdleConnsPerHost: cfg.MaxIdleConnsPerHost, // see https://github.com/golang/go/issues/13801
 		DisableKeepAlives:   false,
 		TLSClientConfig:     tlsConfig,
 		// 5 minutes is typically above the maximum sane scrape interval. So we can
