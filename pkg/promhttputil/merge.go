@@ -171,6 +171,93 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value, preferMax bool
 	return nil, fmt.Errorf("unknown type! %v", reflect.TypeOf(a))
 }
 
+// SumValues sums values `a` and `b` with the given antiAffinityBuffer
+func SumValues(antiAffinityBuffer model.Time, a, b model.Value, preferMax bool) (model.Value, error) {
+	if a == nil {
+		return b, nil
+	}
+	if b == nil {
+		return a, nil
+	}
+	if a.Type() != b.Type() {
+		return nil, fmt.Errorf("mismatch type %v!=%v", a.Type(), b.Type())
+	}
+
+	switch aTyped := a.(type) {
+	// TODO: more logic? for now we assume both are correct if they exist
+	// In the case where it is a single datapoint, we're going to assume that
+	// either is valid, we just need one
+	case *model.Scalar:
+		bTyped := b.(*model.Scalar)
+		return &model.Scalar{aTyped.Value + bTyped.Value, aTyped.Timestamp}, nil
+
+	// In the case where it is a single datapoint, we're going to assume that
+	// either is valid, we just need one
+	case *model.String:
+		bTyped := b.(*model.String)
+		return &model.String{aTyped.Value + bTyped.Value, aTyped.Timestamp}, nil
+
+	// List of *model.Sample -- only 1 value (guaranteed same timestamp)
+	case model.Vector:
+		bTyped := b.(model.Vector)
+
+		newValue := make(model.Vector, 0, len(aTyped)+len(bTyped))
+		fingerPrintMap := make(map[model.Fingerprint]int)
+
+		addItem := func(item *model.Sample) {
+			finger := item.Metric.Fingerprint()
+
+			// If we've seen this fingerPrint before, lets make sure that a value exists
+			if index, ok := fingerPrintMap[finger]; ok {
+				// Sum values
+				newValue[index].Value += item.Value
+			} else {
+				newValue = append(newValue, item)
+				fingerPrintMap[finger] = len(newValue) - 1
+			}
+		}
+
+		for _, item := range aTyped {
+			addItem(item)
+		}
+
+		for _, item := range bTyped {
+			addItem(item)
+		}
+		return newValue, nil
+
+	case model.Matrix:
+		bTyped := b.(model.Matrix)
+
+		newValue := make(model.Matrix, 0, len(aTyped)+len(bTyped))
+		fingerPrintMap := make(map[model.Fingerprint]int)
+
+		addStream := func(stream *model.SampleStream) {
+			finger := stream.Metric.Fingerprint()
+
+			// If we've seen this fingerPrint before, lets make sure that a value exists
+			if index, ok := fingerPrintMap[finger]; ok {
+				// TODO: check this error? For now the only one is sig collision, which we check
+				newValue[index], _ = MergeSampleStream(antiAffinityBuffer, newValue[index], stream, preferMax)
+			} else {
+				newValue = append(newValue, stream)
+				fingerPrintMap[finger] = len(newValue) - 1
+			}
+		}
+
+		for _, item := range aTyped {
+			addStream(item)
+		}
+
+		for _, item := range bTyped {
+			addStream(item)
+		}
+		return newValue, nil
+	}
+
+	return nil, fmt.Errorf("unknown type! %v", reflect.TypeOf(a))
+}
+
 // MergeSampleStream merges SampleStreams `a` and `b` with the given antiAffinityBuffer
 // When combining series from 2 different prometheus hosts we can run into some problems
 // with clock skew (from a variety of sources). The primary one I've run into is issues

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -11,7 +12,9 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/storage/remote"
+	"github.com/sirupsen/logrus"
 
+	"github.com/jacksontj/promxy/pkg/middleware"
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 )
 
@@ -40,7 +43,27 @@ func (p *PromAPIV1) LabelNames(ctx context.Context, matchers []string, startTime
 		endTime = time.Time{}
 	}
 
-	return p.API.LabelNames(ctx, matchers, startTime, endTime)
+	stringResult := make([]string, 0)
+	result := make(map[string]struct{})
+	warnings := make(promhttputil.WarningSet)
+
+	for _, childChangedContext := range middleware.MultipleContexts(ctx) {
+		// Remove this later
+		logrus.Infof("LabelNames Query using header: %s", middleware.GetHeaders(childChangedContext)[middleware.OrgIdKey])
+		labelResults, warning, err := p.API.LabelNames(childChangedContext, matchers, startTime, endTime)
+		warnings.AddWarnings(warning)
+		if err == nil {
+			for _, v := range labelResults {
+				result[v] = struct{}{}
+			}
+		}
+	}
+
+	for k := range result {
+		stringResult = append(stringResult, k)
+	}
+	sort.Strings(stringResult)
+	return stringResult, warnings.Warnings(), nil
 }
 
 // LabelValues performs a query for the values of the given label.
@@ -53,17 +76,77 @@ func (p *PromAPIV1) LabelValues(ctx context.Context, label string, matchers []st
 		endTime = time.Time{}
 	}
 
-	return p.API.LabelValues(ctx, label, matchers, startTime, endTime)
+	var mergedResults model.LabelValues
+	warnings := make(promhttputil.WarningSet)
+
+	for _, childChangedContext := range middleware.MultipleContexts(ctx) {
+		// Remove this later
+		logrus.Infof("LabelValues Query using header: %s", middleware.GetHeaders(childChangedContext)[middleware.OrgIdKey])
+		result, warning, err := p.API.LabelValues(childChangedContext, label, matchers, startTime, endTime)
+		warnings.AddWarnings(warning)
+		if err == nil {
+			if mergedResults == nil {
+				mergedResults = result
+			} else {
+				var err error
+				mergedResults = MergeLabelValues(mergedResults, result)
+				if err != nil {
+					return nil, warnings.Warnings(), err
+				}
+			}
+		}
+	}
+	return mergedResults, warnings.Warnings(), nil
 }
 
 // Query performs a query for the given time.
 func (p *PromAPIV1) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
-	return p.API.Query(ctx, query, ts)
+	var mergedResults model.Value
+	warnings := make(promhttputil.WarningSet)
+
+	for _, childChangedContext := range middleware.MultipleContexts(ctx) {
+		// Remove this later
+		logrus.Infof("Query using header: %s", middleware.GetHeaders(childChangedContext)[middleware.OrgIdKey])
+		result, warning, err := p.API.Query(childChangedContext, query, ts)
+		warnings.AddWarnings(warning)
+		if err == nil {
+			if mergedResults == nil {
+				mergedResults = result
+			} else {
+				var err error
+				mergedResults, err = promhttputil.SumValues(model.TimeFromUnix(0), mergedResults, result, false)
+				if err != nil {
+					return nil, warnings.Warnings(), err
+				}
+			}
+		}
+	}
+	return mergedResults, warnings.Warnings(), nil
 }
 
 // QueryRange performs a query for the given range.
 func (p *PromAPIV1) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
-	return p.API.QueryRange(ctx, query, r)
+	var mergedResults model.Value
+	warnings := make(promhttputil.WarningSet)
+
+	for _, childChangedContext := range middleware.MultipleContexts(ctx) {
+		// Remove this later
+		logrus.Infof("QueryRange using header: %s", middleware.GetHeaders(childChangedContext)[middleware.OrgIdKey])
+		result, warning, err := p.API.QueryRange(childChangedContext, query, r)
+		warnings.AddWarnings(warning)
+		if err == nil {
+			if mergedResults == nil {
+				mergedResults = result
+			} else {
+				var err error
+				mergedResults, err = promhttputil.SumValues(model.TimeFromUnix(0), mergedResults, result, false)
+				if err != nil {
+					return nil, warnings.Warnings(), err
+				}
+			}
+		}
+	}
+	return mergedResults, warnings.Warnings(), nil
 }
 
 // Series finds series by label matchers.
