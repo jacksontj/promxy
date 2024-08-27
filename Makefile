@@ -35,7 +35,7 @@ release:
 	./build.bash github.com/jacksontj/promxy/cmd/remote_write_exporter $(BUILD)
 
 .PHONY: build-image
-build-image: clean ## Build the rollout-operator image
+build-image: clean
 	docker buildx build --load --platform linux/amd64 --build-arg revision=$(GIT_REVISION) -t promxy:latest -t promxy:$(IMAGE_TAG) .
 
 
