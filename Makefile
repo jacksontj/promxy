@@ -31,6 +31,11 @@ release:
 	./build.bash github.com/jacksontj/promxy/cmd/promxy $(BUILD)
 	./build.bash github.com/jacksontj/promxy/cmd/remote_write_exporter $(BUILD)
 
+.PHONY: build-image
+build-image: clean ## Build the rollout-operator image
+	docker buildx build --load --platform linux/amd64 -t promxy:latest .
+
+
 testlocal-build:
 	docker build -t 127.0.0.1:32000/promxy:latest .
 	docker push 127.0.0.1:32000/promxy:latest

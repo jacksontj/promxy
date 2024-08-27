@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"os/signal"
@@ -15,8 +16,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	_ "net/http/pprof"
 
 	kitlog "github.com/go-kit/log"
 	"github.com/golang/glog"
