@@ -4,6 +4,9 @@ GOFILES := $(shell find . -name "*.go" -type f ! -path "./vendor/*")
 GOFMT ?= gofmt
 GOIMPORTS ?= goimports -local=github.com/jacksontj/promxy
 STATICCHECK ?= staticcheck
+GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+GIT_REVISION := $(shell git rev-parse --short HEAD)
+IMAGE_TAG ?= $(subst /,-,$(GIT_BRANCH))-$(GIT_REVISION)
 
 .PHONY: clean
 clean:
@@ -33,7 +36,7 @@ release:
 
 .PHONY: build-image
 build-image: clean ## Build the rollout-operator image
-	docker buildx build --load --platform linux/amd64 -t promxy:latest .
+	docker buildx build --load --platform linux/amd64 --build-arg revision=$(GIT_REVISION) -t promxy:latest -t promxy:$(IMAGE_TAG) .
 
 
 testlocal-build:
