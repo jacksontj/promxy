@@ -1,21 +1,20 @@
 package promclient
 
 import (
-	"context"
-	"fmt"
-	"math"
-	"sort"
-	"time"
+  "context"
+  "fmt"
+  "math"
+  "sort"
+  "time"
 
-	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
-	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/model/timestamp"
-	"github.com/prometheus/prometheus/storage/remote"
-	"github.com/sirupsen/logrus"
+  v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+  "github.com/prometheus/common/model"
+  "github.com/prometheus/prometheus/model/labels"
+  "github.com/prometheus/prometheus/model/timestamp"
+  "github.com/prometheus/prometheus/storage/remote"
 
-	"github.com/jacksontj/promxy/pkg/middleware"
-	"github.com/jacksontj/promxy/pkg/promhttputil"
+  "github.com/jacksontj/promxy/pkg/middleware"
+  "github.com/jacksontj/promxy/pkg/promhttputil"
 )
 
 // Copied from prometheus' API (these should just be exported...)
@@ -47,9 +46,7 @@ func (p *PromAPIV1) LabelNames(ctx context.Context, matchers []string, startTime
 	result := make(map[string]struct{})
 	warnings := make(promhttputil.WarningSet)
 
-	for _, childChangedContext := range middleware.MultipleContexts(ctx) {
-		// Remove this later
-		logrus.Infof("LabelNames Query using header: %s", middleware.GetHeaders(childChangedContext)[middleware.OrgIdKey])
+	for _, childChangedContext := range middleware.CreateMultipleContexts(ctx) {
 		labelResults, warning, err := p.API.LabelNames(childChangedContext, matchers, startTime, endTime)
 		warnings.AddWarnings(warning)
 		if err == nil {
@@ -79,9 +76,7 @@ func (p *PromAPIV1) LabelValues(ctx context.Context, label string, matchers []st
 	var mergedResults model.LabelValues
 	warnings := make(promhttputil.WarningSet)
 
-	for _, childChangedContext := range middleware.MultipleContexts(ctx) {
-		// Remove this later
-		logrus.Infof("LabelValues Query using header: %s", middleware.GetHeaders(childChangedContext)[middleware.OrgIdKey])
+	for _, childChangedContext := range middleware.CreateMultipleContexts(ctx) {
 		result, warning, err := p.API.LabelValues(childChangedContext, label, matchers, startTime, endTime)
 		warnings.AddWarnings(warning)
 		if err == nil {
@@ -104,9 +99,7 @@ func (p *PromAPIV1) Query(ctx context.Context, query string, ts time.Time) (mode
 	var mergedResults model.Value
 	warnings := make(promhttputil.WarningSet)
 
-	for _, childChangedContext := range middleware.MultipleContexts(ctx) {
-		// Remove this later
-		logrus.Infof("Query using header: %s", middleware.GetHeaders(childChangedContext)[middleware.OrgIdKey])
+	for _, childChangedContext := range middleware.CreateMultipleContexts(ctx) {
 		result, warning, err := p.API.Query(childChangedContext, query, ts)
 		warnings.AddWarnings(warning)
 		if err == nil {
@@ -129,9 +122,7 @@ func (p *PromAPIV1) QueryRange(ctx context.Context, query string, r v1.Range) (m
 	var mergedResults model.Value
 	warnings := make(promhttputil.WarningSet)
 
-	for _, childChangedContext := range middleware.MultipleContexts(ctx) {
-		// Remove this later
-		logrus.Infof("QueryRange using header: %s", middleware.GetHeaders(childChangedContext)[middleware.OrgIdKey])
+	for _, childChangedContext := range middleware.CreateMultipleContexts(ctx) {
 		result, warning, err := p.API.QueryRange(childChangedContext, query, r)
 		warnings.AddWarnings(warning)
 		if err == nil {

@@ -1,7 +1,40 @@
 ##
+## Regular prometheus configuration
+##
+
+# Uncomment below section to enable evaluation interval.
+#global:
+#  evaluation_interval: 5s
+#  external_labels:
+#    source: promxy
+
+# Rule files specifies a list of globs. Rules and alerts are read from
+# all matching files. Uncomment below section to enable.
+
+#rule_files:
+#  - "*rule"
+
+# Alerting specifies settings related to the Alertmanager. Uncomment below section to enable.
+
+#alerting:
+#  alertmanagers:
+#    - scheme: http
+#      static_configs:
+#        - targets:
+#            - "127.0.0.1:12345"
+
+# remote_write configuration is used by promxy as its local Appender, meaning all
+# metrics promxy would "write" (not export) would be sent to this. Examples
+# of this include: recording rules, metrics on alerting rules, etc. Uncomment below section to enable.
+
+#remote_write:
+#  - url: http://localhost:8083/receive
+
+##
 ### Promxy configuration
 ##
 promxy:
+  # In below examples, point 8000 & 8001 to prometheus servers.
   server_groups:
     # All upstream prometheus service discovery mechanisms are supported with the same
     # markup, all defined in https://github.com/prometheus/prometheus/blob/master/discovery/config/config.go#L33

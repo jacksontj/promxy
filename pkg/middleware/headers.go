@@ -5,11 +5,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 const headerKey int = 0
 const OrgIdKey string = "X-Scope-OrgID"
 const batchSizeKey string = "batch-size"
+const sep = "|"
 
 func NewProxyHeaders(h http.Handler, headers []string) *ProxyHeaders {
 	return &ProxyHeaders{
@@ -45,7 +48,6 @@ func GetHeaders(ctx context.Context) map[string]string {
 
 func splitTenants(tenants string, batchSize int) []string {
 	result := make([]string, 0)
-	sep := "|"
 	if batchSize == 0 {
 		result = append(result, tenants)
 	} else {
@@ -73,8 +75,10 @@ func getBatchSize(values map[string]string) int {
 		if key == batchSizeKey {
 			i, err := strconv.Atoi(value)
 			if err != nil {
+				logrus.Errorf("Error getting batch size : %v", err)
 				return 0
 			} else {
+				logrus.Infof("Batch size set for query : %d", i)
 				return i
 			}
 		}
@@ -82,7 +86,8 @@ func getBatchSize(values map[string]string) int {
 	return 0
 }
 
-func MultipleContexts(ctx context.Context) []context.Context {
+// CreateMultipleContexts create multiple context based on a base context and each context has updated OrgIdKey based on fetched batch size
+func CreateMultipleContexts(ctx context.Context) []context.Context {
 	v := ctx.Value(headerKey)
 	value := v.(map[string]string)
 
