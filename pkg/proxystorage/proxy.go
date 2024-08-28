@@ -260,12 +260,12 @@ func (p *ProxyStorage) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
 	state := p.GetState()
 	return &proxyquerier.ProxyQuerier{
-		ctx,
-		timestamp.Time(mint).UTC(),
-		timestamp.Time(maxt).UTC(),
-		state.client,
+		Ctx:    ctx,
+		Start:  timestamp.Time(mint).UTC(),
+		End:    timestamp.Time(maxt).UTC(),
+		Client: state.client,
 
-		&state.cfg.PromxyConfig,
+		Cfg: &state.cfg.PromxyConfig,
 	}, nil
 }
 
