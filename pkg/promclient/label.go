@@ -57,6 +57,34 @@ func (c *AddLabelClient) Key() model.LabelSet {
 	return c.Labels
 }
 
+func (c *AddLabelClient) filterMatchers(matchers []string) ([]string, bool, error) {
+	ret := make([]string, 0, len(matchers))
+	for i, matcher := range matchers {
+		selectors, err := parser.ParseMetricSelector(matcher)
+		if err != nil {
+			return nil, true, err
+		}
+
+		// If the selector matches our value -- remove the selector
+		// if the selector doesn't match, return empty
+		for sI, s := range selectors {
+			if v, ok := c.Labels[model.LabelName(s.Name)]; ok {
+				if s.Matches(string(v)) {
+					selectors = append(selectors[:sI], selectors[i+1:]...)
+				} else {
+					return nil, false, nil
+				}
+			}
+		}
+		newMatcher, err := promhttputil.MatcherToString(selectors)
+		if err != nil {
+			return nil, false, err
+		}
+		ret = append(ret, newMatcher)
+	}
+	return ret, true, nil
+}
+
 // LabelNames returns all the unique label names present in the block in sorted order.
 func (c *AddLabelClient) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
 	l, w, err := c.API.LabelNames(ctx, matchers, startTime, endTime)
@@ -81,6 +109,14 @@ func (c *AddLabelClient) LabelNames(ctx context.Context, matchers []string, star
 
 // LabelValues performs a query for the values of the given label.
 func (c *AddLabelClient) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
+	matchers, ok, err := c.filterMatchers(matchers)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !ok {
+		return nil, nil, nil
+	}
+
 	val, w, err := c.API.LabelValues(ctx, label, matchers, startTime, endTime)
 	if err != nil {
 		return nil, w, err
