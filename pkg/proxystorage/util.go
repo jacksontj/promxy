@@ -55,25 +55,25 @@ func (o *OffsetFinder) Visit(node parser.Node, _ []parser.Node) (parser.Visitor,
 	defer o.l.Unlock()
 	switch n := node.(type) {
 	case *parser.SubqueryExpr:
-		if !o.Found {
-			if n.OriginalOffset > 0 {
+		if n.OriginalOffset > 0 {
+			if !o.Found {
 				o.Offset = n.OriginalOffset
 				o.Found = true
-			}
-		} else {
-			if n.OriginalOffset != o.Offset {
-				o.Error = fmt.Errorf("mismatched offsets %v %v", n.OriginalOffset, o.Offset)
+			} else {
+				if n.OriginalOffset != o.Offset {
+					o.Error = fmt.Errorf("mismatched offsets %v %v", n.OriginalOffset, o.Offset)
+				}
 			}
 		}
 	case *parser.VectorSelector:
-		if !o.Found {
-			if n.OriginalOffset > 0 {
+		if n.OriginalOffset > 0 {
+			if !o.Found {
 				o.Offset = n.OriginalOffset
 				o.Found = true
-			}
-		} else {
-			if n.OriginalOffset != o.Offset {
-				o.Error = fmt.Errorf("mismatched offsets %v %v", n.OriginalOffset, o.Offset)
+			} else {
+				if n.OriginalOffset != o.Offset {
+					o.Error = fmt.Errorf("mismatched offsets %v %v", n.OriginalOffset, o.Offset)
+				}
 			}
 		}
 	}

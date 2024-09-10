@@ -376,14 +376,16 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 	// If the tree below us is not all the same offset, then we can't do anything below -- we'll need
 	// to wait until further in execution where they all match
-	var offset time.Duration
+	var offset time.Duration = 0
 
-	// If we couldn't find an offset, then something is wrong-- lets skip
-	// Also if there was an error, skip
-	if !offsetFinder.Found || offsetFinder.Error != nil {
+	// If we couldn't find an offset, the offset should be 0.
+	// If there was an error, let's skip.
+	if offsetFinder.Error != nil {
 		return nil, nil
 	}
-	offset = offsetFinder.Offset
+	if offsetFinder.Found {
+		offset = offsetFinder.Offset
+	}
 
 	// Function to recursivelt remove offset. This is needed as we're using
 	// the node API to String() the query to downstreams. Promql's iterators require
