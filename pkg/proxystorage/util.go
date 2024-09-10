@@ -119,3 +119,21 @@ func PreserveLabel(expr parser.Expr, srcLabel string, dstLabel string) (relabelE
 	relabelExpress, _ = parser.ParseExpr(fmt.Sprintf("label_replace(%s,`%s`,`$1`,`%s`,`(.*)`)", expr.String(), dstLabel, srcLabel))
 	return relabelExpress
 }
+
+func UnwrapExpr(expr parser.Expr) parser.Expr {
+	switch e := expr.(type) {
+	case *parser.StepInvariantExpr:
+		return e.Expr
+	}
+	return expr
+}
+
+func ExprIsLiteral(expr parser.Expr) bool {
+	switch expr.(type) {
+	case *parser.StringLiteral:
+		return true
+	case *parser.NumberLiteral:
+		return true
+	}
+	return false
+}
