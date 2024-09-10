@@ -56,8 +56,10 @@ func (o *OffsetFinder) Visit(node parser.Node, _ []parser.Node) (parser.Visitor,
 	switch n := node.(type) {
 	case *parser.SubqueryExpr:
 		if !o.Found {
-			o.Offset = n.OriginalOffset
-			o.Found = true
+			if n.OriginalOffset > 0 {
+				o.Offset = n.OriginalOffset
+				o.Found = true
+			}
 		} else {
 			if n.OriginalOffset != o.Offset {
 				o.Error = fmt.Errorf("mismatched offsets %v %v", n.OriginalOffset, o.Offset)
@@ -65,8 +67,10 @@ func (o *OffsetFinder) Visit(node parser.Node, _ []parser.Node) (parser.Visitor,
 		}
 	case *parser.VectorSelector:
 		if !o.Found {
-			o.Offset = n.OriginalOffset
-			o.Found = true
+			if n.OriginalOffset > 0 {
+				o.Offset = n.OriginalOffset
+				o.Found = true
+			}
 		} else {
 			if n.OriginalOffset != o.Offset {
 				o.Error = fmt.Errorf("mismatched offsets %v %v", n.OriginalOffset, o.Offset)
