@@ -448,7 +448,7 @@ func main() {
 	r.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Have our fallback rules
 		if strings.HasPrefix(r.URL.Path, path.Join(webOptions.RoutePrefix, "/debug")) {
-			http.StripPrefix(webOptions.RoutePrefix, http.DefaultServeMux).ServeHTTP(w, r)
+			http.StripPrefix(strings.Trim(webOptions.RoutePrefix, "/"), http.DefaultServeMux).ServeHTTP(w, r)
 		} else if r.URL.Path == path.Join(webOptions.RoutePrefix, "/-/ready") {
 			if stopping {
 				w.WriteHeader(http.StatusServiceUnavailable)
