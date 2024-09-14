@@ -648,7 +648,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		// we can set it as the args (the vector of data) and the promql engine handles the types properly
 		case "scalar":
 			n.Args[0] = ret
-			return nil, nil
+			return n, nil
 		// the functions of sort() and sort_desc() need whole results to calculate.
 		case "sort", "sort_desc":
 			return &parser.Call{
@@ -707,6 +707,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		}
 		n.OriginalOffset = offset
 		n.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
+		return n, nil
 
 	// If we hit this someone is asking for a matrix directly, if so then we don't
 	// have anyway to ask for less-- since this is exactly what they are asking for
