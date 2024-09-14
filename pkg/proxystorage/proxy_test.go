@@ -50,7 +50,7 @@ func (a *stubAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mod
 		r.Step.String(),
 	)
 	a.queries = append(a.queries, query+" @ "+from)
-	return nil, nil, nil
+	return model.Matrix{}, nil, nil
 }
 
 // Series finds series by label matchers.
@@ -162,6 +162,13 @@ func TestNodeReplacer(t *testing.T) {
 			out: "[30m:1m]",
 			queries: []string{
 				"rate(http_requests_total[5m]) @ 8220 to 10000 step 1m0s",
+			},
+		},
+		{
+			in:  "sum(foo{} offset 30m)[1h:5m]",
+			out: "sum( offset 30m)[1h:5m]",
+			queries: []string{
+				"sum(foo) @ 4800 to 8200 step 5m0s",
 			},
 		},
 
