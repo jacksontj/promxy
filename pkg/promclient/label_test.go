@@ -181,6 +181,21 @@ func TestAddLabelClient(t *testing.T) {
 			labelValues: []string{"1"},
 			matchers:    []string{`{b="1"}`},
 		},
+		{
+			labelSet:    model.LabelSet{"b": "1", "c": "1"},
+			labelValues: []string{"1"},
+			matchers:    []string{`{b="1", c="1"}`},
+		},
+		{
+			labelSet:    model.LabelSet{"b": "1", "c": "1", "d": "1"},
+			labelValues: []string{"1"},
+			matchers:    []string{`{b="1", c="1"}`},
+		},
+		{
+			labelSet:    model.LabelSet{"b": "1", "c": "1", "d": "1"},
+			labelValues: []string{"1"},
+			matchers:    []string{`{a="1", b="1", c="1"}`},
+		},
 	}
 
 	for i, test := range tests {
