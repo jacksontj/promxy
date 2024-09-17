@@ -59,24 +59,31 @@ func (c *AddLabelClient) Key() model.LabelSet {
 
 func (c *AddLabelClient) filterMatchers(matchers []string) ([]string, bool, error) {
 	ret := make([]string, 0, len(matchers))
-	for i, matcher := range matchers {
+	for _, matcher := range matchers {
 		selectors, err := parser.ParseMetricSelector(matcher)
 		if err != nil {
 			return nil, true, err
 		}
 
+		filteredSelectors := make([]*labels.Matcher, 0, len(selectors))
+
 		// If the selector matches our value -- remove the selector
 		// if the selector doesn't match, return empty
-		for sI, s := range selectors {
+		for _, s := range selectors {
 			if v, ok := c.Labels[model.LabelName(s.Name)]; ok {
-				if s.Matches(string(v)) {
-					selectors = append(selectors[:sI], selectors[i+1:]...)
-				} else {
+				// If the selector doesn't match the labels from our client; we don't match
+				if !s.Matches(string(v)) {
 					return nil, false, nil
 				}
+			} else { // Otherwise if the selector isn't part of the `Labels` we add; we pass it along
+				filteredSelectors = append(filteredSelectors, s)
 			}
 		}
-		newMatcher, err := promhttputil.MatcherToString(selectors)
+		// If the selector is cleared -- then we skip it in the return
+		if len(filteredSelectors) == 0 {
+			continue
+		}
+		newMatcher, err := promhttputil.MatcherToString(filteredSelectors)
 		if err != nil {
 			return nil, false, err
 		}
