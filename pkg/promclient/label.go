@@ -94,6 +94,14 @@ func (c *AddLabelClient) filterMatchers(matchers []string) ([]string, bool, erro
 
 // LabelNames returns all the unique label names present in the block in sorted order.
 func (c *AddLabelClient) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
+	matchers, ok, err := c.filterMatchers(matchers)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !ok {
+		return nil, nil, nil
+	}
+
 	l, w, err := c.API.LabelNames(ctx, matchers, startTime, endTime)
 	if err != nil {
 		return nil, nil, err

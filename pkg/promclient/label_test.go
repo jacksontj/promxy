@@ -98,7 +98,36 @@ type labelStubAPI struct {
 }
 
 func (a *labelStubAPI) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
-	return nil, nil, fmt.Errorf("not implemented")
+	series := append([]model.LabelSet{}, a.series...)
+	for _, m := range matchers {
+		selectors, err := parser.ParseMetricSelector(m)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, selector := range selectors {
+			for i, s := range series {
+				v, ok := s[model.LabelName(selector.Name)]
+				if !ok || !selector.Matches(string(v)) {
+					series = append(series[:i], series[i+1:]...)
+				}
+			}
+		}
+	}
+
+	names := make(map[string]struct{})
+	for _, s := range series {
+		for k := range s {
+			if strings.HasPrefix(string(k), model.ReservedLabelPrefix) {
+				continue
+			}
+			names[string(k)] = struct{}{}
+		}
+	}
+	ret := make([]string, 0, len(names))
+	for k := range names {
+		ret = append(ret, k)
+	}
+	return ret, nil, nil
 }
 
 func (a *labelStubAPI) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
@@ -171,29 +200,35 @@ func TestAddLabelClient(t *testing.T) {
 		err         bool
 		matchers    []string
 		labelValues []string
+		labelNames  []string
 	}{
 		{
 			labelSet:    model.LabelSet{"b": "1"},
 			labelValues: []string{"1"},
+			labelNames:  []string{"a", "b"},
 		},
 		{
 			labelSet:    model.LabelSet{"b": "1"},
 			labelValues: []string{"1"},
+			labelNames:  []string{"a", "b"},
 			matchers:    []string{`{b="1"}`},
 		},
 		{
 			labelSet:    model.LabelSet{"b": "1", "c": "1"},
 			labelValues: []string{"1"},
+			labelNames:  []string{"a", "b", "c"},
 			matchers:    []string{`{b="1", c="1"}`},
 		},
 		{
 			labelSet:    model.LabelSet{"b": "1", "c": "1", "d": "1"},
 			labelValues: []string{"1"},
+			labelNames:  []string{"a", "b", "c", "d"},
 			matchers:    []string{`{b="1", c="1"}`},
 		},
 		{
 			labelSet:    model.LabelSet{"b": "1", "c": "1", "d": "1"},
 			labelValues: []string{"1"},
+			labelNames:  []string{"a", "b", "c", "d"},
 			matchers:    []string{`{a="1", b="1", c="1"}`},
 		},
 	}
@@ -222,6 +257,29 @@ func TestAddLabelClient(t *testing.T) {
 					}
 				}
 			})
+
+			t.Run("LabelValues", func(t *testing.T) {
+				v, _, err := a.LabelNames(context.TODO(), test.matchers, time.Time{}, time.Time{})
+				if err != nil != test.err {
+					if test.err {
+						t.Fatalf("missing expected err")
+					} else {
+						t.Fatalf("Unexpected Err: %v", err)
+					}
+				}
+				if err == nil {
+					if len(v) != len(test.labelNames) {
+						t.Fatalf("mismatch in len: \nexpected=%v\nactual=%v", test.labelNames, v)
+					}
+
+					for i, actualV := range v {
+						if actualV != test.labelNames[i] {
+							t.Fatalf("mismatch in value: \nexpected=%v\nactual=%v", test.labelNames, v)
+						}
+					}
+				}
+			})
+
 		})
 	}
 }
