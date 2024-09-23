@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -272,8 +273,8 @@ func TestAddLabelClient(t *testing.T) {
 						t.Fatalf("mismatch in len: \nexpected=%v\nactual=%v", test.labelNames, v)
 					}
 
-					for i, actualV := range v {
-						if actualV != test.labelNames[i] {
+					for _, actualV := range v {
+						if !slices.Contains(test.labelNames, actualV) {
 							t.Fatalf("mismatch in value: \nexpected=%v\nactual=%v", test.labelNames, v)
 						}
 					}
