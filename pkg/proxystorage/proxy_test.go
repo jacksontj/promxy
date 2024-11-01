@@ -192,32 +192,62 @@ func TestNodeReplacer(t *testing.T) {
 		// we expect to re-do the AggregateExpr but have replaced the VectorSelector with the query
 		{
 			in:  "min(foo{}) > 1",
-			out: "min() > 1",
+			out: "min()",
 			queries: []string{
 				"min(foo) > 1 @ 10000",
 			},
 		},
 		{
 			in:  "max(foo{}) > 1",
-			out: "max() > 1",
+			out: "max()",
 			queries: []string{
 				"max(foo) > 1 @ 10000",
 			},
 		},
 		{
 			in:  "topk(5, foo{}) > 1",
-			out: "topk(5, ) > 1",
+			out: "topk(5, )",
 			queries: []string{
 				"topk(5, foo) > 1 @ 10000",
 			},
 		},
 		{
 			in:  "bottomk(5, foo{}) > 1",
-			out: "bottomk(5, ) > 1",
+			out: "bottomk(5, )",
 			queries: []string{
 				"bottomk(5, foo) > 1 @ 10000",
 			},
 		},
+
+		{
+			in:  "min(foo{}) * 1000",
+			out: "min()",
+			queries: []string{
+				"min(foo) * 1000 @ 10000",
+			},
+		},
+		{
+			in:  "max(foo{}) * 1000",
+			out: "max()",
+			queries: []string{
+				"max(foo) * 1000 @ 10000",
+			},
+		},
+		{
+			in:  "topk(5, foo{}) * 1000",
+			out: "topk(5, )",
+			queries: []string{
+				"topk(5, foo) * 1000 @ 10000",
+			},
+		},
+		{
+			in:  "bottomk(5, foo{}) * 1000",
+			out: "bottomk(5, )",
+			queries: []string{
+				"bottomk(5, foo) * 1000 @ 10000",
+			},
+		},
+
 		// Check that some others do nothing
 		{
 			in: "avg(foo) > 1",
