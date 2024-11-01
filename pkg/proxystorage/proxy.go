@@ -795,7 +795,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		// aggregateBinaryExpr will send the node as a query to the downstream and
 		// replace the aggregate expr with the resulting data. This will cause the aggregation
 		// (min, max, topk, bottomk) to be re-run against the expression.
-		aggregateBinaryExpr := func(agg *parser.AggregateExpr) error {
+		aggregateBinaryExpr := func(agg *parser.AggregateExpr) (parser.Node, error) {
 			logrus.Debugf("BinaryExpr (AggregateExpr + Literal): %v", n)
 
 			removeOffsetFn()
@@ -816,7 +816,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
 			}
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			iterators := promclient.IteratorsForValue(result)
@@ -833,7 +833,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
 
 			agg.Expr = ret
-			return nil
+			return agg, nil
 		}
 
 		// Only valid if the other side is either `NumberLiteral` or `StringLiteral`
@@ -853,10 +853,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			case *parser.AggregateExpr:
 				switch otherTyped.Op {
 				case parser.MIN, parser.MAX, parser.TOPK, parser.BOTTOMK:
-					if err := aggregateBinaryExpr(otherTyped); err != nil {
-						return nil, err
-					}
-					return n, nil
+					return aggregateBinaryExpr(otherTyped)
 				}
 			}
 		}
