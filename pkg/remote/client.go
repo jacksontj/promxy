@@ -41,6 +41,7 @@ type Client struct {
 	url     *config_util.URL
 	client  *http.Client
 	timeout time.Duration
+	headers map[string]string
 }
 
 // ClientConfig configures a Client.
@@ -48,6 +49,7 @@ type ClientConfig struct {
 	URL              *config_util.URL
 	Timeout          model.Duration
 	HTTPClientConfig config_util.HTTPClientConfig
+	Headers          map[string]string
 }
 
 // NewClient creates a new Client.
@@ -87,6 +89,9 @@ func (c *Client) Store(ctx context.Context, req *prompb.WriteRequest) error {
 	httpReq.Header.Set("Content-Type", "application/x-protobuf")
 	httpReq.Header.Set("User-Agent", userAgent)
 	httpReq.Header.Set("X-Prometheus-Remote-Write-Version", "0.1.0")
+	for headerKey, headerValue := range c.headers {
+		httpReq.Header.Set(headerKey, headerValue)
+	}
 	httpReq = httpReq.WithContext(ctx)
 
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
