@@ -15,33 +15,37 @@ package remote
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
-	"sort"
+	"slices"
+	"strings"
+	"sync"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 	"github.com/prometheus/prometheus/util/gate"
 )
 
 type readHandler struct {
-	logger                    log.Logger
+	logger                    *slog.Logger
 	queryable                 storage.SampleAndChunkQueryable
 	config                    func() config.Config
 	remoteReadSampleLimit     int
 	remoteReadMaxBytesInFrame int
 	remoteReadGate            *gate.Gate
 	queries                   prometheus.Gauge
+	marshalPool               *sync.Pool
 }
 
 // NewReadHandler creates a http.Handler that accepts remote read requests and
 // writes them to the provided queryable.
-func NewReadHandler(logger log.Logger, r prometheus.Registerer, queryable storage.SampleAndChunkQueryable, config func() config.Config, remoteReadSampleLimit, remoteReadConcurrencyLimit, remoteReadMaxBytesInFrame int) http.Handler {
+func NewReadHandler(logger *slog.Logger, r prometheus.Registerer, queryable storage.SampleAndChunkQueryable, config func() config.Config, remoteReadSampleLimit, remoteReadConcurrencyLimit, remoteReadMaxBytesInFrame int) http.Handler {
 	h := &readHandler{
 		logger:                    logger,
 		queryable:                 queryable,
@@ -49,6 +53,7 @@ func NewReadHandler(logger log.Logger, r prometheus.Registerer, queryable storag
 		remoteReadSampleLimit:     remoteReadSampleLimit,
 		remoteReadGate:            gate.New(remoteReadConcurrencyLimit),
 		remoteReadMaxBytesInFrame: remoteReadMaxBytesInFrame,
+		marshalPool:               &sync.Pool{},
 
 		queries: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: "prometheus",
@@ -89,8 +94,8 @@ func (h *readHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Value: value,
 		})
 	}
-	sort.Slice(sortedExternalLabels, func(i, j int) bool {
-		return sortedExternalLabels[i].Name < sortedExternalLabels[j].Name
+	slices.SortFunc(sortedExternalLabels, func(a, b prompb.Label) int {
+		return strings.Compare(a.Name, b.Name)
 	})
 
 	responseType, err := NegotiateResponseType(req.AcceptedResponseTypes)
@@ -128,13 +133,13 @@ func (h *readHandler) remoteReadSamples(
 				return err
 			}
 
-			querier, err := h.queryable.Querier(ctx, query.StartTimestampMs, query.EndTimestampMs)
+			querier, err := h.queryable.Querier(query.StartTimestampMs, query.EndTimestampMs)
 			if err != nil {
 				return err
 			}
 			defer func() {
 				if err := querier.Close(); err != nil {
-					level.Warn(h.logger).Log("msg", "Error on querier close", "err", err.Error())
+					h.logger.Warn("Error on querier close", "err", err.Error())
 				}
 			}()
 
@@ -151,20 +156,21 @@ func (h *readHandler) remoteReadSamples(
 				}
 			}
 
-			var ws storage.Warnings
-			resp.Results[i], ws, err = ToQueryResult(querier.Select(false, hints, filteredMatchers...), h.remoteReadSampleLimit)
+			var ws annotations.Annotations
+			resp.Results[i], ws, err = ToQueryResult(querier.Select(ctx, false, hints, filteredMatchers...), h.remoteReadSampleLimit)
 			if err != nil {
 				return err
 			}
 			for _, w := range ws {
-				level.Warn(h.logger).Log("msg", "Warnings on remote read query", "err", w.Error())
+				h.logger.Warn("Warnings on remote read query", "err", w.Error())
 			}
 			for _, ts := range resp.Results[i].Timeseries {
 				ts.Labels = MergeLabels(ts.Labels, sortedExternalLabels)
 			}
 			return nil
 		}(); err != nil {
-			if httpErr, ok := err.(HTTPError); ok {
+			var httpErr HTTPError
+			if errors.As(err, &httpErr) {
 				http.Error(w, httpErr.Error(), httpErr.Status())
 				return
 			}
@@ -195,13 +201,13 @@ func (h *readHandler) remoteReadStreamedXORChunks(ctx context.Context, w http.Re
 				return err
 			}
 
-			querier, err := h.queryable.ChunkQuerier(ctx, query.StartTimestampMs, query.EndTimestampMs)
+			querier, err := h.queryable.ChunkQuerier(query.StartTimestampMs, query.EndTimestampMs)
 			if err != nil {
 				return err
 			}
 			defer func() {
 				if err := querier.Close(); err != nil {
-					level.Warn(h.logger).Log("msg", "Error on chunk querier close", "err", err.Error())
+					h.logger.Warn("Error on chunk querier close", "err", err.Error())
 				}
 			}()
 
@@ -222,20 +228,22 @@ func (h *readHandler) remoteReadStreamedXORChunks(ctx context.Context, w http.Re
 				NewChunkedWriter(w, f),
 				int64(i),
 				// The streaming API has to provide the series sorted.
-				querier.Select(true, hints, filteredMatchers...),
+				querier.Select(ctx, true, hints, filteredMatchers...),
 				sortedExternalLabels,
 				h.remoteReadMaxBytesInFrame,
+				h.marshalPool,
 			)
 			if err != nil {
 				return err
 			}
 
 			for _, w := range ws {
-				level.Warn(h.logger).Log("msg", "Warnings on chunked remote read query", "warnings", w.Error())
+				h.logger.Warn("Warnings on chunked remote read query", "warnings", w.Error())
 			}
 			return nil
 		}(); err != nil {
-			if httpErr, ok := err.(HTTPError); ok {
+			var httpErr HTTPError
+			if errors.As(err, &httpErr) {
 				http.Error(w, httpErr.Error(), httpErr.Status())
 				return
 			}

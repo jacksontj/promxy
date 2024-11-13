@@ -3,7 +3,6 @@ package linodego
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/linode/linodego/internal/parseabletime"
@@ -15,7 +14,7 @@ type Payment struct {
 	ID int `json:"id"`
 
 	// The amount, in US dollars, of the Payment.
-	USD json.Number `json:"usd,Number"`
+	USD json.Number `json:"usd"`
 
 	// When the Payment was made.
 	Date *time.Time `json:"-"`
@@ -27,7 +26,7 @@ type PaymentCreateOptions struct {
 	CVV string `json:"cvv,omitempty"`
 
 	// The amount, in US dollars, of the Payment
-	USD json.Number `json:"usd,Number"`
+	USD json.Number `json:"usd"`
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface
@@ -56,77 +55,34 @@ func (i Payment) GetCreateOptions() (o PaymentCreateOptions) {
 	return
 }
 
-// PaymentsPagedResponse represents a paginated Payment API response
-type PaymentsPagedResponse struct {
-	*PageOptions
-	Data []Payment `json:"data"`
-}
-
-// endpoint gets the endpoint URL for Payment
-func (PaymentsPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Payments.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-
-	return endpoint
-}
-
-// appendData appends Payments when processing paginated Payment responses
-func (resp *PaymentsPagedResponse) appendData(r *PaymentsPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
 // ListPayments lists Payments
 func (c *Client) ListPayments(ctx context.Context, opts *ListOptions) ([]Payment, error) {
-	response := PaymentsPagedResponse{}
-	err := c.listHelper(ctx, &response, opts)
+	response, err := getPaginatedResults[Payment](ctx, c, "account/payments", opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return response, nil
 }
 
 // GetPayment gets the payment with the provided ID
-func (c *Client) GetPayment(ctx context.Context, id int) (*Payment, error) {
-	e, err := c.Payments.Endpoint()
+func (c *Client) GetPayment(ctx context.Context, paymentID int) (*Payment, error) {
+	e := formatAPIPath("account/payments/%d", paymentID)
+	response, err := doGETRequest[Payment](ctx, c, e)
 	if err != nil {
 		return nil, err
 	}
 
-	e = fmt.Sprintf("%s/%d", e, id)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&Payment{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*Payment), nil
+	return response, nil
 }
 
 // CreatePayment creates a Payment
-func (c *Client) CreatePayment(ctx context.Context, createOpts PaymentCreateOptions) (*Payment, error) {
-	var body string
-
-	e, err := c.Payments.Endpoint()
+func (c *Client) CreatePayment(ctx context.Context, opts PaymentCreateOptions) (*Payment, error) {
+	e := "accounts/payments"
+	response, err := doPOSTRequest[Payment](ctx, c, e, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	req := c.R(ctx).SetResult(&Payment{})
-
-	if bodyData, err := json.Marshal(createOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Post(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*Payment), nil
+	return response, nil
 }

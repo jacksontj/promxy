@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -30,6 +30,9 @@ type DatacenterProperties struct {
 	SecAuthProtection *bool `json:"secAuthProtection,omitempty"`
 	// Array of features and CPU families available in a location
 	CpuArchitecture *[]CpuArchitectureProperties `json:"cpuArchitecture,omitempty"`
+	// This value is either 'null' or contains an automatically-assigned /56 IPv6 CIDR block if IPv6 is enabled on this virtual data center. It can neither be changed nor removed.
+	// to set this field to `nil` in order to be marshalled, the explicit nil address `Nilstring` can be used, or the setter `SetIpv6CidrBlockNil`
+	Ipv6CidrBlock *string `json:"ipv6CidrBlock,omitempty"`
 }
 
 // NewDatacenterProperties instantiates a new DatacenterProperties object
@@ -53,7 +56,7 @@ func NewDatacenterPropertiesWithDefaults() *DatacenterProperties {
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -91,7 +94,7 @@ func (o *DatacenterProperties) HasName() bool {
 }
 
 // GetDescription returns the Description field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterProperties) GetDescription() *string {
 	if o == nil {
 		return nil
@@ -129,7 +132,7 @@ func (o *DatacenterProperties) HasDescription() bool {
 }
 
 // GetLocation returns the Location field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterProperties) GetLocation() *string {
 	if o == nil {
 		return nil
@@ -167,7 +170,7 @@ func (o *DatacenterProperties) HasLocation() bool {
 }
 
 // GetVersion returns the Version field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterProperties) GetVersion() *int32 {
 	if o == nil {
 		return nil
@@ -205,7 +208,7 @@ func (o *DatacenterProperties) HasVersion() bool {
 }
 
 // GetFeatures returns the Features field value
-// If the value is explicit nil, the zero value for []string will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterProperties) GetFeatures() *[]string {
 	if o == nil {
 		return nil
@@ -243,7 +246,7 @@ func (o *DatacenterProperties) HasFeatures() bool {
 }
 
 // GetSecAuthProtection returns the SecAuthProtection field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterProperties) GetSecAuthProtection() *bool {
 	if o == nil {
 		return nil
@@ -281,7 +284,7 @@ func (o *DatacenterProperties) HasSecAuthProtection() bool {
 }
 
 // GetCpuArchitecture returns the CpuArchitecture field value
-// If the value is explicit nil, the zero value for []CpuArchitectureProperties will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterProperties) GetCpuArchitecture() *[]CpuArchitectureProperties {
 	if o == nil {
 		return nil
@@ -318,28 +321,83 @@ func (o *DatacenterProperties) HasCpuArchitecture() bool {
 	return false
 }
 
+// GetIpv6CidrBlock returns the Ipv6CidrBlock field value
+// If the value is explicit nil, nil is returned
+func (o *DatacenterProperties) GetIpv6CidrBlock() *string {
+	if o == nil {
+		return nil
+	}
+
+	return o.Ipv6CidrBlock
+
+}
+
+// GetIpv6CidrBlockOk returns a tuple with the Ipv6CidrBlock field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *DatacenterProperties) GetIpv6CidrBlockOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.Ipv6CidrBlock, true
+}
+
+// SetIpv6CidrBlock sets field value
+func (o *DatacenterProperties) SetIpv6CidrBlock(v string) {
+
+	o.Ipv6CidrBlock = &v
+
+}
+
+// sets Ipv6CidrBlock to the explicit address that will be encoded as nil when marshaled
+func (o *DatacenterProperties) SetIpv6CidrBlockNil() {
+	o.Ipv6CidrBlock = &Nilstring
+}
+
+// HasIpv6CidrBlock returns a boolean if a field has been set.
+func (o *DatacenterProperties) HasIpv6CidrBlock() bool {
+	if o != nil && o.Ipv6CidrBlock != nil {
+		return true
+	}
+
+	return false
+}
+
 func (o DatacenterProperties) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.Description != nil {
 		toSerialize["description"] = o.Description
 	}
+
 	if o.Location != nil {
 		toSerialize["location"] = o.Location
 	}
+
 	if o.Version != nil {
 		toSerialize["version"] = o.Version
 	}
+
 	if o.Features != nil {
 		toSerialize["features"] = o.Features
 	}
+
 	if o.SecAuthProtection != nil {
 		toSerialize["secAuthProtection"] = o.SecAuthProtection
 	}
+
 	if o.CpuArchitecture != nil {
 		toSerialize["cpuArchitecture"] = o.CpuArchitecture
+	}
+
+	if o.Ipv6CidrBlock == &Nilstring {
+		toSerialize["ipv6CidrBlock"] = nil
+	} else if o.Ipv6CidrBlock != nil {
+		toSerialize["ipv6CidrBlock"] = o.Ipv6CidrBlock
 	}
 	return json.Marshal(toSerialize)
 }

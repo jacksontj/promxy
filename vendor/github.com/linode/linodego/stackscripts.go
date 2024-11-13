@@ -3,7 +3,6 @@ package linodego
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/linode/linodego/internal/parseabletime"
@@ -110,111 +109,36 @@ func (i Stackscript) GetUpdateOptions() StackscriptUpdateOptions {
 	}
 }
 
-// StackscriptsPagedResponse represents a paginated Stackscript API response
-type StackscriptsPagedResponse struct {
-	*PageOptions
-	Data []Stackscript `json:"data"`
-}
-
-// endpoint gets the endpoint URL for Stackscript
-func (StackscriptsPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.StackScripts.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return endpoint
-}
-
-// appendData appends Stackscripts when processing paginated Stackscript responses
-func (resp *StackscriptsPagedResponse) appendData(r *StackscriptsPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
 // ListStackscripts lists Stackscripts
 func (c *Client) ListStackscripts(ctx context.Context, opts *ListOptions) ([]Stackscript, error) {
-	response := StackscriptsPagedResponse{}
-	err := c.listHelper(ctx, &response, opts)
-	if err != nil {
-		return nil, err
-	}
-	return response.Data, nil
+	response, err := getPaginatedResults[Stackscript](ctx, c, "linode/stackscripts", opts)
+	return response, err
 }
 
 // GetStackscript gets the Stackscript with the provided ID
-func (c *Client) GetStackscript(ctx context.Context, id int) (*Stackscript, error) {
-	e, err := c.StackScripts.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-	e = fmt.Sprintf("%s/%d", e, id)
-	r, err := coupleAPIErrors(c.R(ctx).
-		SetResult(&Stackscript{}).
-		Get(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*Stackscript), nil
+func (c *Client) GetStackscript(ctx context.Context, scriptID int) (*Stackscript, error) {
+	e := formatAPIPath("linode/stackscripts/%d", scriptID)
+	response, err := doGETRequest[Stackscript](ctx, c, e)
+	return response, err
 }
 
 // CreateStackscript creates a StackScript
-func (c *Client) CreateStackscript(ctx context.Context, createOpts StackscriptCreateOptions) (*Stackscript, error) {
-	var body string
-	e, err := c.StackScripts.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-
-	req := c.R(ctx).SetResult(&Stackscript{})
-
-	if bodyData, err := json.Marshal(createOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Post(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*Stackscript), nil
+func (c *Client) CreateStackscript(ctx context.Context, opts StackscriptCreateOptions) (*Stackscript, error) {
+	e := "linode/stackscripts"
+	response, err := doPOSTRequest[Stackscript](ctx, c, e, opts)
+	return response, err
 }
 
 // UpdateStackscript updates the StackScript with the specified id
-func (c *Client) UpdateStackscript(ctx context.Context, id int, updateOpts StackscriptUpdateOptions) (*Stackscript, error) {
-	var body string
-	e, err := c.StackScripts.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-	e = fmt.Sprintf("%s/%d", e, id)
-
-	req := c.R(ctx).SetResult(&Stackscript{})
-
-	if bodyData, err := json.Marshal(updateOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*Stackscript), nil
+func (c *Client) UpdateStackscript(ctx context.Context, scriptID int, opts StackscriptUpdateOptions) (*Stackscript, error) {
+	e := formatAPIPath("linode/stackscripts/%d", scriptID)
+	response, err := doPUTRequest[Stackscript](ctx, c, e, opts)
+	return response, err
 }
 
 // DeleteStackscript deletes the StackScript with the specified id
-func (c *Client) DeleteStackscript(ctx context.Context, id int) error {
-	e, err := c.StackScripts.Endpoint()
-	if err != nil {
-		return err
-	}
-	e = fmt.Sprintf("%s/%d", e, id)
-
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
+func (c *Client) DeleteStackscript(ctx context.Context, scriptID int) error {
+	e := formatAPIPath("linode/stackscripts/%d", scriptID)
+	err := doDELETERequest(ctx, c, e)
 	return err
 }

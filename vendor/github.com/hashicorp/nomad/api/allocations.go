@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 import (
@@ -27,6 +30,7 @@ const (
 	AllocClientStatusComplete = "complete"
 	AllocClientStatusFailed   = "failed"
 	AllocClientStatusLost     = "lost"
+	AllocClientStatusUnknown  = "unknown"
 )
 
 const (
@@ -231,6 +235,27 @@ func (a *Allocations) Signal(alloc *Allocation, q *QueryOptions, task, signal st
 	return err
 }
 
+// SetPauseState sets the schedule behavior of one task in the allocation.
+func (a *Allocations) SetPauseState(alloc *Allocation, q *QueryOptions, task, state string) error {
+	req := AllocPauseRequest{
+		ScheduleState: state,
+		Task:          task,
+	}
+	var resp GenericResponse
+	_, err := a.client.putQuery("/v1/client/allocation/"+alloc.ID+"/pause", &req, &resp, q)
+	return err
+}
+
+// GetPauseState gets the schedule behavior of one task in the allocation.
+//
+// The ?task=<task> query parameter must be set.
+func (a *Allocations) GetPauseState(alloc *Allocation, q *QueryOptions, task string) (string, *QueryMeta, error) {
+	var resp AllocGetPauseResponse
+	qm, err := a.client.query("/v1/client/allocation/"+alloc.ID+"/pause?task="+task, &resp, q)
+	state := resp.ScheduleState
+	return state, qm, err
+}
+
 // Services is used to return a list of service registrations associated to the
 // specified allocID.
 func (a *Allocations) Services(allocID string, q *QueryOptions) ([]*ServiceRegistration, *QueryMeta, error) {
@@ -267,6 +292,7 @@ type Allocation struct {
 	PreviousAllocation    string
 	NextAllocation        string
 	RescheduleTracker     *RescheduleTracker
+	NetworkStatus         *AllocNetworkStatus
 	PreemptedAllocations  []string
 	PreemptedByAllocation string
 	CreateIndex           uint64
@@ -280,6 +306,7 @@ type Allocation struct {
 type AllocationMetric struct {
 	NodesEvaluated     int
 	NodesFiltered      int
+	NodesInPool        int
 	NodesAvailable     map[string]int
 	ClassFiltered      map[string]int
 	ConstraintFiltered map[string]int
@@ -305,7 +332,7 @@ type NodeScoreMeta struct {
 
 // Stub returns a list stub for the allocation
 func (a *Allocation) Stub() *AllocationListStub {
-	return &AllocationListStub{
+	stub := &AllocationListStub{
 		ID:                    a.ID,
 		EvalID:                a.EvalID,
 		Name:                  a.Name,
@@ -313,8 +340,6 @@ func (a *Allocation) Stub() *AllocationListStub {
 		NodeID:                a.NodeID,
 		NodeName:              a.NodeName,
 		JobID:                 a.JobID,
-		JobType:               *a.Job.Type,
-		JobVersion:            *a.Job.Version,
 		TaskGroup:             a.TaskGroup,
 		DesiredStatus:         a.DesiredStatus,
 		DesiredDescription:    a.DesiredDescription,
@@ -323,6 +348,7 @@ func (a *Allocation) Stub() *AllocationListStub {
 		TaskStates:            a.TaskStates,
 		DeploymentStatus:      a.DeploymentStatus,
 		FollowupEvalID:        a.FollowupEvalID,
+		NextAllocation:        a.NextAllocation,
 		RescheduleTracker:     a.RescheduleTracker,
 		PreemptedAllocations:  a.PreemptedAllocations,
 		PreemptedByAllocation: a.PreemptedByAllocation,
@@ -331,6 +357,13 @@ func (a *Allocation) Stub() *AllocationListStub {
 		CreateTime:            a.CreateTime,
 		ModifyTime:            a.ModifyTime,
 	}
+
+	if a.Job != nil {
+		stub.JobType = *a.Job.Type
+		stub.JobVersion = *a.Job.Version
+	}
+
+	return stub
 }
 
 // ServerTerminalStatus returns true if the desired state of the allocation is
@@ -376,6 +409,7 @@ type AllocationListStub struct {
 	TaskStates            map[string]*TaskState
 	DeploymentStatus      *AllocDeploymentStatus
 	FollowupEvalID        string
+	NextAllocation        string
 	RescheduleTracker     *RescheduleTracker
 	PreemptedAllocations  []string
 	PreemptedByAllocation string
@@ -393,6 +427,15 @@ type AllocDeploymentStatus struct {
 	Timestamp   time.Time
 	Canary      bool
 	ModifyIndex uint64
+}
+
+// AllocNetworkStatus captures the status of an allocation's network during runtime.
+// Depending on the network mode, an allocation's address may need to be known to other
+// systems in Nomad such as service registration.
+type AllocNetworkStatus struct {
+	InterfaceName string
+	Address       string
+	DNS           *DNSConfig
 }
 
 type AllocatedResources struct {
@@ -495,6 +538,18 @@ type AllocSignalRequest struct {
 	Signal string
 }
 
+type AllocPauseRequest struct {
+	Task string
+
+	// ScheduleState must be one of "pause", "run", "scheduled".
+	ScheduleState string
+}
+
+type AllocGetPauseResponse struct {
+	// ScheduleState will be one of "pause", "run", "scheduled".
+	ScheduleState string
+}
+
 // GenericResponse is used to respond to a request where no
 // specific response information is needed.
 type GenericResponse struct {
@@ -503,7 +558,8 @@ type GenericResponse struct {
 
 // RescheduleTracker encapsulates previous reschedule events
 type RescheduleTracker struct {
-	Events []*RescheduleEvent
+	Events         []*RescheduleEvent
+	LastReschedule string
 }
 
 // RescheduleEvent is used to keep track of previous attempts at rescheduling an allocation

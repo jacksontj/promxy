@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -17,15 +17,15 @@ import (
 
 // KubernetesNodeMetadata struct for KubernetesNodeMetadata
 type KubernetesNodeMetadata struct {
-	// Resource's Entity Tag as defined in http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.11  Entity Tag is also added as an 'ETag response header to requests which don't use 'depth' parameter.
+	// The resource entity tag as defined in http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.11  Entity tags are also added as 'ETag' response headers to requests that do not use the 'depth' parameter.
 	Etag *string `json:"etag,omitempty"`
-	// The last time the resource was created.
+	// The date the resource was created.
 	CreatedDate *IonosTime
-	// The last time the resource was modified.
+	// The date the resource was last modified.
 	LastModifiedDate *IonosTime
-	// State of the resource.
+	// The resource state.
 	State *string `json:"state,omitempty"`
-	// The last time the software was updated on the node.
+	// The date when the software on the node was last updated.
 	LastSoftwareUpdatedDate *IonosTime
 }
 
@@ -48,7 +48,7 @@ func NewKubernetesNodeMetadataWithDefaults() *KubernetesNodeMetadata {
 }
 
 // GetEtag returns the Etag field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodeMetadata) GetEtag() *string {
 	if o == nil {
 		return nil
@@ -86,7 +86,7 @@ func (o *KubernetesNodeMetadata) HasEtag() bool {
 }
 
 // GetCreatedDate returns the CreatedDate field value
-// If the value is explicit nil, the zero value for time.Time will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodeMetadata) GetCreatedDate() *time.Time {
 	if o == nil {
 		return nil
@@ -131,7 +131,7 @@ func (o *KubernetesNodeMetadata) HasCreatedDate() bool {
 }
 
 // GetLastModifiedDate returns the LastModifiedDate field value
-// If the value is explicit nil, the zero value for time.Time will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodeMetadata) GetLastModifiedDate() *time.Time {
 	if o == nil {
 		return nil
@@ -176,7 +176,7 @@ func (o *KubernetesNodeMetadata) HasLastModifiedDate() bool {
 }
 
 // GetState returns the State field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodeMetadata) GetState() *string {
 	if o == nil {
 		return nil
@@ -214,7 +214,7 @@ func (o *KubernetesNodeMetadata) HasState() bool {
 }
 
 // GetLastSoftwareUpdatedDate returns the LastSoftwareUpdatedDate field value
-// If the value is explicit nil, the zero value for time.Time will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodeMetadata) GetLastSoftwareUpdatedDate() *time.Time {
 	if o == nil {
 		return nil
@@ -263,18 +263,23 @@ func (o KubernetesNodeMetadata) MarshalJSON() ([]byte, error) {
 	if o.Etag != nil {
 		toSerialize["etag"] = o.Etag
 	}
+
 	if o.CreatedDate != nil {
 		toSerialize["createdDate"] = o.CreatedDate
 	}
+
 	if o.LastModifiedDate != nil {
 		toSerialize["lastModifiedDate"] = o.LastModifiedDate
 	}
+
 	if o.State != nil {
 		toSerialize["state"] = o.State
 	}
+
 	if o.LastSoftwareUpdatedDate != nil {
 		toSerialize["lastSoftwareUpdatedDate"] = o.LastSoftwareUpdatedDate
 	}
+
 	return json.Marshal(toSerialize)
 }
 

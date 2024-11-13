@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,13 +16,13 @@ import (
 
 // KubernetesNodeProperties struct for KubernetesNodeProperties
 type KubernetesNodeProperties struct {
-	// A Kubernetes node name.
+	// The Kubernetes node name.
 	Name *string `json:"name"`
-	// A valid public IP.
+	// The public IP associated with the node.
 	PublicIP *string `json:"publicIP,omitempty"`
-	// A valid private IP.
+	// The private IP associated with the node.
 	PrivateIP *string `json:"privateIP,omitempty"`
-	// The Kubernetes version the nodepool is running. This imposes restrictions on what Kubernetes versions can be run in a cluster's nodepools. Additionally, not all Kubernetes versions are viable upgrade targets for all prior versions.
+	// The Kubernetes version running in the node pool. Note that this imposes restrictions on which Kubernetes versions can run in the node pools of a cluster. Also, not all Kubernetes versions are suitable upgrade targets for all earlier versions.
 	K8sVersion *string `json:"k8sVersion"`
 }
 
@@ -48,7 +48,7 @@ func NewKubernetesNodePropertiesWithDefaults() *KubernetesNodeProperties {
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodeProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -86,7 +86,7 @@ func (o *KubernetesNodeProperties) HasName() bool {
 }
 
 // GetPublicIP returns the PublicIP field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodeProperties) GetPublicIP() *string {
 	if o == nil {
 		return nil
@@ -124,7 +124,7 @@ func (o *KubernetesNodeProperties) HasPublicIP() bool {
 }
 
 // GetPrivateIP returns the PrivateIP field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodeProperties) GetPrivateIP() *string {
 	if o == nil {
 		return nil
@@ -162,7 +162,7 @@ func (o *KubernetesNodeProperties) HasPrivateIP() bool {
 }
 
 // GetK8sVersion returns the K8sVersion field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodeProperties) GetK8sVersion() *string {
 	if o == nil {
 		return nil
@@ -204,15 +204,19 @@ func (o KubernetesNodeProperties) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.PublicIP != nil {
 		toSerialize["publicIP"] = o.PublicIP
 	}
+
 	if o.PrivateIP != nil {
 		toSerialize["privateIP"] = o.PrivateIP
 	}
+
 	if o.K8sVersion != nil {
 		toSerialize["k8sVersion"] = o.K8sVersion
 	}
+
 	return json.Marshal(toSerialize)
 }
 

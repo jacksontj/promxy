@@ -15,13 +15,16 @@ package remote
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/go-kit/log"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -41,6 +44,24 @@ type Storage struct {
 	queryables             []storage.Queryable
 	localStartTimeCallback startTimeCallback
 	flushDeadline          time.Duration
+}
+
+func (s *Storage) SetOptions(opts *storage.AppendOptions) {}
+
+func (s *Storage) AppendHistogram(ref storage.SeriesRef, l labels.Labels, t int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, fmt.Errorf("not Implemented")
+}
+
+func (s *Storage) AppendHistogramCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, fmt.Errorf("not Implemented")
+}
+
+func (s *Storage) UpdateMetadata(ref storage.SeriesRef, l labels.Labels, m metadata.Metadata) (storage.SeriesRef, error) {
+	return 0, fmt.Errorf("not Implemented")
+}
+
+func (s *Storage) AppendCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64) (storage.SeriesRef, error) {
+	return 0, fmt.Errorf("not Implemented")
 }
 
 // NewStorage returns a remote.Storage.
@@ -140,7 +161,7 @@ func (s *Storage) Querier(ctx context.Context, mint, maxt int64) (storage.Querie
 
 	queriers := make([]storage.Querier, 0, len(queryables))
 	for _, queryable := range queryables {
-		q, err := queryable.Querier(ctx, mint, maxt)
+		q, err := queryable.Querier(mint, maxt)
 		if err != nil {
 			return nil, err
 		}

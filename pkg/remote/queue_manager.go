@@ -232,7 +232,7 @@ func (t *QueueManager) Append(s *model.Sample) error {
 		}
 	}
 
-	ls := relabel.Process(b.Labels(), t.relabelConfigs...)
+	ls, _ := relabel.Process(b.Labels(), t.relabelConfigs...)
 
 	// If there are no labels; don't queue the sample
 	if len(ls) < 1 {

@@ -3,7 +3,6 @@ package linodego
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/linode/linodego/internal/parseabletime"
@@ -38,6 +37,9 @@ type Volume struct {
 	Tags           []string     `json:"tags"`
 	Created        *time.Time   `json:"-"`
 	Updated        *time.Time   `json:"-"`
+
+	// Note: Block Storage Disk Encryption is not currently available to all users.
+	Encryption string `json:"encryption"`
 }
 
 // VolumeCreateOptions fields are those accepted by CreateVolume
@@ -51,6 +53,7 @@ type VolumeCreateOptions struct {
 	// An array of tags applied to this object. Tags are for organizational purposes only.
 	Tags               []string `json:"tags"`
 	PersistAcrossBoots *bool    `json:"persist_across_boots,omitempty"`
+	Encryption         string   `json:"encryption,omitempty"`
 }
 
 // VolumeUpdateOptions fields are those accepted by UpdateVolume
@@ -64,12 +67,6 @@ type VolumeAttachOptions struct {
 	LinodeID           int   `json:"linode_id"`
 	ConfigID           int   `json:"config_id,omitempty"`
 	PersistAcrossBoots *bool `json:"persist_across_boots,omitempty"`
-}
-
-// VolumesPagedResponse represents a linode API response for listing of volumes
-type VolumesPagedResponse struct {
-	*PageOptions
-	Data []Volume `json:"data"`
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface
@@ -113,185 +110,72 @@ func (v Volume) GetCreateOptions() (createOpts VolumeCreateOptions) {
 	return
 }
 
-// endpoint gets the endpoint URL for Volume
-func (VolumesPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Volumes.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return endpoint
-}
-
-// appendData appends Volumes when processing paginated Volume responses
-func (resp *VolumesPagedResponse) appendData(r *VolumesPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
 // ListVolumes lists Volumes
 func (c *Client) ListVolumes(ctx context.Context, opts *ListOptions) ([]Volume, error) {
-	response := VolumesPagedResponse{}
-	err := c.listHelper(ctx, &response, opts)
-	if err != nil {
-		return nil, err
-	}
-	return response.Data, nil
+	response, err := getPaginatedResults[Volume](ctx, c, "volumes", opts)
+	return response, err
 }
 
 // GetVolume gets the template with the provided ID
-func (c *Client) GetVolume(ctx context.Context, id int) (*Volume, error) {
-	e, err := c.Volumes.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-	e = fmt.Sprintf("%s/%d", e, id)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&Volume{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*Volume), nil
+func (c *Client) GetVolume(ctx context.Context, volumeID int) (*Volume, error) {
+	e := formatAPIPath("volumes/%d", volumeID)
+	response, err := doGETRequest[Volume](ctx, c, e)
+	return response, err
 }
 
 // AttachVolume attaches a volume to a Linode instance
-func (c *Client) AttachVolume(ctx context.Context, id int, options *VolumeAttachOptions) (*Volume, error) {
-	body := ""
-	if bodyData, err := json.Marshal(options); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	e, err := c.Volumes.Endpoint()
-	if err != nil {
-		return nil, NewError(err)
-	}
-
-	e = fmt.Sprintf("%s/%d/attach", e, id)
-	resp, err := coupleAPIErrors(c.R(ctx).
-		SetResult(&Volume{}).
-		SetBody(body).
-		Post(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.Result().(*Volume), nil
+func (c *Client) AttachVolume(ctx context.Context, volumeID int, opts *VolumeAttachOptions) (*Volume, error) {
+	e := formatAPIPath("volumes/%d/attach", volumeID)
+	response, err := doPOSTRequest[Volume](ctx, c, e, opts)
+	return response, err
 }
 
 // CreateVolume creates a Linode Volume
-func (c *Client) CreateVolume(ctx context.Context, createOpts VolumeCreateOptions) (*Volume, error) {
-	body := ""
-	if bodyData, err := json.Marshal(createOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	e, err := c.Volumes.Endpoint()
-	if err != nil {
-		return nil, NewError(err)
-	}
-
-	resp, err := coupleAPIErrors(c.R(ctx).
-		SetResult(&Volume{}).
-		SetBody(body).
-		Post(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.Result().(*Volume), nil
+func (c *Client) CreateVolume(ctx context.Context, opts VolumeCreateOptions) (*Volume, error) {
+	e := "volumes"
+	response, err := doPOSTRequest[Volume](ctx, c, e, opts)
+	return response, err
 }
 
 // UpdateVolume updates the Volume with the specified id
-func (c *Client) UpdateVolume(ctx context.Context, id int, volume VolumeUpdateOptions) (*Volume, error) {
-	var body string
-	e, err := c.Volumes.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-	e = fmt.Sprintf("%s/%d", e, id)
-
-	req := c.R(ctx).SetResult(&Volume{})
-
-	if bodyData, err := json.Marshal(volume); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*Volume), nil
+func (c *Client) UpdateVolume(ctx context.Context, volumeID int, opts VolumeUpdateOptions) (*Volume, error) {
+	e := formatAPIPath("volumes/%d", volumeID)
+	response, err := doPUTRequest[Volume](ctx, c, e, opts)
+	return response, err
 }
 
 // CloneVolume clones a Linode volume
-func (c *Client) CloneVolume(ctx context.Context, id int, label string) (*Volume, error) {
-	body := fmt.Sprintf("{\"label\":\"%s\"}", label)
-
-	e, err := c.Volumes.Endpoint()
-	if err != nil {
-		return nil, NewError(err)
-	}
-	e = fmt.Sprintf("%s/%d/clone", e, id)
-
-	resp, err := coupleAPIErrors(c.R(ctx).
-		SetResult(&Volume{}).
-		SetBody(body).
-		Post(e))
-	if err != nil {
-		return nil, err
+func (c *Client) CloneVolume(ctx context.Context, volumeID int, label string) (*Volume, error) {
+	opts := map[string]any{
+		"label": label,
 	}
 
-	return resp.Result().(*Volume), nil
+	e := formatAPIPath("volumes/%d/clone", volumeID)
+	response, err := doPOSTRequest[Volume](ctx, c, e, opts)
+	return response, err
 }
 
 // DetachVolume detaches a Linode volume
-func (c *Client) DetachVolume(ctx context.Context, id int) error {
-	body := ""
-
-	e, err := c.Volumes.Endpoint()
-	if err != nil {
-		return NewError(err)
-	}
-
-	e = fmt.Sprintf("%s/%d/detach", e, id)
-
-	_, err = coupleAPIErrors(c.R(ctx).
-		SetBody(body).
-		Post(e))
-
+func (c *Client) DetachVolume(ctx context.Context, volumeID int) error {
+	e := formatAPIPath("volumes/%d/detach", volumeID)
+	_, err := doPOSTRequest[Volume, any](ctx, c, e)
 	return err
 }
 
 // ResizeVolume resizes an instance to new Linode type
-func (c *Client) ResizeVolume(ctx context.Context, id int, size int) error {
-	body := fmt.Sprintf("{\"size\": %d}", size)
-
-	e, err := c.Volumes.Endpoint()
-	if err != nil {
-		return NewError(err)
+func (c *Client) ResizeVolume(ctx context.Context, volumeID int, size int) error {
+	opts := map[string]int{
+		"size": size,
 	}
-	e = fmt.Sprintf("%s/%d/resize", e, id)
 
-	_, err = coupleAPIErrors(c.R(ctx).
-		SetBody(body).
-		Post(e))
-
+	e := formatAPIPath("volumes/%d/resize", volumeID)
+	_, err := doPOSTRequest[Volume](ctx, c, e, opts)
 	return err
 }
 
 // DeleteVolume deletes the Volume with the specified id
-func (c *Client) DeleteVolume(ctx context.Context, id int) error {
-	e, err := c.Volumes.Endpoint()
-	if err != nil {
-		return err
-	}
-	e = fmt.Sprintf("%s/%d", e, id)
-
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
+func (c *Client) DeleteVolume(ctx context.Context, volumeID int) error {
+	e := formatAPIPath("volumes/%d", volumeID)
+	err := doDELETERequest(ctx, c, e)
 	return err
 }

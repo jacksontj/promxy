@@ -2,7 +2,6 @@ package linodego
 
 import (
 	"context"
-	"encoding/json"
 )
 
 // AccountSettings are the account wide flags or plans that effect new resources
@@ -18,6 +17,9 @@ type AccountSettings struct {
 
 	// A plan name like "longview-3"..."longview-100", or a nil value for to cancel any existing subscription plan.
 	LongviewSubscription *string `json:"longview_subscription"`
+
+	// A string like "disabled", "suspended", or "active" describing the status of this account’s Object Storage service enrollment.
+	ObjectStorage *string `json:"object_storage"`
 }
 
 // AccountSettingsUpdateOptions are the updateable account wide flags or plans that effect new resources.
@@ -26,6 +28,7 @@ type AccountSettingsUpdateOptions struct {
 	BackupsEnabled *bool `json:"backups_enabled,omitempty"`
 
 	// A plan name like "longview-3"..."longview-100", or a nil value for to cancel any existing subscription plan.
+	// Deprecated: Use PUT /longview/plan instead to update the LongviewSubscription
 	LongviewSubscription *string `json:"longview_subscription,omitempty"`
 
 	// The default network helper setting for all new Linodes and Linode Configs for all users on the account.
@@ -34,42 +37,24 @@ type AccountSettingsUpdateOptions struct {
 
 // GetAccountSettings gets the account wide flags or plans that effect new resources
 func (c *Client) GetAccountSettings(ctx context.Context) (*AccountSettings, error) {
-	e, err := c.AccountSettings.Endpoint()
+	e := "account/settings"
+
+	response, err := doGETRequest[AccountSettings](ctx, c, e)
 	if err != nil {
 		return nil, err
 	}
 
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&AccountSettings{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*AccountSettings), nil
+	return response, nil
 }
 
 // UpdateAccountSettings updates the settings associated with the account
-func (c *Client) UpdateAccountSettings(ctx context.Context, settings AccountSettingsUpdateOptions) (*AccountSettings, error) {
-	var body string
+func (c *Client) UpdateAccountSettings(ctx context.Context, opts AccountSettingsUpdateOptions) (*AccountSettings, error) {
+	e := "account/settings"
 
-	e, err := c.AccountSettings.Endpoint()
+	response, err := doPUTRequest[AccountSettings](ctx, c, e, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	req := c.R(ctx).SetResult(&AccountSettings{})
-
-	if bodyData, err := json.Marshal(settings); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*AccountSettings), nil
+	return response, nil
 }

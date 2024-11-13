@@ -2,8 +2,6 @@ package linodego
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 )
 
 // Domain represents a Domain object
@@ -186,138 +184,63 @@ func (d Domain) GetUpdateOptions() (du DomainUpdateOptions) {
 	return
 }
 
-// DomainsPagedResponse represents a paginated Domain API response
-type DomainsPagedResponse struct {
-	*PageOptions
-	Data []Domain `json:"data"`
-}
-
-// endpoint gets the endpoint URL for Domain
-func (DomainsPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Domains.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-
-	return endpoint
-}
-
-// appendData appends Domains when processing paginated Domain responses
-func (resp *DomainsPagedResponse) appendData(r *DomainsPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
 // ListDomains lists Domains
 func (c *Client) ListDomains(ctx context.Context, opts *ListOptions) ([]Domain, error) {
-	response := DomainsPagedResponse{}
-	err := c.listHelper(ctx, &response, opts)
+	response, err := getPaginatedResults[Domain](ctx, c, "domains", opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return response, nil
 }
 
 // GetDomain gets the domain with the provided ID
-func (c *Client) GetDomain(ctx context.Context, id int) (*Domain, error) {
-	e, err := c.Domains.Endpoint()
+func (c *Client) GetDomain(ctx context.Context, domainID int) (*Domain, error) {
+	e := formatAPIPath("domains/%d", domainID)
+	response, err := doGETRequest[Domain](ctx, c, e)
 	if err != nil {
 		return nil, err
 	}
 
-	e = fmt.Sprintf("%s/%d", e, id)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&Domain{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*Domain), nil
+	return response, nil
 }
 
 // CreateDomain creates a Domain
-func (c *Client) CreateDomain(ctx context.Context, domain DomainCreateOptions) (*Domain, error) {
-	var body string
-
-	e, err := c.Domains.Endpoint()
+func (c *Client) CreateDomain(ctx context.Context, opts DomainCreateOptions) (*Domain, error) {
+	e := "domains"
+	response, err := doPOSTRequest[Domain](ctx, c, e, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	req := c.R(ctx).SetResult(&Domain{})
-
-	bodyData, err := json.Marshal(domain)
-	if err != nil {
-		return nil, NewError(err)
-	}
-
-	body = string(bodyData)
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Post(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*Domain), nil
+	return response, nil
 }
 
 // UpdateDomain updates the Domain with the specified id
-func (c *Client) UpdateDomain(ctx context.Context, id int, domain DomainUpdateOptions) (*Domain, error) {
-	var body string
-
-	e, err := c.Domains.Endpoint()
+func (c *Client) UpdateDomain(ctx context.Context, domainID int, opts DomainUpdateOptions) (*Domain, error) {
+	e := formatAPIPath("domains/%d", domainID)
+	response, err := doPUTRequest[Domain](ctx, c, e, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	e = fmt.Sprintf("%s/%d", e, id)
-
-	req := c.R(ctx).SetResult(&Domain{})
-
-	if bodyData, err := json.Marshal(domain); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*Domain), nil
+	return response, nil
 }
 
 // DeleteDomain deletes the Domain with the specified id
-func (c *Client) DeleteDomain(ctx context.Context, id int) error {
-	e, err := c.Domains.Endpoint()
-	if err != nil {
-		return err
-	}
-
-	e = fmt.Sprintf("%s/%d", e, id)
-
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
-
+func (c *Client) DeleteDomain(ctx context.Context, domainID int) error {
+	e := formatAPIPath("domains/%d", domainID)
+	err := doDELETERequest(ctx, c, e)
 	return err
 }
 
 // GetDomainZoneFile gets the zone file for the last rendered zone for the specified domain.
 func (c *Client) GetDomainZoneFile(ctx context.Context, domainID int) (*DomainZoneFile, error) {
-	e, err := c.Domains.Endpoint()
+	e := formatAPIPath("domains/%d/zone-file", domainID)
+	response, err := doGETRequest[DomainZoneFile](ctx, c, e)
 	if err != nil {
 		return nil, err
 	}
 
-	e = fmt.Sprintf("%s/%d/zone-file", e, domainID)
-
-	resp, err := coupleAPIErrors(c.R(ctx).SetResult(&DomainZoneFile{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.Result().(*DomainZoneFile), nil
+	return response, nil
 }

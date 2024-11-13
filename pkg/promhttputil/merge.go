@@ -7,14 +7,15 @@ import (
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
+	_ "github.com/prometheus/prometheus/util/annotations"
 )
 
 // WarningsConvert simply converts v1.Warnings to storage.Warnings
-func WarningsConvert(ws v1.Warnings) storage.Warnings {
-	w := make(storage.Warnings, len(ws))
+func WarningsConvert(ws v1.Warnings) annotations.Annotations {
+	w := make(annotations.Annotations, len(ws))
 	for i, item := range ws {
-		w[i] = errors.New(item)
+		w[string(i)] = errors.New(item)
 	}
 	return w
 }

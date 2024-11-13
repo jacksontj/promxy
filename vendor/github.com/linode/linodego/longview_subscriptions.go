@@ -2,7 +2,6 @@ package linodego
 
 import (
 	"context"
-	"fmt"
 )
 
 // LongviewSubscription represents a LongviewSubscription object
@@ -15,46 +14,23 @@ type LongviewSubscription struct {
 	// Updated *time.Time `json:"-"`
 }
 
-// LongviewSubscriptionsPagedResponse represents a paginated LongviewSubscription API response
-type LongviewSubscriptionsPagedResponse struct {
-	*PageOptions
-	Data []LongviewSubscription `json:"data"`
-}
-
-// endpoint gets the endpoint URL for LongviewSubscription
-func (LongviewSubscriptionsPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.LongviewSubscriptions.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return endpoint
-}
-
-// appendData appends LongviewSubscriptions when processing paginated LongviewSubscription responses
-func (resp *LongviewSubscriptionsPagedResponse) appendData(r *LongviewSubscriptionsPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
 // ListLongviewSubscriptions lists LongviewSubscriptions
 func (c *Client) ListLongviewSubscriptions(ctx context.Context, opts *ListOptions) ([]LongviewSubscription, error) {
-	response := LongviewSubscriptionsPagedResponse{}
-	err := c.listHelper(ctx, &response, opts)
+	response, err := getPaginatedResults[LongviewSubscription](ctx, c, "longview/subscriptions", opts)
 	if err != nil {
 		return nil, err
 	}
-	return response.Data, nil
+
+	return response, nil
 }
 
 // GetLongviewSubscription gets the template with the provided ID
-func (c *Client) GetLongviewSubscription(ctx context.Context, id string) (*LongviewSubscription, error) {
-	e, err := c.LongviewSubscriptions.Endpoint()
+func (c *Client) GetLongviewSubscription(ctx context.Context, templateID string) (*LongviewSubscription, error) {
+	e := formatAPIPath("longview/subscriptions/%s", templateID)
+	response, err := doGETRequest[LongviewSubscription](ctx, c, e)
 	if err != nil {
 		return nil, err
 	}
-	e = fmt.Sprintf("%s/%s", e, id)
-	r, err := c.R(ctx).SetResult(&LongviewSubscription{}).Get(e)
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*LongviewSubscription), nil
+
+	return response, nil
 }

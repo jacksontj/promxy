@@ -1,15 +1,23 @@
 package linodego
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
+	"reflect"
+	"regexp"
 	"strconv"
+	"strings"
+	"sync"
+	"text/template"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -37,7 +45,22 @@ const (
 	// APISecondsPerPoll how frequently to poll for new Events or Status in WaitFor functions
 	APISecondsPerPoll = 3
 	// Maximum wait time for retries
-	APIRetryMaxWaitTime = time.Duration(30) * time.Second
+	APIRetryMaxWaitTime       = time.Duration(30) * time.Second
+	APIDefaultCacheExpiration = time.Minute * 15
+)
+
+//nolint:unused
+var (
+	reqLogTemplate = template.Must(template.New("request").Parse(`Sending request:
+Method: {{.Method}}
+URL: {{.URL}}
+Headers: {{.Headers}}
+Body: {{.Body}}`))
+
+	respLogTemplate = template.Must(template.New("response").Parse(`Received response:
+Status: {{.Status}}
+Headers: {{.Headers}}
+Body: {{.Body}}`))
 )
 
 var envDebug = false
@@ -46,11 +69,10 @@ var envDebug = false
 type Client struct {
 	resty             *resty.Client
 	userAgent         string
-	resources         map[string]*Resource
 	debug             bool
 	retryConditionals []RetryConditional
 
-	millisecondsPerPoll time.Duration
+	pollInterval time.Duration
 
 	baseURL         string
 	apiVersion      string
@@ -60,69 +82,11 @@ type Client struct {
 
 	configProfiles map[string]ConfigProfile
 
-	Account                *Resource
-	AccountSettings        *Resource
-	Databases              *Resource
-	DomainRecords          *Resource
-	Domains                *Resource
-	Events                 *Resource
-	Firewalls              *Resource
-	FirewallDevices        *Resource
-	FirewallRules          *Resource
-	IPAddresses            *Resource
-	IPv6Pools              *Resource
-	IPv6Ranges             *Resource
-	Images                 *Resource
-	InstanceConfigs        *Resource
-	InstanceDisks          *Resource
-	InstanceIPs            *Resource
-	InstanceSnapshots      *Resource
-	InstanceStats          *Resource
-	InstanceVolumes        *Resource
-	Instances              *Resource
-	InvoiceItems           *Resource
-	Invoices               *Resource
-	Kernels                *Resource
-	LKEClusters            *Resource
-	LKEClusterAPIEndpoints *Resource
-
-	// Deprecated: Please use LKENodePools
-	LKEClusterPools *Resource
-
-	LKENodePools              *Resource
-	LKEVersions               *Resource
-	Longview                  *Resource
-	LongviewClients           *Resource
-	LongviewSubscriptions     *Resource
-	Managed                   *Resource
-	DatabaseMySQLInstances    *Resource
-	DatabaseMongoInstances    *Resource
-	DatabasePostgresInstances *Resource
-	NodeBalancerConfigs       *Resource
-	NodeBalancerNodes         *Resource
-	NodeBalancerStats         *Resource
-	NodeBalancers             *Resource
-	Notifications             *Resource
-	OAuthClients              *Resource
-	ObjectStorageBuckets      *Resource
-	ObjectStorageBucketCerts  *Resource
-	ObjectStorageClusters     *Resource
-	ObjectStorageKeys         *Resource
-	ObjectStorage             *Resource
-	Payments                  *Resource
-	Profile                   *Resource
-	Regions                   *Resource
-	SSHKeys                   *Resource
-	StackScripts              *Resource
-	Tags                      *Resource
-	Tickets                   *Resource
-	Token                     *Resource
-	Tokens                    *Resource
-	Types                     *Resource
-	UserGrants                *Resource
-	Users                     *Resource
-	VLANs                     *Resource
-	Volumes                   *Resource
+	// Fields for caching endpoint responses
+	shouldCache     bool
+	cacheExpiration time.Duration
+	cachedEntries   map[string]clientCacheEntry
+	cachedEntryLock *sync.RWMutex
 }
 
 type EnvDefaults struct {
@@ -130,10 +94,22 @@ type EnvDefaults struct {
 	Profile string
 }
 
-type Request = resty.Request
+type clientCacheEntry struct {
+	Created time.Time
+	Data    any
+	// If != nil, use this instead of the
+	// global expiry
+	ExpiryOverride *time.Duration
+}
+
+type (
+	Request  = resty.Request
+	Response = resty.Response
+	Logger   = resty.Logger
+)
 
 func init() {
-	// Wether or not we will enable Resty debugging output
+	// Whether we will enable Resty debugging output
 	if apiDebug, ok := os.LookupEnv("LINODE_DEBUG"); ok {
 		if parsed, err := strconv.ParseBool(apiDebug); err == nil {
 			envDebug = parsed
@@ -150,6 +126,238 @@ func (c *Client) SetUserAgent(ua string) *Client {
 	c.resty.SetHeader("User-Agent", c.userAgent)
 
 	return c
+}
+
+type RequestParams struct {
+	Body     any
+	Response any
+}
+
+// Generic helper to execute HTTP requests using the net/http package
+//
+// nolint:unused, funlen, gocognit
+func (c *httpClient) doRequest(ctx context.Context, method, url string, params RequestParams) error {
+	var (
+		req        *http.Request
+		bodyBuffer *bytes.Buffer
+		resp       *http.Response
+		err        error
+	)
+
+	for range httpDefaultRetryCount {
+		req, bodyBuffer, err = c.createRequest(ctx, method, url, params)
+		if err != nil {
+			return err
+		}
+
+		if err = c.applyBeforeRequest(req); err != nil {
+			return err
+		}
+
+		if c.debug && c.logger != nil {
+			c.logRequest(req, method, url, bodyBuffer)
+		}
+
+		processResponse := func() error {
+			defer func() {
+				closeErr := resp.Body.Close()
+				if closeErr != nil && err == nil {
+					err = closeErr
+				}
+			}()
+			if err = c.checkHTTPError(resp); err != nil {
+				return err
+			}
+			if c.debug && c.logger != nil {
+				var logErr error
+				resp, logErr = c.logResponse(resp)
+				if logErr != nil {
+					return logErr
+				}
+			}
+			if params.Response != nil {
+				if err = c.decodeResponseBody(resp, params.Response); err != nil {
+					return err
+				}
+			}
+
+			// Apply after-response mutations
+			if err = c.applyAfterResponse(resp); err != nil {
+				return err
+			}
+
+			return nil
+		}
+
+		resp, err = c.sendRequest(req)
+		if err == nil {
+			if err = processResponse(); err == nil {
+				return nil
+			}
+		}
+
+		if !c.shouldRetry(resp, err) {
+			break
+		}
+
+		retryAfter, retryErr := c.retryAfter(resp)
+		if retryErr != nil {
+			return retryErr
+		}
+
+		// Sleep for the specified duration before retrying.
+		// If retryAfter is 0 (i.e., Retry-After header is not found),
+		// no delay is applied.
+		time.Sleep(retryAfter)
+	}
+
+	return err
+}
+
+// nolint:unused
+func (c *httpClient) shouldRetry(resp *http.Response, err error) bool {
+	for _, retryConditional := range c.retryConditionals {
+		if retryConditional(resp, err) {
+			return true
+		}
+	}
+	return false
+}
+
+// nolint:unused
+func (c *httpClient) createRequest(ctx context.Context, method, url string, params RequestParams) (*http.Request, *bytes.Buffer, error) {
+	var bodyReader io.Reader
+	var bodyBuffer *bytes.Buffer
+
+	if params.Body != nil {
+		bodyBuffer = new(bytes.Buffer)
+		if err := json.NewEncoder(bodyBuffer).Encode(params.Body); err != nil {
+			if c.debug && c.logger != nil {
+				c.logger.Errorf("failed to encode body: %v", err)
+			}
+			return nil, nil, fmt.Errorf("failed to encode body: %w", err)
+		}
+		bodyReader = bodyBuffer
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+	if err != nil {
+		if c.debug && c.logger != nil {
+			c.logger.Errorf("failed to create request: %v", err)
+		}
+		return nil, nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	if c.userAgent != "" {
+		req.Header.Set("User-Agent", c.userAgent)
+	}
+
+	return req, bodyBuffer, nil
+}
+
+// nolint:unused
+func (c *httpClient) applyBeforeRequest(req *http.Request) error {
+	for _, mutate := range c.onBeforeRequest {
+		if err := mutate(req); err != nil {
+			if c.debug && c.logger != nil {
+				c.logger.Errorf("failed to mutate before request: %v", err)
+			}
+			return fmt.Errorf("failed to mutate before request: %w", err)
+		}
+	}
+	return nil
+}
+
+// nolint:unused
+func (c *httpClient) applyAfterResponse(resp *http.Response) error {
+	for _, mutate := range c.onAfterResponse {
+		if err := mutate(resp); err != nil {
+			if c.debug && c.logger != nil {
+				c.logger.Errorf("failed to mutate after response: %v", err)
+			}
+			return fmt.Errorf("failed to mutate after response: %w", err)
+		}
+	}
+	return nil
+}
+
+// nolint:unused
+func (c *httpClient) logRequest(req *http.Request, method, url string, bodyBuffer *bytes.Buffer) {
+	var reqBody string
+	if bodyBuffer != nil {
+		reqBody = bodyBuffer.String()
+	} else {
+		reqBody = "nil"
+	}
+
+	var logBuf bytes.Buffer
+	err := reqLogTemplate.Execute(&logBuf, map[string]interface{}{
+		"Method":  method,
+		"URL":     url,
+		"Headers": req.Header,
+		"Body":    reqBody,
+	})
+	if err == nil {
+		c.logger.Debugf(logBuf.String())
+	}
+}
+
+// nolint:unused
+func (c *httpClient) sendRequest(req *http.Request) (*http.Response, error) {
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		if c.debug && c.logger != nil {
+			c.logger.Errorf("failed to send request: %v", err)
+		}
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	return resp, nil
+}
+
+// nolint:unused
+func (c *httpClient) checkHTTPError(resp *http.Response) error {
+	_, err := coupleAPIErrorsHTTP(resp, nil)
+	if err != nil {
+		if c.debug && c.logger != nil {
+			c.logger.Errorf("received HTTP error: %v", err)
+		}
+		return err
+	}
+	return nil
+}
+
+// nolint:unused
+func (c *httpClient) logResponse(resp *http.Response) (*http.Response, error) {
+	var respBody bytes.Buffer
+	if _, err := io.Copy(&respBody, resp.Body); err != nil {
+		c.logger.Errorf("failed to read response body: %v", err)
+	}
+
+	var logBuf bytes.Buffer
+	err := respLogTemplate.Execute(&logBuf, map[string]interface{}{
+		"Status":  resp.Status,
+		"Headers": resp.Header,
+		"Body":    respBody.String(),
+	})
+	if err == nil {
+		c.logger.Debugf(logBuf.String())
+	}
+
+	resp.Body = io.NopCloser(bytes.NewReader(respBody.Bytes()))
+	return resp, nil
+}
+
+// nolint:unused
+func (c *httpClient) decodeResponseBody(resp *http.Response, response interface{}) error {
+	if err := json.NewDecoder(resp.Body).Decode(response); err != nil {
+		if c.debug && c.logger != nil {
+			c.logger.Errorf("failed to decode response: %v", err)
+		}
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+	return nil
 }
 
 // R wraps resty's R method
@@ -169,11 +377,85 @@ func (c *Client) SetDebug(debug bool) *Client {
 	return c
 }
 
+// SetLogger allows the user to override the output
+// logger for debug logs.
+func (c *Client) SetLogger(logger Logger) *Client {
+	c.resty.SetLogger(logger)
+
+	return c
+}
+
+//nolint:unused
+func (c *httpClient) httpSetDebug(debug bool) *httpClient {
+	c.debug = debug
+
+	return c
+}
+
+//nolint:unused
+func (c *httpClient) httpSetLogger(logger httpLogger) *httpClient {
+	c.logger = logger
+
+	return c
+}
+
 // OnBeforeRequest adds a handler to the request body to run before the request is sent
 func (c *Client) OnBeforeRequest(m func(request *Request) error) {
-	c.resty.OnBeforeRequest(func(client *resty.Client, req *resty.Request) error {
+	c.resty.OnBeforeRequest(func(_ *resty.Client, req *resty.Request) error {
 		return m(req)
 	})
+}
+
+// OnAfterResponse adds a handler to the request body to run before the request is sent
+func (c *Client) OnAfterResponse(m func(response *Response) error) {
+	c.resty.OnAfterResponse(func(_ *resty.Client, req *resty.Response) error {
+		return m(req)
+	})
+}
+
+// nolint:unused
+func (c *httpClient) httpOnBeforeRequest(m func(*http.Request) error) *httpClient {
+	c.onBeforeRequest = append(c.onBeforeRequest, m)
+
+	return c
+}
+
+// nolint:unused
+func (c *httpClient) httpOnAfterResponse(m func(*http.Response) error) *httpClient {
+	c.onAfterResponse = append(c.onAfterResponse, m)
+
+	return c
+}
+
+// UseURL parses the individual components of the given API URL and configures the client
+// accordingly. For example, a valid URL.
+// For example:
+//
+//	client.UseURL("https://api.test.linode.com/v4beta")
+func (c *Client) UseURL(apiURL string) (*Client, error) {
+	parsedURL, err := url.Parse(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	// Create a new URL excluding the path to use as the base URL
+	baseURL := &url.URL{
+		Host:   parsedURL.Host,
+		Scheme: parsedURL.Scheme,
+	}
+
+	c.SetBaseURL(baseURL.String())
+
+	versionMatches := regexp.MustCompile(`/v[a-zA-Z0-9]+`).FindAllString(parsedURL.Path, -1)
+
+	// Only set the version if a version is found in the URL, else use the default
+	if len(versionMatches) > 0 {
+		c.SetAPIVersion(
+			strings.Trim(versionMatches[len(versionMatches)-1], "/"),
+		)
+	}
+
+	return c, nil
 }
 
 // SetBaseURL sets the base URL of the Linode v4 API (https://api.linode.com/v4)
@@ -214,7 +496,14 @@ func (c *Client) updateHostURL() {
 		apiProto = c.apiProto
 	}
 
-	c.resty.SetHostURL(fmt.Sprintf("%s://%s/%s", apiProto, baseURL, apiVersion))
+	c.resty.SetBaseURL(
+		fmt.Sprintf(
+			"%s://%s/%s",
+			apiProto,
+			baseURL,
+			url.PathEscape(apiVersion),
+		),
+	)
 }
 
 // SetRootCertificate adds a root certificate to the underlying TLS client config
@@ -224,7 +513,7 @@ func (c *Client) SetRootCertificate(path string) *Client {
 }
 
 // SetToken sets the API token for all requests from this client
-// Only necessary if you haven't already provided an http client to NewClient() configured with the token.
+// Only necessary if you haven't already provided the http client to NewClient() configured with the token.
 func (c *Client) SetToken(token string) *Client {
 	c.resty.SetHeader("Authorization", fmt.Sprintf("Bearer %s", token))
 	return c
@@ -237,6 +526,8 @@ func (c *Client) SetRetries() *Client {
 		addRetryConditional(tooManyRequestsRetryCondition).
 		addRetryConditional(serviceUnavailableRetryCondition).
 		addRetryConditional(requestTimeoutRetryCondition).
+		addRetryConditional(requestGOAWAYRetryCondition).
+		addRetryConditional(requestNGINXRetryCondition).
 		SetRetryMaxWaitTime(APIRetryMaxWaitTime)
 	configureRetries(c)
 	return c
@@ -253,15 +544,124 @@ func (c *Client) addRetryConditional(retryConditional RetryConditional) *Client 
 	return c
 }
 
+func (c *Client) addCachedResponse(endpoint string, response any, expiry *time.Duration) {
+	if !c.shouldCache {
+		return
+	}
+
+	responseValue := reflect.ValueOf(response)
+
+	entry := clientCacheEntry{
+		Created:        time.Now(),
+		ExpiryOverride: expiry,
+	}
+
+	switch responseValue.Kind() {
+	case reflect.Ptr:
+		// We want to automatically deref pointers to
+		// avoid caching mutable data.
+		entry.Data = responseValue.Elem().Interface()
+	default:
+		entry.Data = response
+	}
+
+	c.cachedEntryLock.Lock()
+	defer c.cachedEntryLock.Unlock()
+
+	c.cachedEntries[endpoint] = entry
+}
+
+func (c *Client) getCachedResponse(endpoint string) any {
+	if !c.shouldCache {
+		return nil
+	}
+
+	c.cachedEntryLock.RLock()
+
+	// Hacky logic to dynamically RUnlock
+	// only if it is still locked by the
+	// end of the function.
+	// This is necessary as we take write
+	// access if the entry has expired.
+	rLocked := true
+	defer func() {
+		if rLocked {
+			c.cachedEntryLock.RUnlock()
+		}
+	}()
+
+	entry, ok := c.cachedEntries[endpoint]
+	if !ok {
+		return nil
+	}
+
+	// Handle expired entries
+	elapsedTime := time.Since(entry.Created)
+
+	hasExpired := elapsedTime > c.cacheExpiration
+	if entry.ExpiryOverride != nil {
+		hasExpired = elapsedTime > *entry.ExpiryOverride
+	}
+
+	if hasExpired {
+		// We need to give up our read access and request read-write access
+		c.cachedEntryLock.RUnlock()
+		rLocked = false
+
+		c.cachedEntryLock.Lock()
+		defer c.cachedEntryLock.Unlock()
+
+		delete(c.cachedEntries, endpoint)
+		return nil
+	}
+
+	return c.cachedEntries[endpoint].Data
+}
+
+// InvalidateCache clears all cached responses for all endpoints.
+func (c *Client) InvalidateCache() {
+	c.cachedEntryLock.Lock()
+	defer c.cachedEntryLock.Unlock()
+
+	// GC will handle the old map
+	c.cachedEntries = make(map[string]clientCacheEntry)
+}
+
+// InvalidateCacheEndpoint invalidates a single cached endpoint.
+func (c *Client) InvalidateCacheEndpoint(endpoint string) error {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to parse URL for caching: %w", err)
+	}
+
+	c.cachedEntryLock.Lock()
+	defer c.cachedEntryLock.Unlock()
+
+	delete(c.cachedEntries, u.Path)
+
+	return nil
+}
+
+// SetGlobalCacheExpiration sets the desired time for any cached response
+// to be valid for.
+func (c *Client) SetGlobalCacheExpiration(expiryTime time.Duration) {
+	c.cacheExpiration = expiryTime
+}
+
+// UseCache sets whether response caching should be used
+func (c *Client) UseCache(value bool) {
+	c.shouldCache = value
+}
+
 // SetRetryMaxWaitTime sets the maximum delay before retrying a request.
-func (c *Client) SetRetryMaxWaitTime(max time.Duration) *Client {
-	c.resty.SetRetryMaxWaitTime(max)
+func (c *Client) SetRetryMaxWaitTime(maxWaitTime time.Duration) *Client {
+	c.resty.SetRetryMaxWaitTime(maxWaitTime)
 	return c
 }
 
 // SetRetryWaitTime sets the default (minimum) delay before retrying a request.
-func (c *Client) SetRetryWaitTime(min time.Duration) *Client {
-	c.resty.SetRetryWaitTime(min)
+func (c *Client) SetRetryWaitTime(minWaitTime time.Duration) *Client {
+	c.resty.SetRetryWaitTime(minWaitTime)
 	return c
 }
 
@@ -281,24 +681,31 @@ func (c *Client) SetRetryCount(count int) *Client {
 // SetPollDelay sets the number of milliseconds to wait between events or status polls.
 // Affects all WaitFor* functions and retries.
 func (c *Client) SetPollDelay(delay time.Duration) *Client {
-	c.millisecondsPerPoll = delay
+	c.pollInterval = delay
 	return c
 }
 
 // GetPollDelay gets the number of milliseconds to wait between events or status polls.
 // Affects all WaitFor* functions and retries.
 func (c *Client) GetPollDelay() time.Duration {
-	return c.millisecondsPerPoll
+	return c.pollInterval
 }
 
-// Resource looks up a resource by name
-func (c Client) Resource(resourceName string) *Resource {
-	selectedResource, ok := c.resources[resourceName]
-	if !ok {
-		log.Fatalf("Could not find resource named '%s', exiting.", resourceName)
-	}
+// SetHeader sets a custom header to be used in all API requests made with the current
+// client.
+// NOTE: Some headers may be overridden by the individual request functions.
+func (c *Client) SetHeader(name, value string) {
+	c.resty.SetHeader(name, value)
+}
 
-	return selectedResource
+func (c *Client) enableLogSanitization() *Client {
+	c.resty.OnRequestLog(func(r *resty.RequestLog) error {
+		// masking authorization header
+		r.Header.Set("Authorization", "Bearer *******************************")
+		return nil
+	})
+
+	return c
 }
 
 // NewClient factory to create new Client struct
@@ -308,6 +715,11 @@ func NewClient(hc *http.Client) (client Client) {
 	} else {
 		client.resty = resty.New()
 	}
+
+	client.shouldCache = true
+	client.cacheExpiration = APIDefaultCacheExpiration
+	client.cachedEntries = make(map[string]clientCacheEntry)
+	client.cachedEntryLock = &sync.RWMutex{}
 
 	client.SetUserAgent(DefaultUserAgent)
 
@@ -326,7 +738,7 @@ func NewClient(hc *http.Client) (client Client) {
 	certPath, certPathExists := os.LookupEnv(APIHostCert)
 
 	if certPathExists {
-		cert, err := ioutil.ReadFile(certPath)
+		cert, err := os.ReadFile(filepath.Clean(certPath))
 		if err != nil {
 			log.Fatalf("[ERROR] Error when reading cert at %s: %s\n", certPath, err.Error())
 		}
@@ -339,12 +751,11 @@ func NewClient(hc *http.Client) (client Client) {
 	}
 
 	client.
-		SetRetryWaitTime((1000 * APISecondsPerPoll) * time.Millisecond).
-		SetPollDelay(1000 * APISecondsPerPoll).
+		SetRetryWaitTime(APISecondsPerPoll * time.Second).
+		SetPollDelay(APISecondsPerPoll * time.Second).
 		SetRetries().
-		SetDebug(envDebug)
-
-	addResources(&client)
+		SetDebug(envDebug).
+		enableLogSanitization()
 
 	return
 }
@@ -383,7 +794,7 @@ func NewClientFromEnv(hc *http.Client) (*Client, error) {
 
 	// We should only load the config if the config file exists
 	if _, err := os.Stat(configPath); err != nil {
-		return nil, fmt.Errorf("error loading config file %s: %s", configPath, err)
+		return nil, fmt.Errorf("error loading config file %s: %w", configPath, err)
 	}
 
 	err = client.preLoadConfig(configPath)
@@ -403,7 +814,7 @@ func (c *Client) preLoadConfig(configPath string) error {
 	}
 
 	// We don't want to load the profile until the user is actually making requests
-	c.OnBeforeRequest(func(request *Request) error {
+	c.OnBeforeRequest(func(_ *Request) error {
 		if c.loadedProfile != c.selectedProfile {
 			if err := c.UseProfile(c.selectedProfile); err != nil {
 				return err
@@ -414,130 +825,6 @@ func (c *Client) preLoadConfig(configPath string) error {
 	})
 
 	return nil
-}
-
-// nolint
-func addResources(client *Client) {
-	resources := map[string]*Resource{
-		accountName:                  NewResource(client, accountName, accountEndpoint, false, Account{}, nil),                         // really?
-		accountSettingsName:          NewResource(client, accountSettingsName, accountSettingsEndpoint, false, AccountSettings{}, nil), // really?
-		databasesName:                NewResource(client, databasesName, databasesEndpoint, false, Database{}, nil),
-		domainRecordsName:            NewResource(client, domainRecordsName, domainRecordsEndpoint, true, DomainRecord{}, DomainRecordsPagedResponse{}),
-		domainsName:                  NewResource(client, domainsName, domainsEndpoint, false, Domain{}, DomainsPagedResponse{}),
-		eventsName:                   NewResource(client, eventsName, eventsEndpoint, false, Event{}, EventsPagedResponse{}),
-		firewallsName:                NewResource(client, firewallsName, firewallsEndpoint, false, Firewall{}, FirewallsPagedResponse{}),
-		firewallDevicesName:          NewResource(client, firewallDevicesName, firewallDevicesEndpoint, true, FirewallDevice{}, FirewallDevicesPagedResponse{}),
-		firewallRulesName:            NewResource(client, firewallRulesName, firewallRulesEndpoint, true, FirewallRule{}, nil),
-		imagesName:                   NewResource(client, imagesName, imagesEndpoint, false, Image{}, ImagesPagedResponse{}),
-		instanceConfigsName:          NewResource(client, instanceConfigsName, instanceConfigsEndpoint, true, InstanceConfig{}, InstanceConfigsPagedResponse{}),
-		instanceDisksName:            NewResource(client, instanceDisksName, instanceDisksEndpoint, true, InstanceDisk{}, InstanceDisksPagedResponse{}),
-		instanceIPsName:              NewResource(client, instanceIPsName, instanceIPsEndpoint, true, InstanceIP{}, nil), // really?
-		instanceSnapshotsName:        NewResource(client, instanceSnapshotsName, instanceSnapshotsEndpoint, true, InstanceSnapshot{}, nil),
-		instanceStatsName:            NewResource(client, instanceStatsName, instanceStatsEndpoint, true, InstanceStats{}, nil),
-		instanceVolumesName:          NewResource(client, instanceVolumesName, instanceVolumesEndpoint, true, nil, InstanceVolumesPagedResponse{}), // really?
-		instancesName:                NewResource(client, instancesName, instancesEndpoint, false, Instance{}, InstancesPagedResponse{}),
-		invoiceItemsName:             NewResource(client, invoiceItemsName, invoiceItemsEndpoint, true, InvoiceItem{}, InvoiceItemsPagedResponse{}),
-		invoicesName:                 NewResource(client, invoicesName, invoicesEndpoint, false, Invoice{}, InvoicesPagedResponse{}),
-		ipaddressesName:              NewResource(client, ipaddressesName, ipaddressesEndpoint, false, nil, IPAddressesPagedResponse{}), // really?
-		ipv6poolsName:                NewResource(client, ipv6poolsName, ipv6poolsEndpoint, false, nil, IPv6PoolsPagedResponse{}),       // really?
-		ipv6rangesName:               NewResource(client, ipv6rangesName, ipv6rangesEndpoint, false, IPv6Range{}, IPv6RangesPagedResponse{}),
-		kernelsName:                  NewResource(client, kernelsName, kernelsEndpoint, false, LinodeKernel{}, LinodeKernelsPagedResponse{}),
-		lkeClusterAPIEndpointsName:   NewResource(client, lkeClusterAPIEndpointsName, lkeClusterAPIEndpointsEndpoint, true, LKEClusterAPIEndpoint{}, LKEClusterAPIEndpointsPagedResponse{}),
-		lkeClustersName:              NewResource(client, lkeClustersName, lkeClustersEndpoint, false, LKECluster{}, LKEClustersPagedResponse{}),
-		lkeClusterPoolsName:          NewResource(client, lkeClusterPoolsName, lkeClusterPoolsEndpoint, true, LKEClusterPool{}, LKEClusterPoolsPagedResponse{}),
-		lkeNodePoolsName:             NewResource(client, lkeNodePoolsName, lkeNodePoolsEndpoint, true, LKENodePool{}, LKENodePoolsPagedResponse{}),
-		lkeVersionsName:              NewResource(client, lkeVersionsName, lkeVersionsEndpoint, false, LKEVersion{}, LKEVersionsPagedResponse{}),
-		longviewName:                 NewResource(client, longviewName, longviewEndpoint, false, nil, nil), // really?
-		longviewclientsName:          NewResource(client, longviewclientsName, longviewclientsEndpoint, false, LongviewClient{}, LongviewClientsPagedResponse{}),
-		longviewsubscriptionsName:    NewResource(client, longviewsubscriptionsName, longviewsubscriptionsEndpoint, false, LongviewSubscription{}, LongviewSubscriptionsPagedResponse{}),
-		managedName:                  NewResource(client, managedName, managedEndpoint, false, nil, nil), // really?
-		mysqlName:                    NewResource(client, mysqlName, mysqlEndpoint, false, MySQLDatabase{}, MySQLDatabasesPagedResponse{}),
-		mongoName:                    NewResource(client, mongoName, mongoEndpoint, false, MongoDatabase{}, MongoDatabasesPagedResponse{}),
-		postgresName:                 NewResource(client, postgresName, postgresEndpoint, false, PostgresDatabase{}, PostgresDatabasesPagedResponse{}),
-		nodebalancerconfigsName:      NewResource(client, nodebalancerconfigsName, nodebalancerconfigsEndpoint, true, NodeBalancerConfig{}, NodeBalancerConfigsPagedResponse{}),
-		nodebalancernodesName:        NewResource(client, nodebalancernodesName, nodebalancernodesEndpoint, true, NodeBalancerNode{}, NodeBalancerNodesPagedResponse{}),
-		nodebalancerStatsName:        NewResource(client, nodebalancerStatsName, nodebalancerStatsEndpoint, true, NodeBalancerStats{}, nil),
-		nodebalancersName:            NewResource(client, nodebalancersName, nodebalancersEndpoint, false, NodeBalancer{}, NodeBalancerConfigsPagedResponse{}),
-		notificationsName:            NewResource(client, notificationsName, notificationsEndpoint, false, Notification{}, NotificationsPagedResponse{}),
-		oauthClientsName:             NewResource(client, oauthClientsName, oauthClientsEndpoint, false, OAuthClient{}, OAuthClientsPagedResponse{}),
-		objectStorageBucketsName:     NewResource(client, objectStorageBucketsName, objectStorageBucketsEndpoint, false, ObjectStorageBucket{}, ObjectStorageBucketsPagedResponse{}),
-		objectStorageBucketCertsName: NewResource(client, objectStorageBucketCertsName, objectStorageBucketCertsEndpoint, true, ObjectStorageBucketCert{}, nil),
-		objectStorageClustersName:    NewResource(client, objectStorageClustersName, objectStorageClustersEndpoint, false, ObjectStorageCluster{}, ObjectStorageClustersPagedResponse{}),
-		objectStorageKeysName:        NewResource(client, objectStorageKeysName, objectStorageKeysEndpoint, false, ObjectStorageKey{}, ObjectStorageKeysPagedResponse{}),
-		objectStorageName:            NewResource(client, objectStorageName, objectStorageEndpoint, false, nil, nil),
-		paymentsName:                 NewResource(client, paymentsName, paymentsEndpoint, false, Payment{}, PaymentsPagedResponse{}),
-		profileName:                  NewResource(client, profileName, profileEndpoint, false, nil, nil), // really?
-		regionsName:                  NewResource(client, regionsName, regionsEndpoint, false, Region{}, RegionsPagedResponse{}),
-		sshkeysName:                  NewResource(client, sshkeysName, sshkeysEndpoint, false, SSHKey{}, SSHKeysPagedResponse{}),
-		stackscriptsName:             NewResource(client, stackscriptsName, stackscriptsEndpoint, false, Stackscript{}, StackscriptsPagedResponse{}),
-		tagsName:                     NewResource(client, tagsName, tagsEndpoint, false, Tag{}, TagsPagedResponse{}),
-		ticketsName:                  NewResource(client, ticketsName, ticketsEndpoint, false, Ticket{}, TicketsPagedResponse{}),
-		tokensName:                   NewResource(client, tokensName, tokensEndpoint, false, Token{}, TokensPagedResponse{}),
-		typesName:                    NewResource(client, typesName, typesEndpoint, false, LinodeType{}, LinodeTypesPagedResponse{}),
-		userGrantsName:               NewResource(client, typesName, userGrantsEndpoint, true, UserGrants{}, nil),
-		usersName:                    NewResource(client, usersName, usersEndpoint, false, User{}, UsersPagedResponse{}),
-		vlansName:                    NewResource(client, vlansName, vlansEndpoint, false, VLAN{}, VLANsPagedResponse{}),
-		volumesName:                  NewResource(client, volumesName, volumesEndpoint, false, Volume{}, VolumesPagedResponse{}),
-	}
-
-	client.resources = resources
-
-	client.Account = resources[accountName]
-	client.Databases = resources[databasesName]
-	client.DomainRecords = resources[domainRecordsName]
-	client.Domains = resources[domainsName]
-	client.Events = resources[eventsName]
-	client.Firewalls = resources[firewallsName]
-	client.FirewallDevices = resources[firewallDevicesName]
-	client.FirewallRules = resources[firewallRulesName]
-	client.IPAddresses = resources[ipaddressesName]
-	client.IPv6Pools = resources[ipv6poolsName]
-	client.IPv6Ranges = resources[ipv6rangesName]
-	client.Images = resources[imagesName]
-	client.InstanceConfigs = resources[instanceConfigsName]
-	client.InstanceDisks = resources[instanceDisksName]
-	client.InstanceIPs = resources[instanceIPsName]
-	client.InstanceSnapshots = resources[instanceSnapshotsName]
-	client.InstanceStats = resources[instanceStatsName]
-	client.InstanceVolumes = resources[instanceVolumesName]
-	client.Instances = resources[instancesName]
-	client.Invoices = resources[invoicesName]
-	client.Kernels = resources[kernelsName]
-	client.LKEClusterAPIEndpoints = resources[lkeClusterAPIEndpointsName]
-	client.LKEClusters = resources[lkeClustersName]
-	client.LKEClusterPools = resources[lkeClusterPoolsName]
-	client.LKENodePools = resources[lkeNodePoolsName]
-	client.LKEVersions = resources[lkeVersionsName]
-	client.Longview = resources[longviewName]
-	client.LongviewSubscriptions = resources[longviewsubscriptionsName]
-	client.Managed = resources[managedName]
-	client.DatabaseMySQLInstances = resources[mysqlName]
-	client.DatabaseMongoInstances = resources[mongoName]
-	client.DatabasePostgresInstances = resources[postgresName]
-	client.NodeBalancerConfigs = resources[nodebalancerconfigsName]
-	client.NodeBalancerNodes = resources[nodebalancernodesName]
-	client.NodeBalancerStats = resources[nodebalancerStatsName]
-	client.NodeBalancers = resources[nodebalancersName]
-	client.Notifications = resources[notificationsName]
-	client.OAuthClients = resources[oauthClientsName]
-	client.ObjectStorageBuckets = resources[objectStorageBucketsName]
-	client.ObjectStorageBucketCerts = resources[objectStorageBucketCertsName]
-	client.ObjectStorageClusters = resources[objectStorageClustersName]
-	client.ObjectStorageKeys = resources[objectStorageKeysName]
-	client.ObjectStorage = resources[objectStorageName]
-	client.Payments = resources[paymentsName]
-	client.Profile = resources[profileName]
-	client.Regions = resources[regionsName]
-	client.SSHKeys = resources[sshkeysName]
-	client.StackScripts = resources[stackscriptsName]
-	client.Tags = resources[tagsName]
-	client.Tickets = resources[ticketsName]
-	client.Tokens = resources[tokensName]
-	client.Types = resources[typesName]
-	client.UserGrants = resources[userGrantsName]
-	client.Users = resources[usersName]
-	client.VLANs = resources[vlansName]
-	client.Volumes = resources[volumesName]
 }
 
 func copyBool(bPtr *bool) *bool {
@@ -578,4 +865,17 @@ func copyTime(tPtr *time.Time) *time.Time {
 	t := *tPtr
 
 	return &t
+}
+
+func generateListCacheURL(endpoint string, opts *ListOptions) (string, error) {
+	if opts == nil {
+		return endpoint, nil
+	}
+
+	hashedOpts, err := opts.Hash()
+	if err != nil {
+		return endpoint, err
+	}
+
+	return fmt.Sprintf("%s:%s", endpoint, hashedOpts), nil
 }

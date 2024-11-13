@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -27,6 +27,8 @@ const (
 	IonosTokenEnvVar      = "IONOS_TOKEN"
 	IonosApiUrlEnvVar     = "IONOS_API_URL"
 	IonosPinnedCertEnvVar = "IONOS_PINNED_CERT"
+	IonosLogLevelEnvVar   = "IONOS_LOG_LEVEL"
+	IonosContractNumber   = "IONOS_CONTRACT_NUMBER"
 	DefaultIonosServerUrl = "https://api.ionos.com/cloudapi/v6"
 	DefaultIonosBasePath  = "/cloudapi/v6"
 	defaultMaxRetries     = 3
@@ -109,16 +111,19 @@ type Configuration struct {
 	DefaultHeader      map[string]string `json:"defaultHeader,omitempty"`
 	DefaultQueryParams url.Values        `json:"defaultQueryParams,omitempty"`
 	UserAgent          string            `json:"userAgent,omitempty"`
-	Debug              bool              `json:"debug,omitempty"`
-	Servers            ServerConfigurations
-	OperationServers   map[string]ServerConfigurations
-	HTTPClient         *http.Client
-	Username           string        `json:"username,omitempty"`
-	Password           string        `json:"password,omitempty"`
-	Token              string        `json:"token,omitempty"`
-	MaxRetries         int           `json:"maxRetries,omitempty"`
-	WaitTime           time.Duration `json:"waitTime,omitempty"`
-	MaxWaitTime        time.Duration `json:"maxWaitTime,omitempty"`
+	// Debug is deprecated, will be replaced by LogLevel
+	Debug            bool `json:"debug,omitempty"`
+	Servers          ServerConfigurations
+	OperationServers map[string]ServerConfigurations
+	HTTPClient       *http.Client
+	Username         string        `json:"username,omitempty"`
+	Password         string        `json:"password,omitempty"`
+	Token            string        `json:"token,omitempty"`
+	MaxRetries       int           `json:"maxRetries,omitempty"`
+	WaitTime         time.Duration `json:"waitTime,omitempty"`
+	MaxWaitTime      time.Duration `json:"maxWaitTime,omitempty"`
+	LogLevel         LogLevel
+	Logger           Logger
 }
 
 // NewConfiguration returns a new Configuration object
@@ -126,7 +131,7 @@ func NewConfiguration(username, password, token, hostUrl string) *Configuration 
 	cfg := &Configuration{
 		DefaultHeader:      make(map[string]string),
 		DefaultQueryParams: url.Values{},
-		UserAgent:          "ionos-cloud-sdk-go/v6.1.0",
+		UserAgent:          "ionos-cloud-sdk-go/v6.2.1",
 		Debug:              false,
 		Username:           username,
 		Password:           password,
@@ -134,6 +139,10 @@ func NewConfiguration(username, password, token, hostUrl string) *Configuration 
 		MaxRetries:         defaultMaxRetries,
 		MaxWaitTime:        defaultMaxWaitTime,
 		WaitTime:           defaultWaitTime,
+		Logger:             NewDefaultLogger(),
+		LogLevel:           getLogLevelFromEnv(),
+		Host:               getHost(hostUrl),
+		Scheme:             getScheme(hostUrl),
 		Servers: ServerConfigurations{
 			{
 				URL:         getServerUrl(hostUrl),
@@ -259,6 +268,26 @@ func getServerUrl(serverUrl string) string {
 		serverUrl = fmt.Sprintf("%s%s", serverUrl, DefaultIonosBasePath)
 	}
 	return serverUrl
+}
+
+func getHost(serverUrl string) string {
+	// url.Parse only interprets the host correctly when the scheme is set, so we prepend one here if needed
+	if !strings.HasPrefix(serverUrl, "https://") && !strings.HasPrefix(serverUrl, "http://") {
+		serverUrl = "http://" + serverUrl
+	}
+	url, err := url.Parse(serverUrl)
+	if err != nil {
+		return ""
+	}
+	return url.Host
+}
+
+func getScheme(serverUrl string) string {
+	url, err := url.Parse(serverUrl)
+	if err != nil {
+		return ""
+	}
+	return url.Scheme
 }
 
 // ServerURLWithContext returns a new server URL given an endpoint

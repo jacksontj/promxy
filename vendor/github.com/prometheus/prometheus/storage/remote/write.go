@@ -15,20 +15,24 @@ package remote
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"sync"
 	"time"
 
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/common/promslog"
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/exemplar"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/storage"
-	"github.com/prometheus/prometheus/tsdb/wal"
+	"github.com/prometheus/prometheus/tsdb/wlog"
 )
 
 var (
@@ -44,19 +48,26 @@ var (
 		Name:      "exemplars_in_total",
 		Help:      "Exemplars in to remote storage, compare to exemplars out for queue managers.",
 	})
+	histogramsIn = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: subsystem,
+		Name:      "histograms_in_total",
+		Help:      "HistogramSamples in to remote storage, compare to histograms out for queue managers.",
+	})
 )
 
 // WriteStorage represents all the remote write storage.
 type WriteStorage struct {
-	logger log.Logger
+	logger *slog.Logger
 	reg    prometheus.Registerer
 	mtx    sync.Mutex
 
-	watcherMetrics    *wal.WatcherMetrics
-	liveReaderMetrics *wal.LiveReaderMetrics
+	watcherMetrics    *wlog.WatcherMetrics
+	liveReaderMetrics *wlog.LiveReaderMetrics
 	externalLabels    labels.Labels
 	dir               string
 	queues            map[string]*QueueManager
+	metadataInWAL     bool
 	samplesIn         *ewmaRate
 	flushDeadline     time.Duration
 	interner          *pool
@@ -68,14 +79,14 @@ type WriteStorage struct {
 }
 
 // NewWriteStorage creates and runs a WriteStorage.
-func NewWriteStorage(logger log.Logger, reg prometheus.Registerer, dir string, flushDeadline time.Duration, sm ReadyScrapeManager) *WriteStorage {
+func NewWriteStorage(logger *slog.Logger, reg prometheus.Registerer, dir string, flushDeadline time.Duration, sm ReadyScrapeManager, metadataInWal bool) *WriteStorage {
 	if logger == nil {
-		logger = log.NewNopLogger()
+		logger = promslog.NewNopLogger()
 	}
 	rws := &WriteStorage{
 		queues:            make(map[string]*QueueManager),
-		watcherMetrics:    wal.NewWatcherMetrics(reg),
-		liveReaderMetrics: wal.NewLiveReaderMetrics(reg),
+		watcherMetrics:    wlog.NewWatcherMetrics(reg),
+		liveReaderMetrics: wlog.NewLiveReaderMetrics(reg),
 		logger:            logger,
 		reg:               reg,
 		flushDeadline:     flushDeadline,
@@ -84,12 +95,13 @@ func NewWriteStorage(logger log.Logger, reg prometheus.Registerer, dir string, f
 		interner:          newPool(),
 		scraper:           sm,
 		quit:              make(chan struct{}),
+		metadataInWAL:     metadataInWal,
 		highestTimestamp: &maxTimestamp{
 			Gauge: prometheus.NewGauge(prometheus.GaugeOpts{
 				Namespace: namespace,
 				Subsystem: subsystem,
 				Name:      "highest_timestamp_in_seconds",
-				Help:      "Highest timestamp that has come into the remote storage via the Appender interface, in seconds since epoch.",
+				Help:      "Highest timestamp that has come into the remote storage via the Appender interface, in seconds since epoch. Initialized to 0 when no data has been received yet.",
 			}),
 		},
 	}
@@ -113,6 +125,16 @@ func (rws *WriteStorage) run() {
 	}
 }
 
+func (rws *WriteStorage) Notify() {
+	rws.mtx.Lock()
+	defer rws.mtx.Unlock()
+
+	for _, q := range rws.queues {
+		// These should all be non blocking
+		q.watcher.Notify()
+	}
+}
+
 // ApplyConfig updates the state as the new config requires.
 // Only stop & create queues which have changes.
 func (rws *WriteStorage) ApplyConfig(conf *config.Config) error {
@@ -127,6 +149,9 @@ func (rws *WriteStorage) ApplyConfig(conf *config.Config) error {
 	newQueues := make(map[string]*QueueManager)
 	newHashes := []string{}
 	for _, rwConf := range conf.RemoteWriteConfigs {
+		if rwConf.ProtobufMessage == config.RemoteWriteProtoMsgV2 && !rws.metadataInWAL {
+			return errors.New("invalid remote write configuration, if you are using remote write version 2.0 the `--enable-feature=metadata-wal-records` feature flag must be enabled")
+		}
 		hash, err := toHash(rwConf)
 		if err != nil {
 			return err
@@ -147,9 +172,12 @@ func (rws *WriteStorage) ApplyConfig(conf *config.Config) error {
 
 		c, err := NewWriteClient(name, &ClientConfig{
 			URL:              rwConf.URL,
+			WriteProtoMsg:    rwConf.ProtobufMessage,
 			Timeout:          rwConf.RemoteTimeout,
 			HTTPClientConfig: rwConf.HTTPClientConfig,
 			SigV4Config:      rwConf.SigV4Config,
+			AzureADConfig:    rwConf.AzureADConfig,
+			GoogleIAMConfig:  rwConf.GoogleIAMConfig,
 			Headers:          rwConf.Headers,
 			RetryOnRateLimit: rwConf.QueueConfig.RetryOnRateLimit,
 		})
@@ -187,6 +215,8 @@ func (rws *WriteStorage) ApplyConfig(conf *config.Config) error {
 			rws.highestTimestamp,
 			rws.scraper,
 			rwConf.SendExemplars,
+			rwConf.SendNativeHistograms,
+			rwConf.ProtobufMessage,
 		)
 		// Keep track of which queues are new so we know which to start.
 		newHashes = append(newHashes, hash)
@@ -248,10 +278,16 @@ func (rws *WriteStorage) Close() error {
 
 type timestampTracker struct {
 	writeStorage         *WriteStorage
+	appendOptions        *storage.AppendOptions
 	samples              int64
 	exemplars            int64
+	histograms           int64
 	highestTimestamp     int64
 	highestRecvTimestamp *maxTimestamp
+}
+
+func (t *timestampTracker) SetOptions(opts *storage.AppendOptions) {
+	t.appendOptions = opts
 }
 
 // Append implements storage.Appender.
@@ -268,12 +304,47 @@ func (t *timestampTracker) AppendExemplar(_ storage.SeriesRef, _ labels.Labels, 
 	return 0, nil
 }
 
+func (t *timestampTracker) AppendHistogram(_ storage.SeriesRef, _ labels.Labels, ts int64, _ *histogram.Histogram, _ *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	t.histograms++
+	if ts > t.highestTimestamp {
+		t.highestTimestamp = ts
+	}
+	return 0, nil
+}
+
+func (t *timestampTracker) AppendCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, ct int64) (storage.SeriesRef, error) {
+	t.samples++
+	if ct > t.highestTimestamp {
+		// Theoretically, we should never see a CT zero sample with a timestamp higher than the highest timestamp we've seen so far.
+		// However, we're not going to enforce that here, as it is not the responsibility of the tracker to enforce this.
+		t.highestTimestamp = ct
+	}
+	return 0, nil
+}
+
+func (t *timestampTracker) AppendHistogramCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, ct int64, _ *histogram.Histogram, _ *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	t.histograms++
+	if ct > t.highestTimestamp {
+		// Theoretically, we should never see a CT zero sample with a timestamp higher than the highest timestamp we've seen so far.
+		// However, we're not going to enforce that here, as it is not the responsibility of the tracker to enforce this.
+		t.highestTimestamp = ct
+	}
+	return 0, nil
+}
+
+func (t *timestampTracker) UpdateMetadata(_ storage.SeriesRef, _ labels.Labels, _ metadata.Metadata) (storage.SeriesRef, error) {
+	// TODO: Add and increment a `metadata` field when we get around to wiring metadata in remote_write.
+	// UpdateMetadata is no-op for remote write (where timestampTracker is being used) for now.
+	return 0, nil
+}
+
 // Commit implements storage.Appender.
 func (t *timestampTracker) Commit() error {
-	t.writeStorage.samplesIn.incr(t.samples + t.exemplars)
+	t.writeStorage.samplesIn.incr(t.samples + t.exemplars + t.histograms)
 
 	samplesIn.Add(float64(t.samples))
 	exemplarsIn.Add(float64(t.exemplars))
+	histogramsIn.Add(float64(t.histograms))
 	t.highestRecvTimestamp.Set(float64(t.highestTimestamp / 1000))
 	return nil
 }

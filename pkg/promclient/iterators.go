@@ -6,7 +6,9 @@ import (
 	"sort"
 
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
 // IteratorsForValue returns SeriesIterators for the value passed in
@@ -50,28 +52,30 @@ type SeriesIterator struct {
 
 // Seek advances the iterator forward to the value at or after
 // the given timestamp.
-func (s *SeriesIterator) Seek(t int64) bool {
+// TODO: Implement this
+func (s *SeriesIterator) Seek(t int64) chunkenc.ValueType {
 	switch valueTyped := s.V.(type) {
 	case *model.Scalar: // From a vector
-		return int64(valueTyped.Timestamp) >= t
+		return chunkenc.ValNone
 	case *model.Sample: // From a vector
-		return int64(valueTyped.Timestamp) >= t
+		return chunkenc.ValNone
 	case *model.SampleStream: // from a Matrix
 		// If someone calls Seek() on an empty SampleStream, just return false
 		if len(valueTyped.Values) == 0 {
-			return false
+			return chunkenc.ValNone
 		}
 		for i := s.offset; i < len(valueTyped.Values); i++ {
 			s.offset = i
 			if int64(valueTyped.Values[s.offset].Timestamp) >= t {
-				return true
+				return chunkenc.ValNone
 			}
 		}
-		return false
+		return chunkenc.ValNone
 	default:
 		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
 		panic(msg)
 	}
+	return chunkenc.ValNone
 }
 
 // At returns the current timestamp/value pair.
@@ -90,31 +94,56 @@ func (s *SeriesIterator) At() (t int64, v float64) {
 	}
 }
 
-// Next advances the iterator by one.
-func (s *SeriesIterator) Next() bool {
+// TODO: Implement this
+func (s *SeriesIterator) AtHistogram(*histogram.Histogram) (int64, *histogram.Histogram) {
 	switch valueTyped := s.V.(type) {
-	case *model.Scalar:
-		if s.offset < 0 {
-			s.offset = 0
-			return true
-		}
-		return false
-	case *model.Sample: // From a vector
-		if s.offset < 0 {
-			s.offset = 0
-			return true
-		}
-		return false
-	case *model.SampleStream: // from a Matrix
-		if s.offset < (len(valueTyped.Values) - 1) {
-			s.offset++
-			return true
-		}
-		return false
+	case *model.Sample:
+		return int64(valueTyped.Timestamp), nil
 	default:
 		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
 		panic(msg)
 	}
+}
+
+// TODO: Implement this
+func (s *SeriesIterator) AtFloatHistogram(*histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
+	switch valueTyped := s.V.(type) {
+	case *model.Sample:
+		return int64(valueTyped.Timestamp), nil
+	default:
+		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
+		panic(msg)
+	}
+}
+
+// TODO: Implement this
+func (c *SeriesIterator) AtT() int64 {
+	return 0
+}
+
+// TODO: Implment this. Next advances the iterator by one.
+func (s *SeriesIterator) Next() chunkenc.ValueType {
+	switch valueTyped := s.V.(type) {
+	case *model.Scalar:
+		if s.offset < 0 {
+			s.offset = 0
+			return chunkenc.ValNone
+		}
+	case *model.Sample: // From a vector
+		if s.offset < 0 {
+			s.offset = 0
+			return chunkenc.ValNone
+		}
+	case *model.SampleStream: // from a Matrix
+		if s.offset < (len(valueTyped.Values) - 1) {
+			s.offset++
+		}
+		return chunkenc.ValNone
+	default:
+		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
+		panic(msg)
+	}
+	return chunkenc.ValNone
 }
 
 // Err returns the current error.

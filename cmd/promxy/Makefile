@@ -6,4 +6,4 @@ test-local:
 	go build -race -mod=vendor -tags netgo,builtinassets && ./promxy --http.shutdown-delay=0s --config=local_test.conf --web.external-url=http://localhost:8082/promxy --log-level=debug
 
 version:
-	go build -race -mod=vendor -tags netgo,builtinassets && ./promxy --version
+	go build -race -mod=readonly -tags netgo,builtinassets && ./promxy --version

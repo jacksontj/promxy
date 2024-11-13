@@ -2,21 +2,24 @@ package linodego
 
 import (
 	"context"
-	"fmt"
+	"net/url"
 )
 
 // LinodeType represents a linode type object
 type LinodeType struct {
-	ID         string          `json:"id"`
-	Disk       int             `json:"disk"`
-	Class      LinodeTypeClass `json:"class"` // enum: nanode, standard, highmem, dedicated
-	Price      *LinodePrice    `json:"price"`
-	Label      string          `json:"label"`
-	Addons     *LinodeAddons   `json:"addons"`
-	NetworkOut int             `json:"network_out"`
-	Memory     int             `json:"memory"`
-	Transfer   int             `json:"transfer"`
-	VCPUs      int             `json:"vcpus"`
+	ID           string              `json:"id"`
+	Disk         int                 `json:"disk"`
+	Class        LinodeTypeClass     `json:"class"` // enum: nanode, standard, highmem, dedicated, gpu
+	Price        *LinodePrice        `json:"price"`
+	Label        string              `json:"label"`
+	Addons       *LinodeAddons       `json:"addons"`
+	RegionPrices []LinodeRegionPrice `json:"region_prices"`
+	NetworkOut   int                 `json:"network_out"`
+	Memory       int                 `json:"memory"`
+	Transfer     int                 `json:"transfer"`
+	VCPUs        int                 `json:"vcpus"`
+	GPUs         int                 `json:"gpus"`
+	Successor    string              `json:"successor"`
 }
 
 // LinodePrice represents a linode type price object
@@ -27,12 +30,21 @@ type LinodePrice struct {
 
 // LinodeBackupsAddon represents a linode backups addon object
 type LinodeBackupsAddon struct {
-	Price *LinodePrice `json:"price"`
+	Price        *LinodePrice        `json:"price"`
+	RegionPrices []LinodeRegionPrice `json:"region_prices"`
 }
 
 // LinodeAddons represent the linode addons object
 type LinodeAddons struct {
 	Backups *LinodeBackupsAddon `json:"backups"`
+}
+
+// LinodeRegionPrice represents an individual type or addon
+// price exception for a region.
+type LinodeRegionPrice struct {
+	ID      string  `json:"id"`
+	Hourly  float32 `json:"hourly"`
+	Monthly float32 `json:"monthly"`
 }
 
 // LinodeTypeClass constants start with Class and include Linode API Instance Type Classes
@@ -44,47 +56,47 @@ const (
 	ClassStandard  LinodeTypeClass = "standard"
 	ClassHighmem   LinodeTypeClass = "highmem"
 	ClassDedicated LinodeTypeClass = "dedicated"
+	ClassGPU       LinodeTypeClass = "gpu"
 )
 
-// LinodeTypesPagedResponse represents a linode types API response for listing
-type LinodeTypesPagedResponse struct {
-	*PageOptions
-	Data []LinodeType `json:"data"`
-}
-
-func (LinodeTypesPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Types.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return endpoint
-}
-
-func (resp *LinodeTypesPagedResponse) appendData(r *LinodeTypesPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
-// ListTypes lists linode types
+// ListTypes lists linode types. This endpoint is cached by default.
 func (c *Client) ListTypes(ctx context.Context, opts *ListOptions) ([]LinodeType, error) {
-	response := LinodeTypesPagedResponse{}
-	err := c.listHelper(ctx, &response, opts)
+	e := "linode/types"
+
+	endpoint, err := generateListCacheURL(e, opts)
 	if err != nil {
 		return nil, err
 	}
-	return response.Data, nil
+
+	if result := c.getCachedResponse(endpoint); result != nil {
+		return result.([]LinodeType), nil
+	}
+
+	response, err := getPaginatedResults[LinodeType](ctx, c, e, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	c.addCachedResponse(endpoint, response, &cacheExpiryTime)
+
+	return response, nil
 }
 
-// GetType gets the type with the provided ID
+// GetType gets the type with the provided ID. This endpoint is cached by default.
 func (c *Client) GetType(ctx context.Context, typeID string) (*LinodeType, error) {
-	e, err := c.Types.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-	e = fmt.Sprintf("%s/%s", e, typeID)
+	e := formatAPIPath("linode/types/%s", url.PathEscape(typeID))
 
-	r, err := coupleAPIErrors(c.Types.R(ctx).Get(e))
+	if result := c.getCachedResponse(e); result != nil {
+		result := result.(LinodeType)
+		return &result, nil
+	}
+
+	response, err := doGETRequest[LinodeType](ctx, c, e)
 	if err != nil {
 		return nil, err
 	}
-	return r.Result().(*LinodeType), nil
+
+	c.addCachedResponse(e, response, &cacheExpiryTime)
+
+	return response, nil
 }

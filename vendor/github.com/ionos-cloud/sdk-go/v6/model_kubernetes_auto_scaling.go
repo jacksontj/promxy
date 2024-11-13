@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,9 +16,9 @@ import (
 
 // KubernetesAutoScaling struct for KubernetesAutoScaling
 type KubernetesAutoScaling struct {
-	// The minimum number of worker nodes that the managed node group can scale in. Should be set together with 'maxNodeCount'. Value for this attribute must be greater than equal to 1 and less than equal to maxNodeCount.
+	// The minimum number of working nodes that the managed node pool can scale must be >= 1 and >= nodeCount. Required if autoScaling is specified.
 	MinNodeCount *int32 `json:"minNodeCount"`
-	// The maximum number of worker nodes that the managed node pool can scale-out. Should be set together with 'minNodeCount'. Value for this attribute must be greater than equal to 1 and minNodeCount.
+	// The maximum number of worker nodes that the managed node pool can scale in. Must be >= minNodeCount and must be >= nodeCount. Required if autoScaling is specified.
 	MaxNodeCount *int32 `json:"maxNodeCount"`
 }
 
@@ -44,7 +44,7 @@ func NewKubernetesAutoScalingWithDefaults() *KubernetesAutoScaling {
 }
 
 // GetMinNodeCount returns the MinNodeCount field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesAutoScaling) GetMinNodeCount() *int32 {
 	if o == nil {
 		return nil
@@ -82,7 +82,7 @@ func (o *KubernetesAutoScaling) HasMinNodeCount() bool {
 }
 
 // GetMaxNodeCount returns the MaxNodeCount field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesAutoScaling) GetMaxNodeCount() *int32 {
 	if o == nil {
 		return nil
@@ -124,9 +124,11 @@ func (o KubernetesAutoScaling) MarshalJSON() ([]byte, error) {
 	if o.MinNodeCount != nil {
 		toSerialize["minNodeCount"] = o.MinNodeCount
 	}
+
 	if o.MaxNodeCount != nil {
 		toSerialize["maxNodeCount"] = o.MaxNodeCount
 	}
+
 	return json.Marshal(toSerialize)
 }
 

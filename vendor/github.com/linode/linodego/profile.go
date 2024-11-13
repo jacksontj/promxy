@@ -1,16 +1,7 @@
 package linodego
 
-/*
- - copy profile_test.go and do the same
- - When updating Profile structs,
-   - use pointers where ever null'able would have a different meaning if the wrapper
-	 supplied "" or 0 instead
- - Add "NameOfResource" to client.go, resources.go, pagination.go
-*/
-
 import (
 	"context"
-	"encoding/json"
 )
 
 // LishAuthMethod constants start with AuthMethod and include Linode API Lish Authentication Methods
@@ -78,39 +69,14 @@ func (i Profile) GetUpdateOptions() (o ProfileUpdateOptions) {
 
 // GetProfile returns the Profile of the authenticated user
 func (c *Client) GetProfile(ctx context.Context) (*Profile, error) {
-	e, err := c.Profile.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&Profile{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*Profile), nil
+	e := "profile"
+	response, err := doGETRequest[Profile](ctx, c, e)
+	return response, err
 }
 
 // UpdateProfile updates the Profile with the specified id
-func (c *Client) UpdateProfile(ctx context.Context, updateOpts ProfileUpdateOptions) (*Profile, error) {
-	var body string
-	e, err := c.Profile.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-
-	req := c.R(ctx).SetResult(&Profile{})
-
-	if bodyData, err := json.Marshal(updateOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*Profile), nil
+func (c *Client) UpdateProfile(ctx context.Context, opts ProfileUpdateOptions) (*Profile, error) {
+	e := "profile"
+	response, err := doPUTRequest[Profile](ctx, c, e, opts)
+	return response, err
 }

@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,13 +16,13 @@ import (
 
 // FlowLogProperties struct for FlowLogProperties
 type FlowLogProperties struct {
-	// The name of the  resource.
+	// The resource name.
 	Name *string `json:"name"`
 	// Specifies the traffic action pattern.
 	Action *string `json:"action"`
 	// Specifies the traffic direction pattern.
 	Direction *string `json:"direction"`
-	// S3 bucket name of an existing IONOS Cloud S3 bucket.
+	// The S3 bucket name of an existing IONOS Cloud S3 bucket.
 	Bucket *string `json:"bucket"`
 }
 
@@ -50,7 +50,7 @@ func NewFlowLogPropertiesWithDefaults() *FlowLogProperties {
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *FlowLogProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -88,7 +88,7 @@ func (o *FlowLogProperties) HasName() bool {
 }
 
 // GetAction returns the Action field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *FlowLogProperties) GetAction() *string {
 	if o == nil {
 		return nil
@@ -126,7 +126,7 @@ func (o *FlowLogProperties) HasAction() bool {
 }
 
 // GetDirection returns the Direction field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *FlowLogProperties) GetDirection() *string {
 	if o == nil {
 		return nil
@@ -164,7 +164,7 @@ func (o *FlowLogProperties) HasDirection() bool {
 }
 
 // GetBucket returns the Bucket field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *FlowLogProperties) GetBucket() *string {
 	if o == nil {
 		return nil
@@ -206,15 +206,19 @@ func (o FlowLogProperties) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.Action != nil {
 		toSerialize["action"] = o.Action
 	}
+
 	if o.Direction != nil {
 		toSerialize["direction"] = o.Direction
 	}
+
 	if o.Bucket != nil {
 		toSerialize["bucket"] = o.Bucket
 	}
+
 	return json.Marshal(toSerialize)
 }
 

@@ -2,8 +2,6 @@ package linodego
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 )
 
 // OAuthClientStatus constants start with OAuthClient and include Linode API Instance Status values
@@ -82,120 +80,52 @@ func (i OAuthClient) GetUpdateOptions() (o OAuthClientUpdateOptions) {
 	return
 }
 
-// OAuthClientsPagedResponse represents a paginated OAuthClient API response
-type OAuthClientsPagedResponse struct {
-	*PageOptions
-	Data []OAuthClient `json:"data"`
-}
-
-// endpoint gets the endpoint URL for OAuthClient
-func (OAuthClientsPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.OAuthClients.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-
-	return endpoint
-}
-
-// appendData appends OAuthClients when processing paginated OAuthClient responses
-func (resp *OAuthClientsPagedResponse) appendData(r *OAuthClientsPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
 // ListOAuthClients lists OAuthClients
 func (c *Client) ListOAuthClients(ctx context.Context, opts *ListOptions) ([]OAuthClient, error) {
-	response := OAuthClientsPagedResponse{}
-	err := c.listHelper(ctx, &response, opts)
+	response, err := getPaginatedResults[OAuthClient](ctx, c, "account/oauth-clients", opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return response, nil
 }
 
 // GetOAuthClient gets the OAuthClient with the provided ID
-func (c *Client) GetOAuthClient(ctx context.Context, id string) (*OAuthClient, error) {
-	e, err := c.OAuthClients.Endpoint()
+func (c *Client) GetOAuthClient(ctx context.Context, clientID string) (*OAuthClient, error) {
+	e := formatAPIPath("account/oauth-clients/%s", clientID)
+	response, err := doGETRequest[OAuthClient](ctx, c, e)
 	if err != nil {
 		return nil, err
 	}
 
-	e = fmt.Sprintf("%s/%s", e, id)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&OAuthClient{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*OAuthClient), nil
+	return response, nil
 }
 
 // CreateOAuthClient creates an OAuthClient
-func (c *Client) CreateOAuthClient(ctx context.Context, createOpts OAuthClientCreateOptions) (*OAuthClient, error) {
-	var body string
-
-	e, err := c.OAuthClients.Endpoint()
+func (c *Client) CreateOAuthClient(ctx context.Context, opts OAuthClientCreateOptions) (*OAuthClient, error) {
+	e := "account/oauth-clients"
+	response, err := doPOSTRequest[OAuthClient](ctx, c, e, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	req := c.R(ctx).SetResult(&OAuthClient{})
-
-	if bodyData, err := json.Marshal(createOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Post(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*OAuthClient), nil
+	return response, nil
 }
 
 // UpdateOAuthClient updates the OAuthClient with the specified id
-func (c *Client) UpdateOAuthClient(ctx context.Context, id string, updateOpts OAuthClientUpdateOptions) (*OAuthClient, error) {
-	var body string
-
-	e, err := c.OAuthClients.Endpoint()
+func (c *Client) UpdateOAuthClient(ctx context.Context, clientID string, opts OAuthClientUpdateOptions) (*OAuthClient, error) {
+	e := formatAPIPath("account/oauth-clients/%s", clientID)
+	response, err := doPUTRequest[OAuthClient](ctx, c, e, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	e = fmt.Sprintf("%s/%s", e, id)
-
-	req := c.R(ctx).SetResult(&OAuthClient{})
-
-	if bodyData, err := json.Marshal(updateOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*OAuthClient), nil
+	return response, nil
 }
 
 // DeleteOAuthClient deletes the OAuthClient with the specified id
-func (c *Client) DeleteOAuthClient(ctx context.Context, id string) error {
-	e, err := c.OAuthClients.Endpoint()
-	if err != nil {
-		return err
-	}
-
-	e = fmt.Sprintf("%s/%s", e, id)
-
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
-
+func (c *Client) DeleteOAuthClient(ctx context.Context, clientID string) error {
+	e := formatAPIPath("account/oauth-clients/%s", clientID)
+	err := doDELETERequest(ctx, c, e)
 	return err
 }

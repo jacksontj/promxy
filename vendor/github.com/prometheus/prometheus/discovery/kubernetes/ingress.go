@@ -17,38 +17,40 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	v1 "k8s.io/api/networking/v1"
-	"k8s.io/api/networking/v1beta1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/prometheus/prometheus/discovery/targetgroup"
-	"github.com/prometheus/prometheus/util/strutil"
-)
-
-var (
-	ingressAddCount    = eventCount.WithLabelValues("ingress", "add")
-	ingressUpdateCount = eventCount.WithLabelValues("ingress", "update")
-	ingressDeleteCount = eventCount.WithLabelValues("ingress", "delete")
 )
 
 // Ingress implements discovery of Kubernetes ingress.
 type Ingress struct {
-	logger   log.Logger
+	logger   *slog.Logger
 	informer cache.SharedInformer
 	store    cache.Store
 	queue    *workqueue.Type
 }
 
 // NewIngress returns a new ingress discovery.
-func NewIngress(l log.Logger, inf cache.SharedInformer) *Ingress {
-	s := &Ingress{logger: l, informer: inf, store: inf.GetStore(), queue: workqueue.NewNamed("ingress")}
-	s.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+func NewIngress(l *slog.Logger, inf cache.SharedInformer, eventCount *prometheus.CounterVec) *Ingress {
+	ingressAddCount := eventCount.WithLabelValues(RoleIngress.String(), MetricLabelRoleAdd)
+	ingressUpdateCount := eventCount.WithLabelValues(RoleIngress.String(), MetricLabelRoleUpdate)
+	ingressDeleteCount := eventCount.WithLabelValues(RoleIngress.String(), MetricLabelRoleDelete)
+
+	s := &Ingress{
+		logger:   l,
+		informer: inf,
+		store:    inf.GetStore(),
+		queue:    workqueue.NewNamed(RoleIngress.String()),
+	}
+
+	_, err := s.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(o interface{}) {
 			ingressAddCount.Inc()
 			s.enqueue(o)
@@ -62,6 +64,9 @@ func NewIngress(l log.Logger, inf cache.SharedInformer) *Ingress {
 			s.enqueue(o)
 		},
 	})
+	if err != nil {
+		l.Error("Error adding ingresses event handler.", "err", err)
+	}
 	return s
 }
 
@@ -80,7 +85,7 @@ func (i *Ingress) Run(ctx context.Context, ch chan<- []*targetgroup.Group) {
 
 	if !cache.WaitForCacheSync(ctx.Done(), i.informer.HasSynced) {
 		if !errors.Is(ctx.Err(), context.Canceled) {
-			level.Error(i.logger).Log("msg", "ingress informer unable to sync cache")
+			i.logger.Error("ingress informer unable to sync cache")
 		}
 		return
 	}
@@ -120,10 +125,8 @@ func (i *Ingress) process(ctx context.Context, ch chan<- []*targetgroup.Group) b
 	switch ingress := o.(type) {
 	case *v1.Ingress:
 		ia = newIngressAdaptorFromV1(ingress)
-	case *v1beta1.Ingress:
-		ia = newIngressAdaptorFromV1beta1(ingress)
 	default:
-		level.Error(i.logger).Log("msg", "converting to Ingress object failed", "err",
+		i.logger.Error("converting to Ingress object failed", "err",
 			fmt.Errorf("received unexpected object: %v", o))
 		return true
 	}
@@ -140,37 +143,22 @@ func ingressSourceFromNamespaceAndName(namespace, name string) string {
 }
 
 const (
-	ingressNameLabel               = metaLabelPrefix + "ingress_name"
-	ingressLabelPrefix             = metaLabelPrefix + "ingress_label_"
-	ingressLabelPresentPrefix      = metaLabelPrefix + "ingress_labelpresent_"
-	ingressAnnotationPrefix        = metaLabelPrefix + "ingress_annotation_"
-	ingressAnnotationPresentPrefix = metaLabelPrefix + "ingress_annotationpresent_"
-	ingressSchemeLabel             = metaLabelPrefix + "ingress_scheme"
-	ingressHostLabel               = metaLabelPrefix + "ingress_host"
-	ingressPathLabel               = metaLabelPrefix + "ingress_path"
-	ingressClassNameLabel          = metaLabelPrefix + "ingress_class_name"
+	ingressSchemeLabel    = metaLabelPrefix + "ingress_scheme"
+	ingressHostLabel      = metaLabelPrefix + "ingress_host"
+	ingressPathLabel      = metaLabelPrefix + "ingress_path"
+	ingressClassNameLabel = metaLabelPrefix + "ingress_class_name"
 )
 
 func ingressLabels(ingress ingressAdaptor) model.LabelSet {
 	// Each label and annotation will create two key-value pairs in the map.
-	ls := make(model.LabelSet, 2*(len(ingress.labels())+len(ingress.annotations()))+2)
-	ls[ingressNameLabel] = lv(ingress.name())
+	ls := make(model.LabelSet)
 	ls[namespaceLabel] = lv(ingress.namespace())
 	if cls := ingress.ingressClassName(); cls != nil {
 		ls[ingressClassNameLabel] = lv(*cls)
 	}
 
-	for k, v := range ingress.labels() {
-		ln := strutil.SanitizeLabelName(k)
-		ls[model.LabelName(ingressLabelPrefix+ln)] = lv(v)
-		ls[model.LabelName(ingressLabelPresentPrefix+ln)] = presentValue
-	}
+	addObjectMetaLabels(ls, ingress.getObjectMeta(), RoleIngress)
 
-	for k, v := range ingress.annotations() {
-		ln := strutil.SanitizeLabelName(k)
-		ls[model.LabelName(ingressAnnotationPrefix+ln)] = lv(v)
-		ls[model.LabelName(ingressAnnotationPresentPrefix+ln)] = presentValue
-	}
 	return ls
 }
 

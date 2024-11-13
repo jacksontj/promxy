@@ -22,6 +22,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
 var remoteReadQueries = prometheus.NewGaugeVec(
@@ -42,9 +43,9 @@ func init() {
 // Client to select series sets.
 func QueryableClient(c *Client) storage.Queryable {
 	remoteReadQueries.WithLabelValues(c.Name())
-	return storage.QueryableFunc(func(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+	return storage.QueryableFunc(func(mint, maxt int64) (storage.Querier, error) {
 		return &querier{
-			ctx:    ctx,
+			ctx:    context.Background(),
 			mint:   mint,
 			maxt:   maxt,
 			client: c,
@@ -61,7 +62,7 @@ type querier struct {
 
 // Select implements storage.Querier and uses the given matchers to read series
 // sets from the Client.
-func (q *querier) Select(sortSeries bool, p *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+func (q *querier) Select(ctx context.Context, sortSeries bool, p *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	query, err := ToQuery(q.mint, q.maxt, matchers, p)
 	if err != nil {
 		return storage.ErrSeriesSet(errors.Wrap(err, "toQuery"))
@@ -80,13 +81,13 @@ func (q *querier) Select(sortSeries bool, p *storage.SelectHints, matchers ...*l
 }
 
 // LabelValues implements storage.Querier and is a noop.
-func (q *querier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (q *querier) LabelValues(context.Context, string, *storage.LabelHints, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	// TODO implement?
 	return nil, nil, fmt.Errorf("not implemented")
 }
 
 // LabelNames implements storage.Querier and is a noop.
-func (q *querier) LabelNames(matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (q *querier) LabelNames(context.Context, *storage.LabelHints, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	// TODO implement?
 	return nil, nil, fmt.Errorf("not implemented")
 }
@@ -99,8 +100,8 @@ func (q *querier) Close() error {
 // ExternalLabelsHandler returns a storage.Queryable which creates a
 // externalLabelsQuerier.
 func ExternalLabelsHandler(next storage.Queryable, externalLabels model.LabelSet) storage.Queryable {
-	return storage.QueryableFunc(func(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
-		q, err := next.Querier(ctx, mint, maxt)
+	return storage.QueryableFunc(func(mint, maxt int64) (storage.Querier, error) {
+		q, err := next.Querier(mint, maxt)
 		if err != nil {
 			return nil, err
 		}
@@ -119,9 +120,9 @@ type externalLabelsQuerier struct {
 // Select adds equality matchers for all external labels to the list of matchers
 // before calling the wrapped storage.Queryable. The added external labels are
 // removed from the returned series sets.
-func (q externalLabelsQuerier) Select(sortSeries bool, p *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+func (q externalLabelsQuerier) Select(ctx context.Context, sortSeries bool, p *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	m, added := q.addExternalLabels(matchers)
-	s := q.Querier.Select(sortSeries, p, m...)
+	s := q.Querier.Select(ctx, sortSeries, p, m...)
 	return newSeriesSetFilter(s, added)
 }
 
@@ -129,7 +130,7 @@ func (q externalLabelsQuerier) Select(sortSeries bool, p *storage.SelectHints, m
 // if requested timeframe can be answered completely by the local TSDB, and
 // reduces maxt if the timeframe can be partially answered by TSDB.
 func PreferLocalStorageFilter(next storage.Queryable, cb startTimeCallback) storage.Queryable {
-	return storage.QueryableFunc(func(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+	return storage.QueryableFunc(func(mint, maxt int64) (storage.Querier, error) {
 		localStartTime, err := cb()
 		if err != nil {
 			return nil, err
@@ -143,15 +144,15 @@ func PreferLocalStorageFilter(next storage.Queryable, cb startTimeCallback) stor
 		if maxt > localStartTime {
 			cmaxt = localStartTime
 		}
-		return next.Querier(ctx, mint, cmaxt)
+		return next.Querier(mint, cmaxt)
 	})
 }
 
 // RequiredMatchersFilter returns a storage.Queryable which creates a
 // requiredMatchersQuerier.
 func RequiredMatchersFilter(next storage.Queryable, required []*labels.Matcher) storage.Queryable {
-	return storage.QueryableFunc(func(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
-		q, err := next.Querier(ctx, mint, maxt)
+	return storage.QueryableFunc(func(mint, maxt int64) (storage.Querier, error) {
+		q, err := next.Querier(mint, maxt)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +170,7 @@ type requiredMatchersQuerier struct {
 
 // Select returns a NoopSeriesSet if the given matchers don't match the label
 // set of the requiredMatchersQuerier. Otherwise it'll call the wrapped querier.
-func (q requiredMatchersQuerier) Select(sortSeries bool, p *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+func (q requiredMatchersQuerier) Select(ctx context.Context, sortSeries bool, p *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	ms := q.requiredMatchers
 	for _, m := range matchers {
 		for i, r := range ms {
@@ -185,7 +186,7 @@ func (q requiredMatchersQuerier) Select(sortSeries bool, p *storage.SelectHints,
 	if len(ms) > 0 {
 		return storage.NoopSeriesSet()
 	}
-	return q.Querier.Select(sortSeries, p, matchers...)
+	return q.Querier.Select(ctx, sortSeries, p, matchers...)
 }
 
 // addExternalLabels adds matchers for each external label. External labels

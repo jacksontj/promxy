@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/prometheus/prometheus/model/exemplar"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 )
@@ -38,3 +40,21 @@ func (a *appenderStub) AppendExemplar(ref storage.SeriesRef, l labels.Labels, e 
 func (a *appenderStub) Commit() error { return nil }
 
 func (a *appenderStub) Rollback() error { return nil }
+
+func (a *appenderStub) SetOptions(opts *storage.AppendOptions) {}
+
+func (a *appenderStub) AppendHistogram(ref storage.SeriesRef, l labels.Labels, t int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, fmt.Errorf("not Implemented")
+}
+
+func (a *appenderStub) AppendHistogramCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, fmt.Errorf("not Implemented")
+}
+
+func (a *appenderStub) UpdateMetadata(ref storage.SeriesRef, l labels.Labels, m metadata.Metadata) (storage.SeriesRef, error) {
+	return 0, fmt.Errorf("not Implemented")
+}
+
+func (a *appenderStub) AppendCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64) (storage.SeriesRef, error) {
+	return 0, fmt.Errorf("not Implemented")
+}

@@ -2,10 +2,11 @@ package proxyquerier
 
 import (
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
 // NewSeriesSet returns a SeriesSet for the given series
-func NewSeriesSet(series []storage.Series, warnings storage.Warnings, err error) *SeriesSet {
+func NewSeriesSet(series []storage.Series, warnings annotations.Annotations, err error) *SeriesSet {
 	return &SeriesSet{
 		series:   series,
 		warnings: warnings,
@@ -19,7 +20,7 @@ type SeriesSet struct {
 	series []storage.Series
 
 	err      error
-	warnings storage.Warnings
+	warnings annotations.Annotations
 }
 
 // Next will attempt to move the iterator up
@@ -43,6 +44,6 @@ func (s *SeriesSet) Err() error {
 
 // Warnings returns a collection of warnings for the whole set.
 // Note: Warnings could be returned even if iteration has not failed with an error.
-func (s *SeriesSet) Warnings() storage.Warnings {
+func (s *SeriesSet) Warnings() annotations.Annotations {
 	return s.warnings
 }

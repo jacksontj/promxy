@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -44,6 +44,8 @@ type SnapshotProperties struct {
 	DiscVirtioHotUnplug *bool `json:"discVirtioHotUnplug,omitempty"`
 	// Hot-plug capable SCSI drive (no reboot required).
 	DiscScsiHotPlug *bool `json:"discScsiHotPlug,omitempty"`
+	// If set to `true` will expose the serial id of the disk attached to the server. If set to `false` will not expose the serial id. Some operating systems or software solutions require the serial id to be exposed to work properly. Exposing the serial  can influence licensed software (e.g. Windows) behavior
+	ExposeSerial *bool `json:"exposeSerial,omitempty"`
 	// Is capable of SCSI drive hot unplug (no reboot required). This works only for non-Windows virtual Machines.
 	DiscScsiHotUnplug *bool `json:"discScsiHotUnplug,omitempty"`
 	// OS type of this snapshot
@@ -57,6 +59,9 @@ type SnapshotProperties struct {
 func NewSnapshotProperties() *SnapshotProperties {
 	this := SnapshotProperties{}
 
+	var exposeSerial bool = false
+	this.ExposeSerial = &exposeSerial
+
 	return &this
 }
 
@@ -65,11 +70,13 @@ func NewSnapshotProperties() *SnapshotProperties {
 // but it doesn't guarantee that properties required by API are set
 func NewSnapshotPropertiesWithDefaults() *SnapshotProperties {
 	this := SnapshotProperties{}
+	var exposeSerial bool = false
+	this.ExposeSerial = &exposeSerial
 	return &this
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -107,7 +114,7 @@ func (o *SnapshotProperties) HasName() bool {
 }
 
 // GetDescription returns the Description field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetDescription() *string {
 	if o == nil {
 		return nil
@@ -145,7 +152,7 @@ func (o *SnapshotProperties) HasDescription() bool {
 }
 
 // GetLocation returns the Location field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetLocation() *string {
 	if o == nil {
 		return nil
@@ -183,7 +190,7 @@ func (o *SnapshotProperties) HasLocation() bool {
 }
 
 // GetSize returns the Size field value
-// If the value is explicit nil, the zero value for float32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetSize() *float32 {
 	if o == nil {
 		return nil
@@ -221,7 +228,7 @@ func (o *SnapshotProperties) HasSize() bool {
 }
 
 // GetSecAuthProtection returns the SecAuthProtection field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetSecAuthProtection() *bool {
 	if o == nil {
 		return nil
@@ -259,7 +266,7 @@ func (o *SnapshotProperties) HasSecAuthProtection() bool {
 }
 
 // GetCpuHotPlug returns the CpuHotPlug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetCpuHotPlug() *bool {
 	if o == nil {
 		return nil
@@ -297,7 +304,7 @@ func (o *SnapshotProperties) HasCpuHotPlug() bool {
 }
 
 // GetCpuHotUnplug returns the CpuHotUnplug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetCpuHotUnplug() *bool {
 	if o == nil {
 		return nil
@@ -335,7 +342,7 @@ func (o *SnapshotProperties) HasCpuHotUnplug() bool {
 }
 
 // GetRamHotPlug returns the RamHotPlug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetRamHotPlug() *bool {
 	if o == nil {
 		return nil
@@ -373,7 +380,7 @@ func (o *SnapshotProperties) HasRamHotPlug() bool {
 }
 
 // GetRamHotUnplug returns the RamHotUnplug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetRamHotUnplug() *bool {
 	if o == nil {
 		return nil
@@ -411,7 +418,7 @@ func (o *SnapshotProperties) HasRamHotUnplug() bool {
 }
 
 // GetNicHotPlug returns the NicHotPlug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetNicHotPlug() *bool {
 	if o == nil {
 		return nil
@@ -449,7 +456,7 @@ func (o *SnapshotProperties) HasNicHotPlug() bool {
 }
 
 // GetNicHotUnplug returns the NicHotUnplug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetNicHotUnplug() *bool {
 	if o == nil {
 		return nil
@@ -487,7 +494,7 @@ func (o *SnapshotProperties) HasNicHotUnplug() bool {
 }
 
 // GetDiscVirtioHotPlug returns the DiscVirtioHotPlug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetDiscVirtioHotPlug() *bool {
 	if o == nil {
 		return nil
@@ -525,7 +532,7 @@ func (o *SnapshotProperties) HasDiscVirtioHotPlug() bool {
 }
 
 // GetDiscVirtioHotUnplug returns the DiscVirtioHotUnplug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetDiscVirtioHotUnplug() *bool {
 	if o == nil {
 		return nil
@@ -563,7 +570,7 @@ func (o *SnapshotProperties) HasDiscVirtioHotUnplug() bool {
 }
 
 // GetDiscScsiHotPlug returns the DiscScsiHotPlug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetDiscScsiHotPlug() *bool {
 	if o == nil {
 		return nil
@@ -600,8 +607,46 @@ func (o *SnapshotProperties) HasDiscScsiHotPlug() bool {
 	return false
 }
 
+// GetExposeSerial returns the ExposeSerial field value
+// If the value is explicit nil, nil is returned
+func (o *SnapshotProperties) GetExposeSerial() *bool {
+	if o == nil {
+		return nil
+	}
+
+	return o.ExposeSerial
+
+}
+
+// GetExposeSerialOk returns a tuple with the ExposeSerial field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *SnapshotProperties) GetExposeSerialOk() (*bool, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.ExposeSerial, true
+}
+
+// SetExposeSerial sets field value
+func (o *SnapshotProperties) SetExposeSerial(v bool) {
+
+	o.ExposeSerial = &v
+
+}
+
+// HasExposeSerial returns a boolean if a field has been set.
+func (o *SnapshotProperties) HasExposeSerial() bool {
+	if o != nil && o.ExposeSerial != nil {
+		return true
+	}
+
+	return false
+}
+
 // GetDiscScsiHotUnplug returns the DiscScsiHotUnplug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetDiscScsiHotUnplug() *bool {
 	if o == nil {
 		return nil
@@ -639,7 +684,7 @@ func (o *SnapshotProperties) HasDiscScsiHotUnplug() bool {
 }
 
 // GetLicenceType returns the LicenceType field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *SnapshotProperties) GetLicenceType() *string {
 	if o == nil {
 		return nil
@@ -681,51 +726,71 @@ func (o SnapshotProperties) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.Description != nil {
 		toSerialize["description"] = o.Description
 	}
+
 	if o.Location != nil {
 		toSerialize["location"] = o.Location
 	}
+
 	if o.Size != nil {
 		toSerialize["size"] = o.Size
 	}
+
 	if o.SecAuthProtection != nil {
 		toSerialize["secAuthProtection"] = o.SecAuthProtection
 	}
+
 	if o.CpuHotPlug != nil {
 		toSerialize["cpuHotPlug"] = o.CpuHotPlug
 	}
+
 	if o.CpuHotUnplug != nil {
 		toSerialize["cpuHotUnplug"] = o.CpuHotUnplug
 	}
+
 	if o.RamHotPlug != nil {
 		toSerialize["ramHotPlug"] = o.RamHotPlug
 	}
+
 	if o.RamHotUnplug != nil {
 		toSerialize["ramHotUnplug"] = o.RamHotUnplug
 	}
+
 	if o.NicHotPlug != nil {
 		toSerialize["nicHotPlug"] = o.NicHotPlug
 	}
+
 	if o.NicHotUnplug != nil {
 		toSerialize["nicHotUnplug"] = o.NicHotUnplug
 	}
+
 	if o.DiscVirtioHotPlug != nil {
 		toSerialize["discVirtioHotPlug"] = o.DiscVirtioHotPlug
 	}
+
 	if o.DiscVirtioHotUnplug != nil {
 		toSerialize["discVirtioHotUnplug"] = o.DiscVirtioHotUnplug
 	}
+
 	if o.DiscScsiHotPlug != nil {
 		toSerialize["discScsiHotPlug"] = o.DiscScsiHotPlug
 	}
+
+	if o.ExposeSerial != nil {
+		toSerialize["exposeSerial"] = o.ExposeSerial
+	}
+
 	if o.DiscScsiHotUnplug != nil {
 		toSerialize["discScsiHotUnplug"] = o.DiscScsiHotUnplug
 	}
+
 	if o.LicenceType != nil {
 		toSerialize["licenceType"] = o.LicenceType
 	}
+
 	return json.Marshal(toSerialize)
 }
 
