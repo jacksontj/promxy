@@ -640,7 +640,7 @@ github.com/prometheus/exporter-toolkit/web
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
-# github.com/prometheus/prometheus v0.0.0-20241106162053-96c2fe04e74c => github.com/rishabhkumar92/prometheus v0.0.0-20241113004235-5fa91e6e4464
+# github.com/prometheus/prometheus v0.0.0-20241106162053-96c2fe04e74c => github.com/rishabhkumar92/prometheus v0.0.0-20241119224039-1cfb308e254f
 ## explicit; go 1.22.0
 github.com/prometheus/prometheus/config
 github.com/prometheus/prometheus/discovery
@@ -1383,6 +1383,6 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# github.com/prometheus/prometheus => github.com/rishabhkumar92/prometheus v0.0.0-20241113004235-5fa91e6e4464
+# github.com/prometheus/prometheus => github.com/rishabhkumar92/prometheus v0.0.0-20241119224039-1cfb308e254f
 # github.com/golang/glog => github.com/kubermatic/glog-gokit v0.0.0-20181129151237-8ab7e4c2d352
 # k8s.io/klog => github.com/simonpasquier/klog-gokit/v3 v3.0.0

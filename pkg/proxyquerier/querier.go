@@ -52,7 +52,7 @@ func (h *ProxyQuerier) Select(ctx context.Context, _ bool, hints *storage.Select
 		if err != nil {
 			return NewSeriesSet(nil, nil, err)
 		}
-		labelsets, w, err := h.Client.Series(h.Ctx, []string{matcherString}, h.Start, h.End)
+		labelsets, w, err := h.Client.Series(ctx, []string{matcherString}, h.Start, h.End)
 		warnings = promhttputil.WarningsConvert(w)
 		if err != nil {
 			return NewSeriesSet(nil, warnings, err)
@@ -68,7 +68,9 @@ func (h *ProxyQuerier) Select(ctx context.Context, _ bool, hints *storage.Select
 		result = retVector
 	} else {
 		var w v1.Warnings
-		result, w, err = h.Client.GetValue(h.Ctx, timestamp.Time(hints.Start), timestamp.Time(hints.End), matchers)
+		t1 := timestamp.Time(hints.Start)
+		t2 := timestamp.Time(hints.End)
+		result, w, err = h.Client.GetValue(ctx, t1, t2, matchers)
 		warnings = promhttputil.WarningsConvert(w)
 	}
 	if err != nil {
@@ -105,7 +107,7 @@ func (h *ProxyQuerier) LabelValues(ctx context.Context, name string, hints *stor
 		matchersStrings = []string{s}
 	}
 
-	result, w, err := h.Client.LabelValues(h.Ctx, name, matchersStrings, h.Start, h.End)
+	result, w, err := h.Client.LabelValues(ctx, name, matchersStrings, h.Start, h.End)
 	warnings := promhttputil.WarningsConvert(w)
 	if err != nil {
 		return nil, warnings, err
@@ -137,7 +139,7 @@ func (h *ProxyQuerier) LabelNames(ctx context.Context, hints *storage.LabelHints
 		matchersStrings = []string{s}
 	}
 
-	v, w, err := h.Client.LabelNames(h.Ctx, matchersStrings, h.Start, h.End)
+	v, w, err := h.Client.LabelNames(ctx, matchersStrings, h.Start, h.End)
 	return v, promhttputil.WarningsConvert(w), err
 }
 
