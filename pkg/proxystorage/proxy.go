@@ -567,11 +567,10 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 		case parser.QUANTILE:
 			// DO NOTHING
-			// this caltulates an actual quantile over the resulting data
+			// this calculates an actual quantile over the resulting data
 			// as such there is no way to reduce the load necessary here. If
 			// the query is something like quantile(sum(foo)) then the inner aggregation
 			// will reduce the required data
-
 		// Both of these cases require some mechanism of knowing what labels to do the aggregation on.
 		// WIthout that knowledge we require pulling all of the data in, so we do nothing
 		case parser.STDDEV:

@@ -130,7 +130,7 @@ func (s *SeriesIterator) Seek(t int64) chunkenc.ValueType {
 		} else if len(valueTyped.Histograms) != 0 {
 			for i := s.offset; i < len(valueTyped.Histograms); i++ {
 				s.offset = i
-				if int64(valueTyped.Values[s.offset].Timestamp) >= t {
+				if int64(valueTyped.Histograms[s.offset].Timestamp) >= t {
 					return chunkenc.ValHistogram
 				}
 			}
@@ -198,7 +198,14 @@ func (s *SeriesIterator) AtT() int64 {
 		return int64(valueTyped.Timestamp)
 	case *model.SampleStream: // from a Matrix
 		// We assume the list of values is in order, so we'll iterate backwards
-		return int64(valueTyped.Values[s.offset].Timestamp)
+		if len(valueTyped.Values) != 0 {
+			return int64(valueTyped.Values[s.offset].Timestamp)
+		} else if len(valueTyped.Histograms) != 0 {
+			return int64(valueTyped.Histograms[s.offset].Timestamp)
+		} else {
+			msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
+			panic(msg)
+		}
 	default:
 		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
 		panic(msg)
