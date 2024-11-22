@@ -55,10 +55,10 @@ func toFpoints(promqlFloats []promql.FPoint) []FPoint {
 // TODO: Expand on this
 func toFloatHistogram(sampleHistogram *model.SampleHistogram) *histogram.FloatHistogram {
 	return &histogram.FloatHistogram{
-		Count:         405,
 		ZeroCount:     102,
 		ZeroThreshold: 0.001,
-		Sum:           1008.4,
+		Count:         float64(sampleHistogram.Count),
+		Sum:           float64(sampleHistogram.Sum),
 		Schema:        1,
 		PositiveSpans: []histogram.Span{
 			{Offset: 0, Length: 4},
