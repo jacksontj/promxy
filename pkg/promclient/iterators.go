@@ -40,7 +40,6 @@ func IteratorsForValue(v model.Value) []*SeriesIterator {
 }
 
 // NewSeriesIterator return a series iterator for the given value
-// TODO: error return if the type is incorrect?
 func NewSeriesIterator(v interface{}) *SeriesIterator {
 	return &SeriesIterator{V: v, offset: -1}
 }
@@ -56,17 +55,29 @@ func toFpoints(promqlFloats []promql.FPoint) []FPoint {
 // TODO: Expand on this
 func toFloatHistogram(sampleHistogram *model.SampleHistogram) *histogram.FloatHistogram {
 	return &histogram.FloatHistogram{
-		CounterResetHint: 0,
-		Schema:           0,
-		ZeroThreshold:    0,
-		ZeroCount:        0,
-		Count:            float64(sampleHistogram.Count),
-		Sum:              float64(sampleHistogram.Sum),
-		PositiveSpans:    nil,
-		NegativeSpans:    nil,
-		PositiveBuckets:  nil,
-		NegativeBuckets:  nil,
-		CustomValues:     nil,
+		Count:         405,
+		ZeroCount:     102,
+		ZeroThreshold: 0.001,
+		Sum:           1008.4,
+		Schema:        1,
+		PositiveSpans: []histogram.Span{
+			{Offset: 0, Length: 4},
+			{Offset: 1, Length: 0},
+			{Offset: 3, Length: 3},
+			{Offset: 3, Length: 0},
+			{Offset: 2, Length: 0},
+			{Offset: 5, Length: 3},
+		},
+		PositiveBuckets: []float64{100, 344, 123, 55, 3, 63, 2, 54, 235, 33},
+		NegativeSpans: []histogram.Span{
+			{Offset: 0, Length: 3},
+			{Offset: 1, Length: 0},
+			{Offset: 3, Length: 0},
+			{Offset: 3, Length: 4},
+			{Offset: 2, Length: 0},
+			{Offset: 5, Length: 3},
+		},
+		NegativeBuckets: []float64{10, 34, 1230, 54, 67, 63, 2, 554, 235, 33},
 	}
 }
 
