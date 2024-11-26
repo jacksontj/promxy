@@ -2,6 +2,7 @@ package promclient
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 
@@ -52,46 +53,146 @@ func toFpoints(promqlFloats []promql.FPoint) []FPoint {
 	return result
 }
 
-// TODO: Expand on this
-func toFloatHistogram(sampleHistogram *model.SampleHistogram) *histogram.FloatHistogram {
-	return &histogram.FloatHistogram{
-		ZeroCount:     102,
-		ZeroThreshold: 0.001,
-		Count:         float64(sampleHistogram.Count),
-		Sum:           float64(sampleHistogram.Sum),
-		Schema:        1,
-		PositiveSpans: []histogram.Span{
-			{Offset: 0, Length: 4},
-			{Offset: 1, Length: 0},
-			{Offset: 3, Length: 3},
-			{Offset: 3, Length: 0},
-			{Offset: 2, Length: 0},
-			{Offset: 5, Length: 3},
-		},
-		PositiveBuckets: []float64{100, 344, 123, 55, 3, 63, 2, 54, 235, 33},
-		NegativeSpans: []histogram.Span{
-			{Offset: 0, Length: 3},
-			{Offset: 1, Length: 0},
-			{Offset: 3, Length: 0},
-			{Offset: 3, Length: 4},
-			{Offset: 2, Length: 0},
-			{Offset: 5, Length: 3},
-		},
-		NegativeBuckets: []float64{10, 34, 1230, 54, 67, 63, 2, 554, 235, 33},
+func zeroBucketInfo(buckets model.HistogramBuckets) (float64, float64) {
+	for _, bucket := range buckets {
+		if bucket.Boundaries == 3 && bucket.Lower < 0 && bucket.Upper > 0 {
+			return float64(bucket.Upper), float64(bucket.Count)
+		}
 	}
+	return 0.0, 0.0
 }
 
-// FPoint represents a single float data point for a given timestamp.
-type FPoint struct {
-	T int64
-	F float64
+func distributeBuckets(buckets model.HistogramBuckets) ([]model.HistogramBucket, []model.HistogramBucket) {
+	negativeBuckets := make([]model.HistogramBucket, 0)
+	positiveBuckets := make([]model.HistogramBucket, 0)
+	// Negative buckets need to be reversed
+	for _, bucket := range buckets {
+		if bucket.Lower < 0 && bucket.Upper < 0 {
+			negativeBuckets = append([]model.HistogramBucket{*bucket}, negativeBuckets...)
+		} else if bucket.Lower > 0 && bucket.Upper > 0 {
+			positiveBuckets = append(positiveBuckets, *bucket)
+		}
+	}
+	return negativeBuckets, positiveBuckets
 }
 
-// HPoint represents a single histogram data point for a given timestamp.
-// H must never be nil.
-type HPoint struct {
-	T int64
-	H *histogram.FloatHistogram
+func fetchBuckets(negativePromBuckets []model.HistogramBucket, positivePromBuckets []model.HistogramBucket) ([]float64, []float64) {
+	negativeNativeBuckets := make([]float64, 0)
+	positiveNativeBuckets := make([]float64, 0)
+	for _, bucket := range negativePromBuckets {
+		negativeNativeBuckets = append(negativeNativeBuckets, float64(bucket.Count))
+	}
+	for _, bucket := range positivePromBuckets {
+		positiveNativeBuckets = append(positiveNativeBuckets, float64(bucket.Count))
+	}
+	return negativeNativeBuckets, positiveNativeBuckets
+}
+
+// Get schema from bucket
+func getSchema(buckets model.HistogramBuckets) (int32, float64) {
+	for _, bucket := range buckets {
+		if bucket.Lower > 0 && bucket.Upper > 0 {
+			jump := float64(bucket.Upper) / float64(bucket.Lower)
+			schema := int32(math.Round(math.Log2(1 / math.Log2(jump))))
+			return schema, jump
+		} else if bucket.Lower < 0 && bucket.Upper < 0 {
+			jump := float64(bucket.Lower) / float64(bucket.Upper)
+			schema := int32(math.Round(math.Log2(1 / math.Log2(float64(bucket.Lower)/float64(bucket.Upper)))))
+			return schema, jump
+		}
+	}
+	return 0, 2.0
+}
+
+// Bucket boundary starts with 1
+func fetchSpans(negativePromBuckets []model.HistogramBucket, positivePromBuckets []model.HistogramBucket, jump float64) ([]histogram.Span, []histogram.Span) {
+	positiveSpans := make([]histogram.Span, 0)
+	negativeSpans := make([]histogram.Span, 0)
+	highertolerance := 1.0
+	bucketTolerance := 0.01
+	//deduce positive spans
+	if len(positivePromBuckets) > 0 {
+		maxBucketUpperLimit := float64(positivePromBuckets[len(positivePromBuckets)-1].Upper)
+		minBucketUpperLimit := float64(positivePromBuckets[0].Upper)
+		currOffset := 0
+		upper := 1.0
+		if minBucketUpperLimit < 1.0 {
+			initialValue := 1.0
+			for initialValue > minBucketUpperLimit {
+				currOffset--
+				initialValue = initialValue / jump
+			}
+			upper = minBucketUpperLimit
+		}
+		bucketIndex := 0
+		currLength := 0
+		assigned := true
+		for upper <= maxBucketUpperLimit+highertolerance {
+			if math.Abs(float64(positivePromBuckets[bucketIndex].Upper)-upper) < bucketTolerance {
+				assigned = false
+				currLength++
+				bucketIndex++
+			} else {
+				if !assigned {
+					positiveSpans = append(positiveSpans, histogram.Span{int32(currOffset), uint32(currLength)})
+					currLength = 0
+					currOffset = 0
+					assigned = true
+				}
+				currOffset++
+			}
+			upper = upper * jump
+		}
+		if currLength > 0 {
+			positiveSpans = append(positiveSpans, histogram.Span{int32(currOffset), uint32(currLength)})
+		}
+	}
+	//deduce negative spans
+	if len(negativePromBuckets) > 0 {
+		minBucketLowerLimit := float64(negativePromBuckets[len(negativePromBuckets)-1].Lower)
+		lower := -1.0
+		bucketIndex := 0
+		currOffset := 0
+		currLength := 0
+		assigned := true
+		for lower > minBucketLowerLimit-highertolerance {
+			if math.Abs(float64(negativePromBuckets[bucketIndex].Lower)-lower) < bucketTolerance {
+				assigned = false
+				currLength++
+				bucketIndex++
+			} else {
+				if !assigned {
+					negativeSpans = append(negativeSpans, histogram.Span{int32(currOffset), uint32(currLength)})
+					currLength = 0
+					currOffset = 0
+					assigned = true
+				}
+				currOffset++
+			}
+			lower = lower * jump
+		}
+	}
+
+	return negativeSpans, positiveSpans
+}
+
+func toFloatHistogram(sampleHistogram *model.SampleHistogram) *histogram.FloatHistogram {
+	zeroBucketThreshold, zeroBucketCount := zeroBucketInfo(sampleHistogram.Buckets)
+	derivedSchema, derivedBucketJump := getSchema(sampleHistogram.Buckets)
+	negativePromBuckets, positivePromBuckets := distributeBuckets(sampleHistogram.Buckets)
+	negativeBuckets, positiveBuckets := fetchBuckets(negativePromBuckets, positivePromBuckets)
+	negativeSpans, positiveSpans := fetchSpans(negativePromBuckets, positivePromBuckets, derivedBucketJump)
+	return &histogram.FloatHistogram{
+		ZeroCount:       zeroBucketCount,
+		ZeroThreshold:   zeroBucketThreshold,
+		Count:           float64(sampleHistogram.Count),
+		Sum:             float64(sampleHistogram.Sum),
+		Schema:          derivedSchema,
+		PositiveSpans:   positiveSpans,
+		PositiveBuckets: positiveBuckets,
+		NegativeSpans:   negativeSpans,
+		NegativeBuckets: negativeBuckets,
+	}
 }
 
 // SeriesIterator implements the prometheus SeriesIterator interface
@@ -99,15 +200,6 @@ type SeriesIterator struct {
 	V      interface{}
 	offset int
 }
-
-//type SeriesIterator struct {
-//	floats               []FPoint
-//	histograms           []HPoint
-//	iFloats, iHistograms int
-//	currT                int64
-//	currF                float64
-//	currH                *histogram.FloatHistogram
-//}
 
 // Seek advances the iterator forward to the value at or after
 // the given timestamp.
@@ -184,7 +276,6 @@ func (s *SeriesIterator) AtHistogram(hist *histogram.Histogram) (int64, *histogr
 	}
 }
 
-// TODO: Implement this for native histogram
 func (s *SeriesIterator) AtFloatHistogram(hist *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
 	switch valueTyped := s.V.(type) {
 	case *model.Sample:
