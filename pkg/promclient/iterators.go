@@ -1,16 +1,15 @@
 package promclient
 
 import (
-	"fmt"
-	"math"
-	"reflect"
-	"sort"
+  "fmt"
+  "math"
+  "reflect"
+  "sort"
 
-	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/model/histogram"
-	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/promql"
-	"github.com/prometheus/prometheus/tsdb/chunkenc"
+  "github.com/prometheus/common/model"
+  "github.com/prometheus/prometheus/model/histogram"
+  "github.com/prometheus/prometheus/model/labels"
+  "github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
 // IteratorsForValue returns SeriesIterators for the value passed in
@@ -43,14 +42,6 @@ func IteratorsForValue(v model.Value) []*SeriesIterator {
 // NewSeriesIterator return a series iterator for the given value
 func NewSeriesIterator(v interface{}) *SeriesIterator {
 	return &SeriesIterator{V: v, offset: -1}
-}
-
-func toFpoints(promqlFloats []promql.FPoint) []FPoint {
-	result := make([]FPoint, len(promqlFloats))
-	for i, promqlFloat := range promqlFloats {
-		result[i] = FPoint{promqlFloat.T, promqlFloat.F}
-	}
-	return result
 }
 
 func zeroBucketInfo(buckets model.HistogramBuckets) (float64, float64) {
