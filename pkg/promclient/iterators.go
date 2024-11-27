@@ -1,15 +1,15 @@
 package promclient
 
 import (
-  "fmt"
-  "math"
-  "reflect"
-  "sort"
+	"fmt"
+	"math"
+	"reflect"
+	"sort"
 
-  "github.com/prometheus/common/model"
-  "github.com/prometheus/prometheus/model/histogram"
-  "github.com/prometheus/prometheus/model/labels"
-  "github.com/prometheus/prometheus/tsdb/chunkenc"
+	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/histogram"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
 // IteratorsForValue returns SeriesIterators for the value passed in
@@ -44,6 +44,7 @@ func NewSeriesIterator(v interface{}) *SeriesIterator {
 	return &SeriesIterator{V: v, offset: -1}
 }
 
+// Zero buckets are on either side of 0
 func zeroBucketInfo(buckets model.HistogramBuckets) (float64, float64) {
 	for _, bucket := range buckets {
 		if bucket.Boundaries == 3 && bucket.Lower < 0 && bucket.Upper > 0 {
@@ -53,7 +54,7 @@ func zeroBucketInfo(buckets model.HistogramBuckets) (float64, float64) {
 	return 0.0, 0.0
 }
 
-func distributeBuckets(buckets model.HistogramBuckets) ([]model.HistogramBucket, []model.HistogramBucket) {
+func separateBuckets(buckets model.HistogramBuckets) ([]model.HistogramBucket, []model.HistogramBucket) {
 	negativeBuckets := make([]model.HistogramBucket, 0)
 	positiveBuckets := make([]model.HistogramBucket, 0)
 	// Negative buckets need to be reversed
@@ -67,7 +68,7 @@ func distributeBuckets(buckets model.HistogramBuckets) ([]model.HistogramBucket,
 	return negativeBuckets, positiveBuckets
 }
 
-func fetchBuckets(negativePromBuckets []model.HistogramBucket, positivePromBuckets []model.HistogramBucket) ([]float64, []float64) {
+func fetchBucketCount(negativePromBuckets []model.HistogramBucket, positivePromBuckets []model.HistogramBucket) ([]float64, []float64) {
 	negativeNativeBuckets := make([]float64, 0)
 	positiveNativeBuckets := make([]float64, 0)
 	for _, bucket := range negativePromBuckets {
@@ -80,7 +81,7 @@ func fetchBuckets(negativePromBuckets []model.HistogramBucket, positivePromBucke
 }
 
 // Get schema from bucket
-func getSchema(buckets model.HistogramBuckets) (int32, float64) {
+func deriveSchema(buckets model.HistogramBuckets) (int32, float64) {
 	for _, bucket := range buckets {
 		if bucket.Lower > 0 && bucket.Upper > 0 {
 			jump := float64(bucket.Upper) / float64(bucket.Lower)
@@ -95,11 +96,11 @@ func getSchema(buckets model.HistogramBuckets) (int32, float64) {
 	return 0, 2.0
 }
 
-// Bucket boundary starts with 1
+// Bucket with index = 0 boundary starts with 1 or -1 in case of negative spans
 func fetchSpans(negativePromBuckets []model.HistogramBucket, positivePromBuckets []model.HistogramBucket, jump float64) ([]histogram.Span, []histogram.Span) {
 	positiveSpans := make([]histogram.Span, 0)
 	negativeSpans := make([]histogram.Span, 0)
-	highertolerance := 1.0
+	buffer := 1.0
 	bucketTolerance := 0.01
 	//deduce positive spans
 	if len(positivePromBuckets) > 0 {
@@ -115,10 +116,11 @@ func fetchSpans(negativePromBuckets []model.HistogramBucket, positivePromBuckets
 			}
 			upper = minBucketUpperLimit
 		}
+		// At this point we have evaluated currOffset to be 0 or -ve depending on what's the start of bucket
 		bucketIndex := 0
 		currLength := 0
 		assigned := true
-		for upper <= maxBucketUpperLimit+highertolerance {
+		for upper <= maxBucketUpperLimit+buffer && bucketIndex <= len(positivePromBuckets)-1 {
 			if math.Abs(float64(positivePromBuckets[bucketIndex].Upper)-upper) < bucketTolerance {
 				assigned = false
 				currLength++
@@ -141,12 +143,21 @@ func fetchSpans(negativePromBuckets []model.HistogramBucket, positivePromBuckets
 	//deduce negative spans
 	if len(negativePromBuckets) > 0 {
 		minBucketLowerLimit := float64(negativePromBuckets[len(negativePromBuckets)-1].Lower)
-		lower := -1.0
-		bucketIndex := 0
+		maxBucketUpperLimit := float64(negativePromBuckets[0].Lower)
 		currOffset := 0
+		lower := -1.0
+		if maxBucketUpperLimit > -1.0 {
+			initialValue := -1.0
+			for initialValue < maxBucketUpperLimit {
+				currOffset--
+				initialValue = initialValue / jump // Increasing the offset it by dividing it by jump
+			}
+			lower = maxBucketUpperLimit
+		}
+		bucketIndex := 0
 		currLength := 0
 		assigned := true
-		for lower > minBucketLowerLimit-highertolerance {
+		for lower > minBucketLowerLimit-buffer && bucketIndex <= len(negativePromBuckets)-1 {
 			if math.Abs(float64(negativePromBuckets[bucketIndex].Lower)-lower) < bucketTolerance {
 				assigned = false
 				currLength++
@@ -162,6 +173,9 @@ func fetchSpans(negativePromBuckets []model.HistogramBucket, positivePromBuckets
 			}
 			lower = lower * jump
 		}
+		if currLength > 0 {
+			negativeSpans = append(negativeSpans, histogram.Span{int32(currOffset), uint32(currLength)})
+		}
 	}
 
 	return negativeSpans, positiveSpans
@@ -169,9 +183,9 @@ func fetchSpans(negativePromBuckets []model.HistogramBucket, positivePromBuckets
 
 func toFloatHistogram(sampleHistogram *model.SampleHistogram) *histogram.FloatHistogram {
 	zeroBucketThreshold, zeroBucketCount := zeroBucketInfo(sampleHistogram.Buckets)
-	derivedSchema, derivedBucketJump := getSchema(sampleHistogram.Buckets)
-	negativePromBuckets, positivePromBuckets := distributeBuckets(sampleHistogram.Buckets)
-	negativeBuckets, positiveBuckets := fetchBuckets(negativePromBuckets, positivePromBuckets)
+	derivedSchema, derivedBucketJump := deriveSchema(sampleHistogram.Buckets)
+	negativePromBuckets, positivePromBuckets := separateBuckets(sampleHistogram.Buckets)
+	negativeBuckets, positiveBuckets := fetchBucketCount(negativePromBuckets, positivePromBuckets)
 	negativeSpans, positiveSpans := fetchSpans(negativePromBuckets, positivePromBuckets, derivedBucketJump)
 	return &histogram.FloatHistogram{
 		ZeroCount:       zeroBucketCount,
