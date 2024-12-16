@@ -287,7 +287,7 @@ func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream, 
 			// see if there is a sample from b within antiAffinityBuffer, that is larger than a
 			for i := lastOffset; i < len(b.Values); i++ {
 				bValue := b.Values[i]
-				if bValue.Timestamp >= (aValue.Timestamp + antiAffinityBuffer) {
+				if bValue.Timestamp >= (aValue.Timestamp+antiAffinityBuffer) && bValue.Timestamp != aValue.Timestamp {
 					break
 				}
 				// b is within antiAffinityBuffer of a
