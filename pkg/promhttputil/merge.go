@@ -15,7 +15,7 @@ import (
 func WarningsConvert(ws v1.Warnings) annotations.Annotations {
 	w := make(annotations.Annotations, len(ws))
 	for i, item := range ws {
-		w[string(i)] = errors.New(item)
+		w[fmt.Sprint(i)] = errors.New(item)
 	}
 	return w
 }
