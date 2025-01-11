@@ -264,7 +264,7 @@ func main() {
 		if opts.LocalStoragePath == "" {
 			logrus.Fatalf("local storage path must be defined if you wish to enable max query concurrency limits")
 		}
-		engineOpts.ActiveQueryTracker = promql.NewActiveQueryTracker(opts.LocalStoragePath, opts.QueryMaxConcurrency, logger.With(logger, "component", "activeQueryTracker"))
+		engineOpts.ActiveQueryTracker = promql.NewActiveQueryTracker(opts.LocalStoragePath, opts.QueryMaxConcurrency, logger.With("component", "activeQueryTracker"))
 	}
 
 	engine := promql.NewEngine(engineOpts)
@@ -281,11 +281,11 @@ func main() {
 			Registerer:    prometheus.DefaultRegisterer,
 			QueueCapacity: opts.NotificationQueueCapacity,
 		},
-		logger.With(logger, "component", "notifier"),
+		logger.With("component", "notifier"),
 	)
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(notifierManager))
 
-	discoveryManagerNotify := discovery.NewManager(ctx, logger.With(logger, "component", "discovery manager notify"), prometheus.DefaultRegisterer, nil, discovery.Name("notify"))
+	discoveryManagerNotify := discovery.NewManager(ctx, logger.With("component", "discovery manager notify"), prometheus.DefaultRegisterer, nil, discovery.Name("notify"))
 
 	reloadables = append(reloadables,
 		proxyconfig.WrapPromReloadable(&proxyconfig.ApplyConfigFunc{func(cfg *config.Config) error {
@@ -386,7 +386,7 @@ func main() {
 	}}))
 
 	// We need an empty scrape manager, simply to make the API not panic and error out
-	scrapeManager, _ := scrape.NewManager(nil, logger.With(logger, "component", "scrape manager"), nil, proxyStorage, prometheus.DefaultRegisterer)
+	scrapeManager, _ := scrape.NewManager(nil, logger.With("component", "scrape manager"), nil, proxyStorage, prometheus.DefaultRegisterer)
 	listenAddresses := []string{opts.BindAddr}
 
 	webOptions := &web.Options{
