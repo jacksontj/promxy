@@ -101,7 +101,7 @@ func fetchSpans(negativePromBuckets []model.HistogramBucket, positivePromBuckets
 	positiveSpans := make([]histogram.Span, 0)
 	negativeSpans := make([]histogram.Span, 0)
 	buffer := 1.0
-	bucketTolerance := 0.01
+	bucketTolerance := 0.1
 	//deduce positive spans
 	if len(positivePromBuckets) > 0 {
 		maxBucketUpperLimit := float64(positivePromBuckets[len(positivePromBuckets)-1].Upper)
