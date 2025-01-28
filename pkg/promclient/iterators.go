@@ -100,8 +100,7 @@ func deriveSchema(buckets model.HistogramBuckets) (int32, float64) {
 func fetchSpans(negativePromBuckets []model.HistogramBucket, positivePromBuckets []model.HistogramBucket, jump float64) ([]histogram.Span, []histogram.Span) {
 	positiveSpans := make([]histogram.Span, 0)
 	negativeSpans := make([]histogram.Span, 0)
-	buffer := 1.0
-	bucketTolerance := 0.1
+	tolerance := math.Ceil(jump / 2.0)
 	//deduce positive spans
 	if len(positivePromBuckets) > 0 {
 		maxBucketUpperLimit := float64(positivePromBuckets[len(positivePromBuckets)-1].Upper)
@@ -120,8 +119,8 @@ func fetchSpans(negativePromBuckets []model.HistogramBucket, positivePromBuckets
 		bucketIndex := 0
 		currLength := 0
 		assigned := true
-		for upper <= maxBucketUpperLimit+buffer && bucketIndex <= len(positivePromBuckets)-1 {
-			if math.Abs(float64(positivePromBuckets[bucketIndex].Upper)-upper) < bucketTolerance {
+		for upper <= maxBucketUpperLimit+tolerance && bucketIndex <= len(positivePromBuckets)-1 {
+			if math.Abs(float64(positivePromBuckets[bucketIndex].Upper)-upper) < tolerance {
 				assigned = false
 				currLength++
 				bucketIndex++
@@ -157,8 +156,8 @@ func fetchSpans(negativePromBuckets []model.HistogramBucket, positivePromBuckets
 		bucketIndex := 0
 		currLength := 0
 		assigned := true
-		for lower > minBucketLowerLimit-buffer && bucketIndex <= len(negativePromBuckets)-1 {
-			if math.Abs(float64(negativePromBuckets[bucketIndex].Lower)-lower) < bucketTolerance {
+		for lower > minBucketLowerLimit-tolerance && bucketIndex <= len(negativePromBuckets)-1 {
+			if math.Abs(float64(negativePromBuckets[bucketIndex].Lower)-lower) < tolerance {
 				assigned = false
 				currLength++
 				bucketIndex++
