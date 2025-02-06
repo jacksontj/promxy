@@ -126,7 +126,7 @@ func (s *SeriesIterator) Err() error {
 func (s *SeriesIterator) Labels() labels.Labels {
 	switch valueTyped := s.V.(type) {
 	case *model.Scalar:
-		panic("Unknown metric() scalar?")
+		return labels.Labels{} // A scalar has (by definition) no labels
 	case *model.Sample: // From a vector
 		ret := make(labels.Labels, 0, len(valueTyped.Metric))
 		for k, v := range valueTyped.Metric {
