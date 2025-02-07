@@ -405,6 +405,10 @@ func (v *MetricsRelabelVisitor) Visit(node parser.Node, path []parser.Node) (w p
 	case *parser.AggregateExpr:
 		nodeTyped.Grouping = RewriteLabels(v.MetricsRelabelConfigs, nodeTyped.Grouping)
 	case *parser.BinaryExpr:
+		// If one is a literal; then it is safe to traverse
+		if ExprIsLiteral(nodeTyped.LHS) || ExprIsLiteral(nodeTyped.RHS) {
+			return v, nil
+		}
 		return nil, fmt.Errorf("metricsrelabelvisitor does not support BinaryExprs")
 	}
 
