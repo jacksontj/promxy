@@ -347,12 +347,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 	// If there is a child that is an aggregator we cannot do anything (as they have their own
 	// rules around combining). We'll skip this node and let a lower layer take this on
-	aggFinder := &BooleanFinder{Func: isAgg}
-	offsetFinder := &OffsetFinder{}
-	vecFinder := &BooleanFinder{Func: isVectorSelector}
-	timestampFinder := &BooleanFinder{Func: hasTimestamp}
+	aggFinder := &promclient.BooleanFinder{Func: isAgg}
+	offsetFinder := &promclient.OffsetFinder{}
+	vecFinder := &promclient.BooleanFinder{Func: isVectorSelector}
+	timestampFinder := &promclient.BooleanFinder{Func: hasTimestamp}
 
-	visitor := NewMultiVisitor([]parser.Visitor{aggFinder, offsetFinder, vecFinder, timestampFinder})
+	visitor := promclient.NewMultiVisitor([]parser.Visitor{aggFinder, offsetFinder, vecFinder, timestampFinder})
 
 	if _, err := parser.Walk(ctx, visitor, s, node, nil, nil); err != nil {
 		return nil, err
@@ -395,7 +395,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// that the time be the absolute time, whereas the API returns them based on the
 	// range you ask for (with the offset being implicit)
 	removeOffsetFn := func() error {
-		_, err := parser.Walk(ctx, &OffsetRemover{}, s, node, nil, nil)
+		_, err := parser.Walk(ctx, &promclient.OffsetRemover{}, s, node, nil, nil)
 		return err
 	}
 
@@ -459,11 +459,11 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 				return &parser.AggregateExpr{
 					Op: parser.MAX,
-					Expr: PreserveLabel(&parser.BinaryExpr{
+					Expr: promclient.PreserveLabel(&parser.BinaryExpr{
 						Op: parser.DIV,
 						LHS: &parser.AggregateExpr{
 							Op:       parser.SUM,
-							Expr:     PreserveLabel(CloneExpr(n.Expr), model.MetricNameLabel, metricNameWorkaroundLabel),
+							Expr:     promclient.PreserveLabel(promclient.CloneExpr(n.Expr), model.MetricNameLabel, metricNameWorkaroundLabel),
 							Param:    n.Param,
 							Grouping: replacedGrouping,
 							Without:  n.Without,
@@ -471,7 +471,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 						RHS: &parser.AggregateExpr{
 							Op:       parser.COUNT,
-							Expr:     PreserveLabel(CloneExpr(n.Expr), model.MetricNameLabel, metricNameWorkaroundLabel),
+							Expr:     promclient.PreserveLabel(promclient.CloneExpr(n.Expr), model.MetricNameLabel, metricNameWorkaroundLabel),
 							Param:    n.Param,
 							Grouping: replacedGrouping,
 							Without:  n.Without,
@@ -489,7 +489,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 				Op: parser.DIV,
 				LHS: &parser.AggregateExpr{
 					Op:       parser.SUM,
-					Expr:     CloneExpr(n.Expr),
+					Expr:     promclient.CloneExpr(n.Expr),
 					Param:    n.Param,
 					Grouping: n.Grouping,
 					Without:  n.Without,
@@ -497,7 +497,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 				RHS: &parser.AggregateExpr{
 					Op:       parser.COUNT,
-					Expr:     CloneExpr(n.Expr),
+					Expr:     promclient.CloneExpr(n.Expr),
 					Param:    n.Param,
 					Grouping: n.Grouping,
 					Without:  n.Without,
@@ -839,11 +839,11 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		// Only valid if the other side is either `NumberLiteral` or `StringLiteral`
 		this := n.LHS
 		other := n.RHS
-		literal := ExprIsLiteral(UnwrapExpr(this))
+		literal := promclient.ExprIsLiteral(promclient.UnwrapExpr(this))
 		if !literal {
 			this = n.RHS
 			other = n.LHS
-			literal = ExprIsLiteral(UnwrapExpr(this))
+			literal = promclient.ExprIsLiteral(promclient.UnwrapExpr(this))
 		}
 		// If one side is a literal lets check
 		if literal {

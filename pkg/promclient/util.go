@@ -1,4 +1,4 @@
-package proxystorage
+package promclient
 
 import (
 	"fmt"
