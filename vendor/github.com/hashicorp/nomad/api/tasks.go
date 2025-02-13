@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 import (
@@ -8,6 +11,8 @@ import (
 	"time"
 )
 
+type ReconcileOption = string
+
 const (
 	// RestartPolicyModeDelay causes an artificial delay till the next interval is
 	// reached when the specified attempts have been reached in the interval.
@@ -16,6 +21,14 @@ const (
 	// RestartPolicyModeFail causes a job to fail if the specified number of
 	// attempts are reached within an interval.
 	RestartPolicyModeFail = "fail"
+
+	// ReconcileOption is used to specify the behavior of the reconciliation process
+	// between the original allocations and the replacements when a previously
+	// disconnected client comes back online.
+	ReconcileOptionKeepOriginal    = "keep_original"
+	ReconcileOptionKeepReplacement = "keep_replacement"
+	ReconcileOptionBestScore       = "best_score"
+	ReconcileOptionLongestRunning  = "longest_running"
 )
 
 // MemoryStats holds memory usage related stats
@@ -85,10 +98,11 @@ type AllocCheckStatuses map[string]AllocCheckStatus
 // RestartPolicy defines how the Nomad client restarts
 // tasks in a taskgroup when they fail
 type RestartPolicy struct {
-	Interval *time.Duration `hcl:"interval,optional"`
-	Attempts *int           `hcl:"attempts,optional"`
-	Delay    *time.Duration `hcl:"delay,optional"`
-	Mode     *string        `hcl:"mode,optional"`
+	Interval        *time.Duration `hcl:"interval,optional"`
+	Attempts        *int           `hcl:"attempts,optional"`
+	Delay           *time.Duration `hcl:"delay,optional"`
+	Mode            *string        `hcl:"mode,optional"`
+	RenderTemplates *bool          `mapstructure:"render_templates" hcl:"render_templates,optional"`
 }
 
 func (r *RestartPolicy) Merge(rp *RestartPolicy) {
@@ -103,6 +117,40 @@ func (r *RestartPolicy) Merge(rp *RestartPolicy) {
 	}
 	if rp.Mode != nil {
 		r.Mode = rp.Mode
+	}
+	if rp.RenderTemplates != nil {
+		r.RenderTemplates = rp.RenderTemplates
+	}
+}
+
+// Disconnect strategy defines how both clients and server should behave in case of
+// disconnection between them.
+type DisconnectStrategy struct {
+	// Defines for how long the server will consider the unresponsive node as
+	// disconnected but alive instead of lost.
+	LostAfter *time.Duration `mapstructure:"lost_after" hcl:"lost_after,optional"`
+
+	// Defines for how long a disconnected client will keep its allocations running.
+	StopOnClientAfter *time.Duration `mapstructure:"stop_on_client_after" hcl:"stop_on_client_after,optional"`
+
+	// A boolean field used to define if the allocations should be replaced while
+	// it's considered disconnected.
+	Replace *bool `mapstructure:"replace" hcl:"replace,optional"`
+
+	// Once the disconnected node starts reporting again, it will define which
+	// instances to keep: the original allocations, the replacement, the one
+	// running on the node with the best score as it is currently implemented,
+	// or the allocation that has been running continuously the longest.
+	Reconcile *ReconcileOption `mapstructure:"reconcile" hcl:"reconcile,optional"`
+}
+
+func (ds *DisconnectStrategy) Canonicalize() {
+	if ds.Replace == nil {
+		ds.Replace = pointerOf(true)
+	}
+
+	if ds.Reconcile == nil {
+		ds.Reconcile = pointerOf(ReconcileOptionBestScore)
 	}
 }
 
@@ -188,13 +236,21 @@ func NewAffinity(lTarget string, operand string, rTarget string, weight int8) *A
 		LTarget: lTarget,
 		RTarget: rTarget,
 		Operand: operand,
-		Weight:  pointerOf(int8(weight)),
+		Weight:  pointerOf(weight),
 	}
 }
 
 func (a *Affinity) Canonicalize() {
 	if a.Weight == nil {
 		a.Weight = pointerOf(int8(50))
+	}
+}
+
+func NewDefaultDisconnectStrategy() *DisconnectStrategy {
+	return &DisconnectStrategy{
+		LostAfter: pointerOf(0 * time.Minute),
+		Replace:   pointerOf(true),
+		Reconcile: pointerOf(ReconcileOptionBestScore),
 	}
 }
 
@@ -294,7 +350,7 @@ func NewSpreadTarget(value string, percent uint8) *SpreadTarget {
 func NewSpread(attribute string, weight int8, spreadTargets []*SpreadTarget) *Spread {
 	return &Spread{
 		Attribute:    attribute,
-		Weight:       pointerOf(int8(weight)),
+		Weight:       pointerOf(weight),
 		SpreadTarget: spreadTargets,
 	}
 }
@@ -419,39 +475,50 @@ type VolumeMount struct {
 	Destination     *string `hcl:"destination,optional"`
 	ReadOnly        *bool   `mapstructure:"read_only" hcl:"read_only,optional"`
 	PropagationMode *string `mapstructure:"propagation_mode" hcl:"propagation_mode,optional"`
+	SELinuxLabel    *string `mapstructure:"selinux_label" hcl:"selinux_label,optional"`
 }
 
 func (vm *VolumeMount) Canonicalize() {
 	if vm.PropagationMode == nil {
 		vm.PropagationMode = pointerOf(VolumeMountPropagationPrivate)
 	}
+
 	if vm.ReadOnly == nil {
 		vm.ReadOnly = pointerOf(false)
+	}
+
+	if vm.SELinuxLabel == nil {
+		vm.SELinuxLabel = pointerOf("")
 	}
 }
 
 // TaskGroup is the unit of scheduling.
 type TaskGroup struct {
-	Name                      *string                   `hcl:"name,label"`
-	Count                     *int                      `hcl:"count,optional"`
-	Constraints               []*Constraint             `hcl:"constraint,block"`
-	Affinities                []*Affinity               `hcl:"affinity,block"`
-	Tasks                     []*Task                   `hcl:"task,block"`
-	Spreads                   []*Spread                 `hcl:"spread,block"`
-	Volumes                   map[string]*VolumeRequest `hcl:"volume,block"`
-	RestartPolicy             *RestartPolicy            `hcl:"restart,block"`
-	ReschedulePolicy          *ReschedulePolicy         `hcl:"reschedule,block"`
-	EphemeralDisk             *EphemeralDisk            `hcl:"ephemeral_disk,block"`
-	Update                    *UpdateStrategy           `hcl:"update,block"`
-	Migrate                   *MigrateStrategy          `hcl:"migrate,block"`
-	Networks                  []*NetworkResource        `hcl:"network,block"`
-	Meta                      map[string]string         `hcl:"meta,block"`
-	Services                  []*Service                `hcl:"service,block"`
-	ShutdownDelay             *time.Duration            `mapstructure:"shutdown_delay" hcl:"shutdown_delay,optional"`
-	StopAfterClientDisconnect *time.Duration            `mapstructure:"stop_after_client_disconnect" hcl:"stop_after_client_disconnect,optional"`
-	MaxClientDisconnect       *time.Duration            `mapstructure:"max_client_disconnect" hcl:"max_client_disconnect,optional"`
-	Scaling                   *ScalingPolicy            `hcl:"scaling,block"`
-	Consul                    *Consul                   `hcl:"consul,block"`
+	Name             *string                   `hcl:"name,label"`
+	Count            *int                      `hcl:"count,optional"`
+	Constraints      []*Constraint             `hcl:"constraint,block"`
+	Affinities       []*Affinity               `hcl:"affinity,block"`
+	Tasks            []*Task                   `hcl:"task,block"`
+	Spreads          []*Spread                 `hcl:"spread,block"`
+	Volumes          map[string]*VolumeRequest `hcl:"volume,block"`
+	RestartPolicy    *RestartPolicy            `hcl:"restart,block"`
+	Disconnect       *DisconnectStrategy       `hcl:"disconnect,block"`
+	ReschedulePolicy *ReschedulePolicy         `hcl:"reschedule,block"`
+	EphemeralDisk    *EphemeralDisk            `hcl:"ephemeral_disk,block"`
+	Update           *UpdateStrategy           `hcl:"update,block"`
+	Migrate          *MigrateStrategy          `hcl:"migrate,block"`
+	Networks         []*NetworkResource        `hcl:"network,block"`
+	Meta             map[string]string         `hcl:"meta,block"`
+	Services         []*Service                `hcl:"service,block"`
+	ShutdownDelay    *time.Duration            `mapstructure:"shutdown_delay" hcl:"shutdown_delay,optional"`
+	// Deprecated: StopAfterClientDisconnect is deprecated in Nomad 1.8. Use Disconnect.StopOnClientAfter instead.
+	StopAfterClientDisconnect *time.Duration `mapstructure:"stop_after_client_disconnect" hcl:"stop_after_client_disconnect,optional"`
+	// To be deprecated after 1.8.0 infavour of Disconnect.LostAfter
+	MaxClientDisconnect *time.Duration `mapstructure:"max_client_disconnect" hcl:"max_client_disconnect,optional"`
+	Scaling             *ScalingPolicy `hcl:"scaling,block"`
+	Consul              *Consul        `hcl:"consul,block"`
+	// To be deprecated after 1.8.0 infavour of Disconnect.Replace
+	PreventRescheduleOnLost *bool `hcl:"prevent_reschedule_on_lost,optional"`
 }
 
 // NewTaskGroup creates a new TaskGroup.
@@ -523,6 +590,7 @@ func (g *TaskGroup) Canonicalize(job *Job) {
 	if g.ReschedulePolicy != nil {
 		g.ReschedulePolicy.Canonicalize(*job.Type)
 	}
+
 	// Merge the migrate strategy from the job
 	if jm, tm := job.Migrate != nil, g.Migrate != nil; jm && tm {
 		jobMigrate := job.Migrate.Copy()
@@ -571,16 +639,24 @@ func (g *TaskGroup) Canonicalize(job *Job) {
 		s.Canonicalize(nil, g, job)
 	}
 
+	if g.PreventRescheduleOnLost == nil {
+		g.PreventRescheduleOnLost = pointerOf(false)
+	}
+
+	if g.Disconnect != nil {
+		g.Disconnect.Canonicalize()
+	}
 }
 
 // These needs to be in sync with DefaultServiceJobRestartPolicy in
 // in nomad/structs/structs.go
 func defaultServiceJobRestartPolicy() *RestartPolicy {
 	return &RestartPolicy{
-		Delay:    pointerOf(15 * time.Second),
-		Attempts: pointerOf(2),
-		Interval: pointerOf(30 * time.Minute),
-		Mode:     pointerOf(RestartPolicyModeFail),
+		Delay:           pointerOf(15 * time.Second),
+		Attempts:        pointerOf(2),
+		Interval:        pointerOf(30 * time.Minute),
+		Mode:            pointerOf(RestartPolicyModeFail),
+		RenderTemplates: pointerOf(false),
 	}
 }
 
@@ -588,10 +664,11 @@ func defaultServiceJobRestartPolicy() *RestartPolicy {
 // in nomad/structs/structs.go
 func defaultBatchJobRestartPolicy() *RestartPolicy {
 	return &RestartPolicy{
-		Delay:    pointerOf(15 * time.Second),
-		Attempts: pointerOf(3),
-		Interval: pointerOf(24 * time.Hour),
-		Mode:     pointerOf(RestartPolicyModeFail),
+		Delay:           pointerOf(15 * time.Second),
+		Attempts:        pointerOf(3),
+		Interval:        pointerOf(24 * time.Hour),
+		Mode:            pointerOf(RestartPolicyModeFail),
+		RenderTemplates: pointerOf(false),
 	}
 }
 
@@ -638,12 +715,19 @@ func (g *TaskGroup) AddSpread(s *Spread) *TaskGroup {
 type LogConfig struct {
 	MaxFiles      *int `mapstructure:"max_files" hcl:"max_files,optional"`
 	MaxFileSizeMB *int `mapstructure:"max_file_size" hcl:"max_file_size,optional"`
+
+	// COMPAT(1.6.0): Enabled had to be swapped for Disabled to fix a backwards
+	// compatibility bug when restoring pre-1.5.4 jobs. Remove in 1.6.0
+	Enabled *bool `mapstructure:"enabled" hcl:"enabled,optional"`
+
+	Disabled *bool `mapstructure:"disabled" hcl:"disabled,optional"`
 }
 
 func DefaultLogConfig() *LogConfig {
 	return &LogConfig{
 		MaxFiles:      pointerOf(10),
 		MaxFileSizeMB: pointerOf(10),
+		Disabled:      pointerOf(false),
 	}
 }
 
@@ -653,6 +737,9 @@ func (l *LogConfig) Canonicalize() {
 	}
 	if l.MaxFileSizeMB == nil {
 		l.MaxFileSizeMB = pointerOf(10)
+	}
+	if l.Disabled == nil {
+		l.Disabled = pointerOf(false)
 	}
 }
 
@@ -695,6 +782,7 @@ type Task struct {
 	LogConfig       *LogConfig             `mapstructure:"logs" hcl:"logs,block"`
 	Artifacts       []*TaskArtifact        `hcl:"artifact,block"`
 	Vault           *Vault                 `hcl:"vault,block"`
+	Consul          *Consul                `hcl:"consul,block"`
 	Templates       []*Template            `hcl:"template,block"`
 	DispatchPayload *DispatchPayloadConfig `hcl:"dispatch_payload,block"`
 	VolumeMounts    []*VolumeMount         `hcl:"volume_mount,block"`
@@ -704,7 +792,17 @@ type Task struct {
 	KillSignal      string                 `mapstructure:"kill_signal" hcl:"kill_signal,optional"`
 	Kind            string                 `hcl:"kind,optional"`
 	ScalingPolicies []*ScalingPolicy       `hcl:"scaling,block"`
-	Identity        *WorkloadIdentity      `hcl:"identity,block"`
+
+	// Identity is the default Nomad Workload Identity and will be added to
+	// Identities with the name "default"
+	Identity *WorkloadIdentity
+
+	// Workload Identities
+	Identities []*WorkloadIdentity `hcl:"identity,block"`
+
+	Actions []*Action `hcl:"action,block"`
+
+	Schedule *TaskSchedule `hcl:"schedule,block"`
 }
 
 func (t *Task) Canonicalize(tg *TaskGroup, job *Job) {
@@ -726,6 +824,9 @@ func (t *Task) Canonicalize(tg *TaskGroup, job *Job) {
 	}
 	if t.Vault != nil {
 		t.Vault.Canonicalize()
+	}
+	if t.Consul != nil {
+		t.Consul.Canonicalize()
 	}
 	for _, tmpl := range t.Templates {
 		tmpl.Canonicalize()
@@ -757,16 +858,20 @@ func (t *Task) Canonicalize(tg *TaskGroup, job *Job) {
 
 // TaskArtifact is used to download artifacts before running a task.
 type TaskArtifact struct {
-	GetterSource  *string           `mapstructure:"source" hcl:"source,optional"`
-	GetterOptions map[string]string `mapstructure:"options" hcl:"options,block"`
-	GetterHeaders map[string]string `mapstructure:"headers" hcl:"headers,block"`
-	GetterMode    *string           `mapstructure:"mode" hcl:"mode,optional"`
-	RelativeDest  *string           `mapstructure:"destination" hcl:"destination,optional"`
+	GetterSource   *string           `mapstructure:"source" hcl:"source,optional"`
+	GetterOptions  map[string]string `mapstructure:"options" hcl:"options,block"`
+	GetterHeaders  map[string]string `mapstructure:"headers" hcl:"headers,block"`
+	GetterMode     *string           `mapstructure:"mode" hcl:"mode,optional"`
+	GetterInsecure *bool             `mapstructure:"insecure" hcl:"insecure,optional"`
+	RelativeDest   *string           `mapstructure:"destination" hcl:"destination,optional"`
 }
 
 func (a *TaskArtifact) Canonicalize() {
 	if a.GetterMode == nil {
 		a.GetterMode = pointerOf("any")
+	}
+	if a.GetterInsecure == nil {
+		a.GetterInsecure = pointerOf(false)
 	}
 	if a.GetterSource == nil {
 		// Shouldn't be possible, but we don't want to panic
@@ -903,25 +1008,38 @@ func (tmpl *Template) Canonicalize() {
 }
 
 type Vault struct {
-	Policies     []string `hcl:"policies,optional"`
-	Namespace    *string  `mapstructure:"namespace" hcl:"namespace,optional"`
-	Env          *bool    `hcl:"env,optional"`
-	ChangeMode   *string  `mapstructure:"change_mode" hcl:"change_mode,optional"`
-	ChangeSignal *string  `mapstructure:"change_signal" hcl:"change_signal,optional"`
+	Policies             []string `hcl:"policies,optional"`
+	Role                 string   `hcl:"role,optional"`
+	Namespace            *string  `mapstructure:"namespace" hcl:"namespace,optional"`
+	Cluster              string   `hcl:"cluster,optional"`
+	Env                  *bool    `hcl:"env,optional"`
+	DisableFile          *bool    `mapstructure:"disable_file" hcl:"disable_file,optional"`
+	ChangeMode           *string  `mapstructure:"change_mode" hcl:"change_mode,optional"`
+	ChangeSignal         *string  `mapstructure:"change_signal" hcl:"change_signal,optional"`
+	AllowTokenExpiration *bool    `mapstructure:"allow_token_expiration" hcl:"allow_token_expiration,optional"`
 }
 
 func (v *Vault) Canonicalize() {
 	if v.Env == nil {
 		v.Env = pointerOf(true)
 	}
+	if v.DisableFile == nil {
+		v.DisableFile = pointerOf(false)
+	}
 	if v.Namespace == nil {
 		v.Namespace = pointerOf("")
+	}
+	if v.Cluster == "" {
+		v.Cluster = "default"
 	}
 	if v.ChangeMode == nil {
 		v.ChangeMode = pointerOf("restart")
 	}
 	if v.ChangeSignal == nil {
 		v.ChangeSignal = pointerOf("SIGHUP")
+	}
+	if v.AllowTokenExpiration == nil {
+		v.AllowTokenExpiration = pointerOf(false)
 	}
 }
 
@@ -973,6 +1091,12 @@ func (t *Task) AddAffinity(a *Affinity) *Task {
 // SetLogConfig sets a log config to a task
 func (t *Task) SetLogConfig(l *LogConfig) *Task {
 	t.LogConfig = l
+	return t
+}
+
+// SetLifecycle is used to set lifecycle config to a task.
+func (t *Task) SetLifecycle(l *TaskLifecycle) *Task {
+	t.Lifecycle = l
 	return t
 }
 
@@ -1116,6 +1240,18 @@ func (t *TaskCSIPluginConfig) Canonicalize() {
 // WorkloadIdentity is the jobspec block which determines if and how a workload
 // identity is exposed to tasks.
 type WorkloadIdentity struct {
-	Env  bool `hcl:"env,optional"`
-	File bool `hcl:"file,optional"`
+	Name         string        `hcl:"name,optional"`
+	Audience     []string      `mapstructure:"aud" hcl:"aud,optional"`
+	ChangeMode   string        `mapstructure:"change_mode" hcl:"change_mode,optional"`
+	ChangeSignal string        `mapstructure:"change_signal" hcl:"change_signal,optional"`
+	Env          bool          `hcl:"env,optional"`
+	File         bool          `hcl:"file,optional"`
+	ServiceName  string        `hcl:"service_name,optional"`
+	TTL          time.Duration `mapstructure:"ttl" hcl:"ttl,optional"`
+}
+
+type Action struct {
+	Name    string   `hcl:"name,label"`
+	Command string   `mapstructure:"command" hcl:"command"`
+	Args    []string `mapstructure:"args" hcl:"args,optional"`
 }

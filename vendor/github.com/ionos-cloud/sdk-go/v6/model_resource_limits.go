@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,49 +16,49 @@ import (
 
 // ResourceLimits struct for ResourceLimits
 type ResourceLimits struct {
-	// The maximum number of cores per server.
+	// The maximum number of CPU cores per server.
 	CoresPerServer *int32 `json:"coresPerServer"`
-	// The maximum number of cores per contract.
+	// The maximum number of CPU cores per contract.
 	CoresPerContract *int32 `json:"coresPerContract"`
-	// The number of cores provisioned.
+	// The number of CPU cores provisioned.
 	CoresProvisioned *int32 `json:"coresProvisioned"`
-	// The maximum RAM per server.
+	// The maximum amount of RAM (in MB) that can be provisioned for a particular server under this contract.
 	RamPerServer *int32 `json:"ramPerServer"`
-	// The maximum RAM per contract.
+	// The maximum amount of RAM (in MB) that can be provisioned under this contract.
 	RamPerContract *int32 `json:"ramPerContract"`
-	// RAM provisioned.
+	// The amount of RAM (in MB) provisioned under this contract.
 	RamProvisioned *int32 `json:"ramProvisioned"`
-	// HDD limit per volume.
+	// The maximum size (in MB) of an idividual hard disk volume.
 	HddLimitPerVolume *int64 `json:"hddLimitPerVolume"`
-	// HDD limit per contract.
+	// The maximum amount of disk space (in MB) that can be provided under this contract.
 	HddLimitPerContract *int64 `json:"hddLimitPerContract"`
-	// HDD volume provisioned.
+	// The amount of hard disk space (in MB) that is currently provisioned.
 	HddVolumeProvisioned *int64 `json:"hddVolumeProvisioned"`
-	// SSD limit per volume.
+	// The maximum size (in MB) of an individual solid state disk volume.
 	SsdLimitPerVolume *int64 `json:"ssdLimitPerVolume"`
-	// SSD limit per contract.
+	// The maximum amount of solid state disk space (in MB) that can be provisioned under this contract.
 	SsdLimitPerContract *int64 `json:"ssdLimitPerContract"`
-	// SSD volume provisioned.
+	// The amount of solid state disk space (in MB) that is currently provisioned.
 	SsdVolumeProvisioned *int64 `json:"ssdVolumeProvisioned"`
-	// DAS (Direct Attached Storage) volume provisioned.
+	// The amount of DAS disk space (in MB) in a Cube server that is currently provisioned.
 	DasVolumeProvisioned *int64 `json:"dasVolumeProvisioned"`
-	// Total reservable IP limit for the customer.
+	// The maximum number of static public IP addresses that can be reserved by this customer across contracts.
 	ReservableIps *int32 `json:"reservableIps"`
-	// Reserved ips for the contract.
+	// The maximum number of static public IP addresses that can be reserved for this contract.
 	ReservedIpsOnContract *int32 `json:"reservedIpsOnContract"`
-	// Reserved ips in use.
+	// The number of static public IP addresses in use.
 	ReservedIpsInUse *int32 `json:"reservedIpsInUse"`
-	// K8s clusters total limit.
+	// The maximum number of Kubernetes clusters that can be created under this contract.
 	K8sClusterLimitTotal *int32 `json:"k8sClusterLimitTotal"`
-	// K8s clusters provisioned.
+	// The amount of Kubernetes clusters that is currently provisioned.
 	K8sClustersProvisioned *int32 `json:"k8sClustersProvisioned"`
-	// NLB total limit.
+	// The NLB total limit.
 	NlbLimitTotal *int32 `json:"nlbLimitTotal"`
-	// NLBs provisioned.
+	// The NLBs provisioned.
 	NlbProvisioned *int32 `json:"nlbProvisioned"`
-	// NAT Gateway total limit.
+	// The NAT Gateway total limit.
 	NatGatewayLimitTotal *int32 `json:"natGatewayLimitTotal"`
-	// NAT Gateways provisioned.
+	// The NAT Gateways provisioned.
 	NatGatewayProvisioned *int32 `json:"natGatewayProvisioned"`
 }
 
@@ -104,7 +104,7 @@ func NewResourceLimitsWithDefaults() *ResourceLimits {
 }
 
 // GetCoresPerServer returns the CoresPerServer field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetCoresPerServer() *int32 {
 	if o == nil {
 		return nil
@@ -142,7 +142,7 @@ func (o *ResourceLimits) HasCoresPerServer() bool {
 }
 
 // GetCoresPerContract returns the CoresPerContract field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetCoresPerContract() *int32 {
 	if o == nil {
 		return nil
@@ -180,7 +180,7 @@ func (o *ResourceLimits) HasCoresPerContract() bool {
 }
 
 // GetCoresProvisioned returns the CoresProvisioned field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetCoresProvisioned() *int32 {
 	if o == nil {
 		return nil
@@ -218,7 +218,7 @@ func (o *ResourceLimits) HasCoresProvisioned() bool {
 }
 
 // GetRamPerServer returns the RamPerServer field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetRamPerServer() *int32 {
 	if o == nil {
 		return nil
@@ -256,7 +256,7 @@ func (o *ResourceLimits) HasRamPerServer() bool {
 }
 
 // GetRamPerContract returns the RamPerContract field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetRamPerContract() *int32 {
 	if o == nil {
 		return nil
@@ -294,7 +294,7 @@ func (o *ResourceLimits) HasRamPerContract() bool {
 }
 
 // GetRamProvisioned returns the RamProvisioned field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetRamProvisioned() *int32 {
 	if o == nil {
 		return nil
@@ -332,7 +332,7 @@ func (o *ResourceLimits) HasRamProvisioned() bool {
 }
 
 // GetHddLimitPerVolume returns the HddLimitPerVolume field value
-// If the value is explicit nil, the zero value for int64 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetHddLimitPerVolume() *int64 {
 	if o == nil {
 		return nil
@@ -370,7 +370,7 @@ func (o *ResourceLimits) HasHddLimitPerVolume() bool {
 }
 
 // GetHddLimitPerContract returns the HddLimitPerContract field value
-// If the value is explicit nil, the zero value for int64 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetHddLimitPerContract() *int64 {
 	if o == nil {
 		return nil
@@ -408,7 +408,7 @@ func (o *ResourceLimits) HasHddLimitPerContract() bool {
 }
 
 // GetHddVolumeProvisioned returns the HddVolumeProvisioned field value
-// If the value is explicit nil, the zero value for int64 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetHddVolumeProvisioned() *int64 {
 	if o == nil {
 		return nil
@@ -446,7 +446,7 @@ func (o *ResourceLimits) HasHddVolumeProvisioned() bool {
 }
 
 // GetSsdLimitPerVolume returns the SsdLimitPerVolume field value
-// If the value is explicit nil, the zero value for int64 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetSsdLimitPerVolume() *int64 {
 	if o == nil {
 		return nil
@@ -484,7 +484,7 @@ func (o *ResourceLimits) HasSsdLimitPerVolume() bool {
 }
 
 // GetSsdLimitPerContract returns the SsdLimitPerContract field value
-// If the value is explicit nil, the zero value for int64 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetSsdLimitPerContract() *int64 {
 	if o == nil {
 		return nil
@@ -522,7 +522,7 @@ func (o *ResourceLimits) HasSsdLimitPerContract() bool {
 }
 
 // GetSsdVolumeProvisioned returns the SsdVolumeProvisioned field value
-// If the value is explicit nil, the zero value for int64 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetSsdVolumeProvisioned() *int64 {
 	if o == nil {
 		return nil
@@ -560,7 +560,7 @@ func (o *ResourceLimits) HasSsdVolumeProvisioned() bool {
 }
 
 // GetDasVolumeProvisioned returns the DasVolumeProvisioned field value
-// If the value is explicit nil, the zero value for int64 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetDasVolumeProvisioned() *int64 {
 	if o == nil {
 		return nil
@@ -598,7 +598,7 @@ func (o *ResourceLimits) HasDasVolumeProvisioned() bool {
 }
 
 // GetReservableIps returns the ReservableIps field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetReservableIps() *int32 {
 	if o == nil {
 		return nil
@@ -636,7 +636,7 @@ func (o *ResourceLimits) HasReservableIps() bool {
 }
 
 // GetReservedIpsOnContract returns the ReservedIpsOnContract field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetReservedIpsOnContract() *int32 {
 	if o == nil {
 		return nil
@@ -674,7 +674,7 @@ func (o *ResourceLimits) HasReservedIpsOnContract() bool {
 }
 
 // GetReservedIpsInUse returns the ReservedIpsInUse field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetReservedIpsInUse() *int32 {
 	if o == nil {
 		return nil
@@ -712,7 +712,7 @@ func (o *ResourceLimits) HasReservedIpsInUse() bool {
 }
 
 // GetK8sClusterLimitTotal returns the K8sClusterLimitTotal field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetK8sClusterLimitTotal() *int32 {
 	if o == nil {
 		return nil
@@ -750,7 +750,7 @@ func (o *ResourceLimits) HasK8sClusterLimitTotal() bool {
 }
 
 // GetK8sClustersProvisioned returns the K8sClustersProvisioned field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetK8sClustersProvisioned() *int32 {
 	if o == nil {
 		return nil
@@ -788,7 +788,7 @@ func (o *ResourceLimits) HasK8sClustersProvisioned() bool {
 }
 
 // GetNlbLimitTotal returns the NlbLimitTotal field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetNlbLimitTotal() *int32 {
 	if o == nil {
 		return nil
@@ -826,7 +826,7 @@ func (o *ResourceLimits) HasNlbLimitTotal() bool {
 }
 
 // GetNlbProvisioned returns the NlbProvisioned field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetNlbProvisioned() *int32 {
 	if o == nil {
 		return nil
@@ -864,7 +864,7 @@ func (o *ResourceLimits) HasNlbProvisioned() bool {
 }
 
 // GetNatGatewayLimitTotal returns the NatGatewayLimitTotal field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetNatGatewayLimitTotal() *int32 {
 	if o == nil {
 		return nil
@@ -902,7 +902,7 @@ func (o *ResourceLimits) HasNatGatewayLimitTotal() bool {
 }
 
 // GetNatGatewayProvisioned returns the NatGatewayProvisioned field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceLimits) GetNatGatewayProvisioned() *int32 {
 	if o == nil {
 		return nil
@@ -944,69 +944,91 @@ func (o ResourceLimits) MarshalJSON() ([]byte, error) {
 	if o.CoresPerServer != nil {
 		toSerialize["coresPerServer"] = o.CoresPerServer
 	}
+
 	if o.CoresPerContract != nil {
 		toSerialize["coresPerContract"] = o.CoresPerContract
 	}
+
 	if o.CoresProvisioned != nil {
 		toSerialize["coresProvisioned"] = o.CoresProvisioned
 	}
+
 	if o.RamPerServer != nil {
 		toSerialize["ramPerServer"] = o.RamPerServer
 	}
+
 	if o.RamPerContract != nil {
 		toSerialize["ramPerContract"] = o.RamPerContract
 	}
+
 	if o.RamProvisioned != nil {
 		toSerialize["ramProvisioned"] = o.RamProvisioned
 	}
+
 	if o.HddLimitPerVolume != nil {
 		toSerialize["hddLimitPerVolume"] = o.HddLimitPerVolume
 	}
+
 	if o.HddLimitPerContract != nil {
 		toSerialize["hddLimitPerContract"] = o.HddLimitPerContract
 	}
+
 	if o.HddVolumeProvisioned != nil {
 		toSerialize["hddVolumeProvisioned"] = o.HddVolumeProvisioned
 	}
+
 	if o.SsdLimitPerVolume != nil {
 		toSerialize["ssdLimitPerVolume"] = o.SsdLimitPerVolume
 	}
+
 	if o.SsdLimitPerContract != nil {
 		toSerialize["ssdLimitPerContract"] = o.SsdLimitPerContract
 	}
+
 	if o.SsdVolumeProvisioned != nil {
 		toSerialize["ssdVolumeProvisioned"] = o.SsdVolumeProvisioned
 	}
+
 	if o.DasVolumeProvisioned != nil {
 		toSerialize["dasVolumeProvisioned"] = o.DasVolumeProvisioned
 	}
+
 	if o.ReservableIps != nil {
 		toSerialize["reservableIps"] = o.ReservableIps
 	}
+
 	if o.ReservedIpsOnContract != nil {
 		toSerialize["reservedIpsOnContract"] = o.ReservedIpsOnContract
 	}
+
 	if o.ReservedIpsInUse != nil {
 		toSerialize["reservedIpsInUse"] = o.ReservedIpsInUse
 	}
+
 	if o.K8sClusterLimitTotal != nil {
 		toSerialize["k8sClusterLimitTotal"] = o.K8sClusterLimitTotal
 	}
+
 	if o.K8sClustersProvisioned != nil {
 		toSerialize["k8sClustersProvisioned"] = o.K8sClustersProvisioned
 	}
+
 	if o.NlbLimitTotal != nil {
 		toSerialize["nlbLimitTotal"] = o.NlbLimitTotal
 	}
+
 	if o.NlbProvisioned != nil {
 		toSerialize["nlbProvisioned"] = o.NlbProvisioned
 	}
+
 	if o.NatGatewayLimitTotal != nil {
 		toSerialize["natGatewayLimitTotal"] = o.NatGatewayLimitTotal
 	}
+
 	if o.NatGatewayProvisioned != nil {
 		toSerialize["natGatewayProvisioned"] = o.NatGatewayProvisioned
 	}
+
 	return json.Marshal(toSerialize)
 }
 

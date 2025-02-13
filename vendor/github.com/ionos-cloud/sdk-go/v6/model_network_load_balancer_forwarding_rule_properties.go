@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -22,7 +22,7 @@ type NetworkLoadBalancerForwardingRuleProperties struct {
 	Algorithm *string `json:"algorithm"`
 	// Balancing protocol
 	Protocol *string `json:"protocol"`
-	// Listening (inbound) IP
+	// Listening (inbound) IP.
 	ListenerIp *string `json:"listenerIp"`
 	// Listening (inbound) port number; valid range is 1 to 65535.
 	ListenerPort *int32                                        `json:"listenerPort"`
@@ -57,7 +57,7 @@ func NewNetworkLoadBalancerForwardingRulePropertiesWithDefaults() *NetworkLoadBa
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NetworkLoadBalancerForwardingRuleProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -95,7 +95,7 @@ func (o *NetworkLoadBalancerForwardingRuleProperties) HasName() bool {
 }
 
 // GetAlgorithm returns the Algorithm field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NetworkLoadBalancerForwardingRuleProperties) GetAlgorithm() *string {
 	if o == nil {
 		return nil
@@ -133,7 +133,7 @@ func (o *NetworkLoadBalancerForwardingRuleProperties) HasAlgorithm() bool {
 }
 
 // GetProtocol returns the Protocol field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NetworkLoadBalancerForwardingRuleProperties) GetProtocol() *string {
 	if o == nil {
 		return nil
@@ -171,7 +171,7 @@ func (o *NetworkLoadBalancerForwardingRuleProperties) HasProtocol() bool {
 }
 
 // GetListenerIp returns the ListenerIp field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NetworkLoadBalancerForwardingRuleProperties) GetListenerIp() *string {
 	if o == nil {
 		return nil
@@ -209,7 +209,7 @@ func (o *NetworkLoadBalancerForwardingRuleProperties) HasListenerIp() bool {
 }
 
 // GetListenerPort returns the ListenerPort field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *NetworkLoadBalancerForwardingRuleProperties) GetListenerPort() *int32 {
 	if o == nil {
 		return nil
@@ -247,7 +247,7 @@ func (o *NetworkLoadBalancerForwardingRuleProperties) HasListenerPort() bool {
 }
 
 // GetHealthCheck returns the HealthCheck field value
-// If the value is explicit nil, the zero value for NetworkLoadBalancerForwardingRuleHealthCheck will be returned
+// If the value is explicit nil, nil is returned
 func (o *NetworkLoadBalancerForwardingRuleProperties) GetHealthCheck() *NetworkLoadBalancerForwardingRuleHealthCheck {
 	if o == nil {
 		return nil
@@ -285,7 +285,7 @@ func (o *NetworkLoadBalancerForwardingRuleProperties) HasHealthCheck() bool {
 }
 
 // GetTargets returns the Targets field value
-// If the value is explicit nil, the zero value for []NetworkLoadBalancerForwardingRuleTarget will be returned
+// If the value is explicit nil, nil is returned
 func (o *NetworkLoadBalancerForwardingRuleProperties) GetTargets() *[]NetworkLoadBalancerForwardingRuleTarget {
 	if o == nil {
 		return nil
@@ -327,24 +327,31 @@ func (o NetworkLoadBalancerForwardingRuleProperties) MarshalJSON() ([]byte, erro
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.Algorithm != nil {
 		toSerialize["algorithm"] = o.Algorithm
 	}
+
 	if o.Protocol != nil {
 		toSerialize["protocol"] = o.Protocol
 	}
+
 	if o.ListenerIp != nil {
 		toSerialize["listenerIp"] = o.ListenerIp
 	}
+
 	if o.ListenerPort != nil {
 		toSerialize["listenerPort"] = o.ListenerPort
 	}
+
 	if o.HealthCheck != nil {
 		toSerialize["healthCheck"] = o.HealthCheck
 	}
+
 	if o.Targets != nil {
 		toSerialize["targets"] = o.Targets
 	}
+
 	return json.Marshal(toSerialize)
 }
 

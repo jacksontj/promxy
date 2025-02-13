@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -18,12 +18,12 @@ import (
 type KubernetesClusterPropertiesForPut struct {
 	// A Kubernetes cluster name. Valid Kubernetes cluster name must be 63 characters or less and must be empty or begin and end with an alphanumeric character ([a-z0-9A-Z]) with dashes (-), underscores (_), dots (.), and alphanumerics between.
 	Name *string `json:"name"`
-	// The Kubernetes version the cluster is running. This imposes restrictions on what Kubernetes versions can be run in a cluster's nodepools. Additionally, not all Kubernetes versions are viable upgrade targets for all prior versions.
+	// The Kubernetes version that the cluster is running. This limits which Kubernetes versions can run in a cluster's node pools. Also, not all Kubernetes versions are suitable upgrade targets for all earlier versions.
 	K8sVersion        *string                      `json:"k8sVersion,omitempty"`
 	MaintenanceWindow *KubernetesMaintenanceWindow `json:"maintenanceWindow,omitempty"`
-	// Access to the K8s API server is restricted to these CIDRs. Traffic, internal to the cluster, is not affected by this restriction. If no allowlist is specified, access is not restricted. If an IP without subnet mask is provided, the default value is used: 32 for IPv4 and 128 for IPv6.
+	// Access to the K8s API server is restricted to these CIDRs. Intra-cluster traffic is not affected by this restriction. If no AllowList is specified, access is not limited. If an IP is specified without a subnet mask, the default value is 32 for IPv4 and 128 for IPv6.
 	ApiSubnetAllowList *[]string `json:"apiSubnetAllowList,omitempty"`
-	// List of S3 bucket configured for K8s usage. For now it contains only an S3 bucket used to store K8s API audit logs
+	// List of S3 buckets configured for K8s usage. At the moment, it contains only one S3 bucket that is used to store K8s API audit logs.
 	S3Buckets *[]S3Bucket `json:"s3Buckets,omitempty"`
 }
 
@@ -48,7 +48,7 @@ func NewKubernetesClusterPropertiesForPutWithDefaults() *KubernetesClusterProper
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesClusterPropertiesForPut) GetName() *string {
 	if o == nil {
 		return nil
@@ -86,7 +86,7 @@ func (o *KubernetesClusterPropertiesForPut) HasName() bool {
 }
 
 // GetK8sVersion returns the K8sVersion field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesClusterPropertiesForPut) GetK8sVersion() *string {
 	if o == nil {
 		return nil
@@ -124,7 +124,7 @@ func (o *KubernetesClusterPropertiesForPut) HasK8sVersion() bool {
 }
 
 // GetMaintenanceWindow returns the MaintenanceWindow field value
-// If the value is explicit nil, the zero value for KubernetesMaintenanceWindow will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesClusterPropertiesForPut) GetMaintenanceWindow() *KubernetesMaintenanceWindow {
 	if o == nil {
 		return nil
@@ -162,7 +162,7 @@ func (o *KubernetesClusterPropertiesForPut) HasMaintenanceWindow() bool {
 }
 
 // GetApiSubnetAllowList returns the ApiSubnetAllowList field value
-// If the value is explicit nil, the zero value for []string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesClusterPropertiesForPut) GetApiSubnetAllowList() *[]string {
 	if o == nil {
 		return nil
@@ -200,7 +200,7 @@ func (o *KubernetesClusterPropertiesForPut) HasApiSubnetAllowList() bool {
 }
 
 // GetS3Buckets returns the S3Buckets field value
-// If the value is explicit nil, the zero value for []S3Bucket will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesClusterPropertiesForPut) GetS3Buckets() *[]S3Bucket {
 	if o == nil {
 		return nil
@@ -242,18 +242,23 @@ func (o KubernetesClusterPropertiesForPut) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.K8sVersion != nil {
 		toSerialize["k8sVersion"] = o.K8sVersion
 	}
+
 	if o.MaintenanceWindow != nil {
 		toSerialize["maintenanceWindow"] = o.MaintenanceWindow
 	}
+
 	if o.ApiSubnetAllowList != nil {
 		toSerialize["apiSubnetAllowList"] = o.ApiSubnetAllowList
 	}
+
 	if o.S3Buckets != nil {
 		toSerialize["s3Buckets"] = o.S3Buckets
 	}
+
 	return json.Marshal(toSerialize)
 }
 

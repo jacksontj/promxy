@@ -1,43 +1,49 @@
 ##
 ## Regular prometheus configuration
 ##
-global:
-  evaluation_interval: 5s
-  external_labels:
-    source: promxy
+
+# Uncomment below section to enable evaluation interval.
+#global:
+#  evaluation_interval: 5s
+#  external_labels:
+#    source: promxy
 
 # Rule files specifies a list of globs. Rules and alerts are read from
-# all matching files.
-rule_files:
-- "*rule"
+# all matching files. Uncomment below section to enable.
 
-# Alerting specifies settings related to the Alertmanager.
-alerting:
-  alertmanagers:
-  - scheme: http
-    static_configs:
-    - targets:
-      - "127.0.0.1:12345"
+#rule_files:
+#  - "*rule"
+
+# Alerting specifies settings related to the Alertmanager. Uncomment below section to enable.
+
+#alerting:
+#  alertmanagers:
+#    - scheme: http
+#      static_configs:
+#        - targets:
+#            - "127.0.0.1:12345"
 
 # remote_write configuration is used by promxy as its local Appender, meaning all
 # metrics promxy would "write" (not export) would be sent to this. Examples
-# of this include: recording rules, metrics on alerting rules, etc.
-remote_write:
-  - url: http://localhost:8083/receive
+# of this include: recording rules, metrics on alerting rules, etc. Uncomment below section to enable.
+
+#remote_write:
+#  - url: http://localhost:8083/receive
 
 ##
 ### Promxy configuration
 ##
 promxy:
+  # In below examples, point 8000 & 8001 to prometheus servers.
   server_groups:
     # All upstream prometheus service discovery mechanisms are supported with the same
     # markup, all defined in https://github.com/prometheus/prometheus/blob/master/discovery/config/config.go#L33
     - static_configs:
         - targets:
-          - localhost:9090
+            - localhost:8000
       # labels to be added to metrics retrieved from this server_group
       labels:
-        sg: localhost_9090
+        sg: localhost_8000
       # anti-affinity for merging values in timeseries between hosts in the server_group
       anti_affinity: 10s
       # time to wait for a server's response headers after fully writing the request (including its body, if any).
@@ -45,18 +51,14 @@ promxy:
       timeout: 5s
       # Controls whether to use remote_read or the prom API for fetching remote RAW data (e.g. matrix selectors)
       # Note, some prometheus implementations (e.g. [VictoriaMetrics](https://github.com/prometheus/prometheus/issues/4456) don't support remote_read.
-      remote_read: true
+      remote_read: false
       # configures the path to send remote read requests to. The default is "api/v1/read"
-      remote_read_path: api/v1/read
       # path_prefix defines a prefix to prepend to all queries to hosts in this servergroup
       # This can be relabeled using __path_prefix__
-      path_prefix: /example/prefix
+      path_prefix: /prometheus
       # query_params adds the following map of query parameters to downstream requests.
       # The initial use-case for this is to add `nocache=1` to VictoriaMetrics downstreams
       # (see https://github.com/jacksontj/promxy/issues/202)
-      query_params:
-        nocache: 1
-      # configures the protocol scheme used for requests. Defaults to http
       scheme: http
       # options for promxy's HTTP client when talking to hosts in server_groups
       http_client:
@@ -65,40 +67,5 @@ promxy:
         dial_timeout: 1s
         tls_config:
           insecure_skip_verify: true
-
-      # relative_time_range defines a relative-to-now time range that this server group contains.
-      # this is completely optional and start/end are both optional as well
-      # an example is if this servergroup only has the most recent 3h of data
-      # the "start" would be -3h and the end would be left out
-      relative_time_range:
-        start: -3h
-        end: -1h
-        truncate: false
-
-      # when merging sample streams, the max value at a given timestamp will be preferred
-      prefer_max: false
-
-      # absolute_time_range defines an absolute time range that this server group contains.
-      # this is completely optional and start/end are both optional as well
-      # and example is if the servergroup has been deprecated and is no longer receiving data
-      # you could set the specific times that it has data for.
-      absolute_time_range:
-        start: '2009-10-10T23:00:00Z'
-        end: '2009-10-11T23:00:00Z'
-        truncate: true
-
-    # as many additional server groups as you have
-    - static_configs:
-        - targets:
-          - localhost:9091
-      labels:
-        sg: localhost_9091
-      anti_affinity: 10s
-      scheme: http
-      http_client:
-        tls_config:
-          insecure_skip_verify: true
-      # ignore_error will make the given server group's response "optional"
-      # meaning if this servergroup returns and error and others don't the overall
-      # query can still succeed
-      ignore_error: true
+      # make response as optional
+      ignore_error: false

@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -43,7 +43,7 @@ func NewDataCenterEntitiesWithDefaults() *DataCenterEntities {
 }
 
 // GetServers returns the Servers field value
-// If the value is explicit nil, the zero value for Servers will be returned
+// If the value is explicit nil, nil is returned
 func (o *DataCenterEntities) GetServers() *Servers {
 	if o == nil {
 		return nil
@@ -81,7 +81,7 @@ func (o *DataCenterEntities) HasServers() bool {
 }
 
 // GetVolumes returns the Volumes field value
-// If the value is explicit nil, the zero value for Volumes will be returned
+// If the value is explicit nil, nil is returned
 func (o *DataCenterEntities) GetVolumes() *Volumes {
 	if o == nil {
 		return nil
@@ -119,7 +119,7 @@ func (o *DataCenterEntities) HasVolumes() bool {
 }
 
 // GetLoadbalancers returns the Loadbalancers field value
-// If the value is explicit nil, the zero value for Loadbalancers will be returned
+// If the value is explicit nil, nil is returned
 func (o *DataCenterEntities) GetLoadbalancers() *Loadbalancers {
 	if o == nil {
 		return nil
@@ -157,7 +157,7 @@ func (o *DataCenterEntities) HasLoadbalancers() bool {
 }
 
 // GetLans returns the Lans field value
-// If the value is explicit nil, the zero value for Lans will be returned
+// If the value is explicit nil, nil is returned
 func (o *DataCenterEntities) GetLans() *Lans {
 	if o == nil {
 		return nil
@@ -195,7 +195,7 @@ func (o *DataCenterEntities) HasLans() bool {
 }
 
 // GetNetworkloadbalancers returns the Networkloadbalancers field value
-// If the value is explicit nil, the zero value for NetworkLoadBalancers will be returned
+// If the value is explicit nil, nil is returned
 func (o *DataCenterEntities) GetNetworkloadbalancers() *NetworkLoadBalancers {
 	if o == nil {
 		return nil
@@ -233,7 +233,7 @@ func (o *DataCenterEntities) HasNetworkloadbalancers() bool {
 }
 
 // GetNatgateways returns the Natgateways field value
-// If the value is explicit nil, the zero value for NatGateways will be returned
+// If the value is explicit nil, nil is returned
 func (o *DataCenterEntities) GetNatgateways() *NatGateways {
 	if o == nil {
 		return nil
@@ -275,21 +275,27 @@ func (o DataCenterEntities) MarshalJSON() ([]byte, error) {
 	if o.Servers != nil {
 		toSerialize["servers"] = o.Servers
 	}
+
 	if o.Volumes != nil {
 		toSerialize["volumes"] = o.Volumes
 	}
+
 	if o.Loadbalancers != nil {
 		toSerialize["loadbalancers"] = o.Loadbalancers
 	}
+
 	if o.Lans != nil {
 		toSerialize["lans"] = o.Lans
 	}
+
 	if o.Networkloadbalancers != nil {
 		toSerialize["networkloadbalancers"] = o.Networkloadbalancers
 	}
+
 	if o.Natgateways != nil {
 		toSerialize["natgateways"] = o.Natgateways
 	}
+
 	return json.Marshal(toSerialize)
 }
 

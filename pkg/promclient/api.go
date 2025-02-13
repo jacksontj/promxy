@@ -108,14 +108,21 @@ func (p *PromAPIRemoteRead) GetValue(ctx context.Context, start, end time.Time, 
 	if err != nil {
 		return nil, nil, err
 	}
-	result, err := p.ReadClient.Read(ctx, query)
+	result, err := p.ReadClient.Read(ctx, query, true)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// TODO: Adjust sample limit if we intend to use remote read api
+	results, _, err := remote.ToQueryResult(result, 5e7)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// convert result (timeseries) to SampleStream
-	matrix := make(model.Matrix, len(result.Timeseries))
-	for i, ts := range result.Timeseries {
+	matrix := make(model.Matrix, len(results.Timeseries))
+
+	for i, ts := range results.Timeseries {
 		metric := make(model.Metric)
 		for _, label := range ts.Labels {
 			metric[model.LabelName(label.Name)] = model.LabelValue(label.Value)

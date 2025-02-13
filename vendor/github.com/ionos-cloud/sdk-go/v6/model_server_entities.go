@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -40,7 +40,7 @@ func NewServerEntitiesWithDefaults() *ServerEntities {
 }
 
 // GetCdroms returns the Cdroms field value
-// If the value is explicit nil, the zero value for Cdroms will be returned
+// If the value is explicit nil, nil is returned
 func (o *ServerEntities) GetCdroms() *Cdroms {
 	if o == nil {
 		return nil
@@ -78,7 +78,7 @@ func (o *ServerEntities) HasCdroms() bool {
 }
 
 // GetVolumes returns the Volumes field value
-// If the value is explicit nil, the zero value for AttachedVolumes will be returned
+// If the value is explicit nil, nil is returned
 func (o *ServerEntities) GetVolumes() *AttachedVolumes {
 	if o == nil {
 		return nil
@@ -116,7 +116,7 @@ func (o *ServerEntities) HasVolumes() bool {
 }
 
 // GetNics returns the Nics field value
-// If the value is explicit nil, the zero value for Nics will be returned
+// If the value is explicit nil, nil is returned
 func (o *ServerEntities) GetNics() *Nics {
 	if o == nil {
 		return nil
@@ -158,12 +158,15 @@ func (o ServerEntities) MarshalJSON() ([]byte, error) {
 	if o.Cdroms != nil {
 		toSerialize["cdroms"] = o.Cdroms
 	}
+
 	if o.Volumes != nil {
 		toSerialize["volumes"] = o.Volumes
 	}
+
 	if o.Nics != nil {
 		toSerialize["nics"] = o.Nics
 	}
+
 	return json.Marshal(toSerialize)
 }
 

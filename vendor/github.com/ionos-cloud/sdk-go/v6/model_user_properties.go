@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -53,7 +53,7 @@ func NewUserPropertiesWithDefaults() *UserProperties {
 }
 
 // GetFirstname returns the Firstname field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *UserProperties) GetFirstname() *string {
 	if o == nil {
 		return nil
@@ -91,7 +91,7 @@ func (o *UserProperties) HasFirstname() bool {
 }
 
 // GetLastname returns the Lastname field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *UserProperties) GetLastname() *string {
 	if o == nil {
 		return nil
@@ -129,7 +129,7 @@ func (o *UserProperties) HasLastname() bool {
 }
 
 // GetEmail returns the Email field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *UserProperties) GetEmail() *string {
 	if o == nil {
 		return nil
@@ -167,7 +167,7 @@ func (o *UserProperties) HasEmail() bool {
 }
 
 // GetAdministrator returns the Administrator field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *UserProperties) GetAdministrator() *bool {
 	if o == nil {
 		return nil
@@ -205,7 +205,7 @@ func (o *UserProperties) HasAdministrator() bool {
 }
 
 // GetForceSecAuth returns the ForceSecAuth field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *UserProperties) GetForceSecAuth() *bool {
 	if o == nil {
 		return nil
@@ -243,7 +243,7 @@ func (o *UserProperties) HasForceSecAuth() bool {
 }
 
 // GetSecAuthActive returns the SecAuthActive field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *UserProperties) GetSecAuthActive() *bool {
 	if o == nil {
 		return nil
@@ -281,7 +281,7 @@ func (o *UserProperties) HasSecAuthActive() bool {
 }
 
 // GetS3CanonicalUserId returns the S3CanonicalUserId field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *UserProperties) GetS3CanonicalUserId() *string {
 	if o == nil {
 		return nil
@@ -319,7 +319,7 @@ func (o *UserProperties) HasS3CanonicalUserId() bool {
 }
 
 // GetActive returns the Active field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *UserProperties) GetActive() *bool {
 	if o == nil {
 		return nil
@@ -361,27 +361,35 @@ func (o UserProperties) MarshalJSON() ([]byte, error) {
 	if o.Firstname != nil {
 		toSerialize["firstname"] = o.Firstname
 	}
+
 	if o.Lastname != nil {
 		toSerialize["lastname"] = o.Lastname
 	}
+
 	if o.Email != nil {
 		toSerialize["email"] = o.Email
 	}
+
 	if o.Administrator != nil {
 		toSerialize["administrator"] = o.Administrator
 	}
+
 	if o.ForceSecAuth != nil {
 		toSerialize["forceSecAuth"] = o.ForceSecAuth
 	}
+
 	if o.SecAuthActive != nil {
 		toSerialize["secAuthActive"] = o.SecAuthActive
 	}
+
 	if o.S3CanonicalUserId != nil {
 		toSerialize["s3CanonicalUserId"] = o.S3CanonicalUserId
 	}
+
 	if o.Active != nil {
 		toSerialize["active"] = o.Active
 	}
+
 	return json.Marshal(toSerialize)
 }
 

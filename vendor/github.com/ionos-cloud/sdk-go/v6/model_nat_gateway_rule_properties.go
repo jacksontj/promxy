@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -54,7 +54,7 @@ func NewNatGatewayRulePropertiesWithDefaults() *NatGatewayRuleProperties {
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NatGatewayRuleProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -92,7 +92,7 @@ func (o *NatGatewayRuleProperties) HasName() bool {
 }
 
 // GetType returns the Type field value
-// If the value is explicit nil, the zero value for NatGatewayRuleType will be returned
+// If the value is explicit nil, nil is returned
 func (o *NatGatewayRuleProperties) GetType() *NatGatewayRuleType {
 	if o == nil {
 		return nil
@@ -130,7 +130,7 @@ func (o *NatGatewayRuleProperties) HasType() bool {
 }
 
 // GetProtocol returns the Protocol field value
-// If the value is explicit nil, the zero value for NatGatewayRuleProtocol will be returned
+// If the value is explicit nil, nil is returned
 func (o *NatGatewayRuleProperties) GetProtocol() *NatGatewayRuleProtocol {
 	if o == nil {
 		return nil
@@ -168,7 +168,7 @@ func (o *NatGatewayRuleProperties) HasProtocol() bool {
 }
 
 // GetSourceSubnet returns the SourceSubnet field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NatGatewayRuleProperties) GetSourceSubnet() *string {
 	if o == nil {
 		return nil
@@ -206,7 +206,7 @@ func (o *NatGatewayRuleProperties) HasSourceSubnet() bool {
 }
 
 // GetPublicIp returns the PublicIp field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NatGatewayRuleProperties) GetPublicIp() *string {
 	if o == nil {
 		return nil
@@ -244,7 +244,7 @@ func (o *NatGatewayRuleProperties) HasPublicIp() bool {
 }
 
 // GetTargetSubnet returns the TargetSubnet field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NatGatewayRuleProperties) GetTargetSubnet() *string {
 	if o == nil {
 		return nil
@@ -282,7 +282,7 @@ func (o *NatGatewayRuleProperties) HasTargetSubnet() bool {
 }
 
 // GetTargetPortRange returns the TargetPortRange field value
-// If the value is explicit nil, the zero value for TargetPortRange will be returned
+// If the value is explicit nil, nil is returned
 func (o *NatGatewayRuleProperties) GetTargetPortRange() *TargetPortRange {
 	if o == nil {
 		return nil
@@ -324,24 +324,31 @@ func (o NatGatewayRuleProperties) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.Type != nil {
 		toSerialize["type"] = o.Type
 	}
+
 	if o.Protocol != nil {
 		toSerialize["protocol"] = o.Protocol
 	}
+
 	if o.SourceSubnet != nil {
 		toSerialize["sourceSubnet"] = o.SourceSubnet
 	}
+
 	if o.PublicIp != nil {
 		toSerialize["publicIp"] = o.PublicIp
 	}
+
 	if o.TargetSubnet != nil {
 		toSerialize["targetSubnet"] = o.TargetSubnet
 	}
+
 	if o.TargetPortRange != nil {
 		toSerialize["targetPortRange"] = o.TargetPortRange
 	}
+
 	return json.Marshal(toSerialize)
 }
 

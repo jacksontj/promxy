@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,7 +16,7 @@ import (
 
 // TemplateProperties struct for TemplateProperties
 type TemplateProperties struct {
-	// The name of the  resource.
+	// The resource name.
 	Name *string `json:"name"`
 	// The CPU cores count.
 	Cores *float32 `json:"cores"`
@@ -50,7 +50,7 @@ func NewTemplatePropertiesWithDefaults() *TemplateProperties {
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *TemplateProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -88,7 +88,7 @@ func (o *TemplateProperties) HasName() bool {
 }
 
 // GetCores returns the Cores field value
-// If the value is explicit nil, the zero value for float32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *TemplateProperties) GetCores() *float32 {
 	if o == nil {
 		return nil
@@ -126,7 +126,7 @@ func (o *TemplateProperties) HasCores() bool {
 }
 
 // GetRam returns the Ram field value
-// If the value is explicit nil, the zero value for float32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *TemplateProperties) GetRam() *float32 {
 	if o == nil {
 		return nil
@@ -164,7 +164,7 @@ func (o *TemplateProperties) HasRam() bool {
 }
 
 // GetStorageSize returns the StorageSize field value
-// If the value is explicit nil, the zero value for float32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *TemplateProperties) GetStorageSize() *float32 {
 	if o == nil {
 		return nil
@@ -206,15 +206,19 @@ func (o TemplateProperties) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.Cores != nil {
 		toSerialize["cores"] = o.Cores
 	}
+
 	if o.Ram != nil {
 		toSerialize["ram"] = o.Ram
 	}
+
 	if o.StorageSize != nil {
 		toSerialize["storageSize"] = o.StorageSize
 	}
+
 	return json.Marshal(toSerialize)
 }
 

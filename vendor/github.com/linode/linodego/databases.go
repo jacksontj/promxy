@@ -3,7 +3,6 @@ package linodego
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/linode/linodego/internal/parseabletime"
@@ -17,13 +16,13 @@ type (
 )
 
 const (
-	DatabaseMaintenanceDaySunday DatabaseDayOfWeek = iota + 1
-	DatabaseMaintenanceDayMonday
+	DatabaseMaintenanceDayMonday DatabaseDayOfWeek = iota + 1
 	DatabaseMaintenanceDayTuesday
 	DatabaseMaintenanceDayWednesday
 	DatabaseMaintenanceDayThursday
 	DatabaseMaintenanceDayFriday
 	DatabaseMaintenanceDaySaturday
+	DatabaseMaintenanceDaySunday
 )
 
 const (
@@ -33,7 +32,6 @@ const (
 
 const (
 	DatabaseEngineTypeMySQL    DatabaseEngineType = "mysql"
-	DatabaseEngineTypeMongo    DatabaseEngineType = "mongodb"
 	DatabaseEngineTypePostgres DatabaseEngineType = "postgresql"
 )
 
@@ -51,57 +49,6 @@ const (
 	DatabaseStatusUpdating     DatabaseStatus = "updating"
 	DatabaseStatusBackingUp    DatabaseStatus = "backing_up"
 )
-
-type DatabasesPagedResponse struct {
-	*PageOptions
-	Data []Database `json:"data"`
-}
-
-func (DatabasesPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Databases.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return fmt.Sprintf("%s/instances", endpoint)
-}
-
-func (resp *DatabasesPagedResponse) appendData(r *DatabasesPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
-type DatabaseEnginesPagedResponse struct {
-	*PageOptions
-	Data []DatabaseEngine `json:"data"`
-}
-
-func (DatabaseEnginesPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Databases.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return fmt.Sprintf("%s/engines", endpoint)
-}
-
-func (resp *DatabaseEnginesPagedResponse) appendData(r *DatabaseEnginesPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
-type DatabaseTypesPagedResponse struct {
-	*PageOptions
-	Data []DatabaseType `json:"data"`
-}
-
-func (DatabaseTypesPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Databases.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return fmt.Sprintf("%s/types", endpoint)
-}
-
-func (resp *DatabaseTypesPagedResponse) appendData(r *DatabaseTypesPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
 
 // A Database is a instance of Linode Managed Databases
 type Database struct {
@@ -195,72 +142,52 @@ func (d *Database) UnmarshalJSON(b []byte) error {
 
 // ListDatabases lists all Database instances in Linode Managed Databases for the account
 func (c *Client) ListDatabases(ctx context.Context, opts *ListOptions) ([]Database, error) {
-	response := DatabasesPagedResponse{}
-
-	err := c.listHelper(ctx, &response, opts)
+	response, err := getPaginatedResults[Database](ctx, c, "databases/instances", opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return response, nil
 }
 
-// ListDatabaseEngines lists all Database Engines
+// ListDatabaseEngines lists all Database Engines. This endpoint is cached by default.
 func (c *Client) ListDatabaseEngines(ctx context.Context, opts *ListOptions) ([]DatabaseEngine, error) {
-	response := DatabaseEnginesPagedResponse{}
-
-	err := c.listHelper(ctx, &response, opts)
+	response, err := getPaginatedResults[DatabaseEngine](ctx, c, "databases/engines", opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return response, nil
 }
 
-// GetDatabaseEngine returns a specific Database Engine
-func (c *Client) GetDatabaseEngine(ctx context.Context, opts *ListOptions, id string) (*DatabaseEngine, error) {
-	e, err := c.Databases.Endpoint()
+// GetDatabaseEngine returns a specific Database Engine. This endpoint is cached by default.
+func (c *Client) GetDatabaseEngine(ctx context.Context, _ *ListOptions, engineID string) (*DatabaseEngine, error) {
+	e := formatAPIPath("databases/engines/%s", engineID)
+	response, err := doGETRequest[DatabaseEngine](ctx, c, e)
 	if err != nil {
 		return nil, err
 	}
 
-	req := c.R(ctx)
-
-	e = fmt.Sprintf("%s/engines/%s", e, id)
-	r, err := coupleAPIErrors(req.SetResult(&DatabaseEngine{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*DatabaseEngine), nil
+	return response, nil
 }
 
-// ListDatabaseTypes lists all Types of Database provided in Linode Managed Databases
+// ListDatabaseTypes lists all Types of Database provided in Linode Managed Databases. This endpoint is cached by default.
 func (c *Client) ListDatabaseTypes(ctx context.Context, opts *ListOptions) ([]DatabaseType, error) {
-	response := DatabaseTypesPagedResponse{}
-
-	err := c.listHelper(ctx, &response, opts)
+	response, err := getPaginatedResults[DatabaseType](ctx, c, "databases/types", opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return response, nil
 }
 
-// GetDatabaseType returns a specific Database Type
-func (c *Client) GetDatabaseType(ctx context.Context, opts *ListOptions, id string) (*DatabaseType, error) {
-	e, err := c.Databases.Endpoint()
+// GetDatabaseType returns a specific Database Type. This endpoint is cached by default.
+func (c *Client) GetDatabaseType(ctx context.Context, _ *ListOptions, typeID string) (*DatabaseType, error) {
+	e := formatAPIPath("databases/types/%s", typeID)
+	response, err := doGETRequest[DatabaseType](ctx, c, e)
 	if err != nil {
 		return nil, err
 	}
 
-	req := c.R(ctx)
-
-	e = fmt.Sprintf("%s/types/%s", e, id)
-	r, err := coupleAPIErrors(req.SetResult(&DatabaseType{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*DatabaseType), nil
+	return response, nil
 }

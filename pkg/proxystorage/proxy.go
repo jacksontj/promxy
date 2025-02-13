@@ -257,10 +257,10 @@ func (p *ProxyStorage) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Querier returns a new Querier on the storage.
-func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+func (p *ProxyStorage) Querier(mint, maxt int64) (storage.Querier, error) {
 	state := p.GetState()
 	return &proxyquerier.ProxyQuerier{
-		Ctx:    ctx,
+		Ctx:    context.Background(),
 		Start:  timestamp.Time(mint).UTC(),
 		End:    timestamp.Time(maxt).UTC(),
 		Client: state.client,
@@ -283,7 +283,7 @@ func (p *ProxyStorage) Appender(context.Context) storage.Appender {
 func (p *ProxyStorage) Close() error { return nil }
 
 // ChunkQuerier returns a new ChunkQuerier on the storage.
-func (p *ProxyStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (storage.ChunkQuerier, error) {
+func (p *ProxyStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -293,10 +293,12 @@ func (p *ProxyStorage) ExemplarQuerier(ctx context.Context) (storage.ExemplarQue
 }
 
 // Implement web.LocalStorage
-func (p *ProxyStorage) CleanTombstones() (err error)                         { return nil }
-func (p *ProxyStorage) Delete(mint, maxt int64, ms ...*labels.Matcher) error { return nil }
-func (p *ProxyStorage) Snapshot(dir string, withHead bool) error             { return nil }
-func (p *ProxyStorage) Stats(statsByLabelName string) (*tsdb.Stats, error) {
+func (p *ProxyStorage) CleanTombstones() (err error) { return nil }
+func (p *ProxyStorage) Delete(ctx context.Context, mint, maxt int64, ms ...*labels.Matcher) error {
+	return nil
+}
+func (p *ProxyStorage) Snapshot(dir string, withHead bool) error { return nil }
+func (p *ProxyStorage) Stats(statsByLabelName string, limit int) (*tsdb.Stats, error) {
 	return &tsdb.Stats{IndexPostingStats: &index.PostingsStats{}}, nil
 }
 func (p *ProxyStorage) WALReplayStatus() (tsdb.WALReplayStatus, error) {
@@ -565,11 +567,10 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 		case parser.QUANTILE:
 			// DO NOTHING
-			// this caltulates an actual quantile over the resulting data
+			// this calculates an actual quantile over the resulting data
 			// as such there is no way to reduce the load necessary here. If
 			// the query is something like quantile(sum(foo)) then the inner aggregation
 			// will reduce the required data
-
 		// Both of these cases require some mechanism of knowing what labels to do the aggregation on.
 		// WIthout that knowledge we require pulling all of the data in, so we do nothing
 		case parser.STDDEV:

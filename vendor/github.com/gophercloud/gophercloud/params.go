@@ -15,17 +15,17 @@ BuildRequestBody builds a map[string]interface from the given `struct`. If
 parent is not an empty string, the final map[string]interface returned will
 encapsulate the built one. For example:
 
-  disk := 1
-  createOpts := flavors.CreateOpts{
-    ID:         "1",
-    Name:       "m1.tiny",
-    Disk:       &disk,
-    RAM:        512,
-    VCPUs:      1,
-    RxTxFactor: 1.0,
-  }
+	disk := 1
+	createOpts := flavors.CreateOpts{
+	  ID:         "1",
+	  Name:       "m1.tiny",
+	  Disk:       &disk,
+	  RAM:        512,
+	  VCPUs:      1,
+	  RxTxFactor: 1.0,
+	}
 
-  body, err := gophercloud.BuildRequestBody(createOpts, "flavor")
+	body, err := gophercloud.BuildRequestBody(createOpts, "flavor")
 
 The above example can be run as-is, however it is recommended to look at how
 BuildRequestBody is used within Gophercloud to more fully understand how it
@@ -318,8 +318,15 @@ converted into query parameters based on a "q" tag. For example:
 
 will be converted into "?x_bar=AAA&lorem_ipsum=BBB".
 
-The struct's fields may be strings, integers, or boolean values. Fields left at
-their type's zero value will be omitted from the query.
+The struct's fields may be strings, integers, slices, or boolean values. Fields
+left at their type's zero value will be omitted from the query.
+
+Slice are handled in one of two ways:
+
+	type struct Something {
+	   Bar []string `q:"bar"` // E.g. ?bar=1&bar=2
+	   Baz []int    `q:"baz" format="comma-separated"` // E.g. ?baz=1,2
+	}
 */
 func BuildQueryString(opts interface{}) (*url.URL, error) {
 	optsValue := reflect.ValueOf(opts)
@@ -358,15 +365,21 @@ func BuildQueryString(opts interface{}) (*url.URL, error) {
 					case reflect.Bool:
 						params.Add(tags[0], strconv.FormatBool(v.Bool()))
 					case reflect.Slice:
+						var values []string
 						switch v.Type().Elem() {
 						case reflect.TypeOf(0):
 							for i := 0; i < v.Len(); i++ {
-								params.Add(tags[0], strconv.FormatInt(v.Index(i).Int(), 10))
+								values = append(values, strconv.FormatInt(v.Index(i).Int(), 10))
 							}
 						default:
 							for i := 0; i < v.Len(); i++ {
-								params.Add(tags[0], v.Index(i).String())
+								values = append(values, v.Index(i).String())
 							}
+						}
+						if sliceFormat := f.Tag.Get("format"); sliceFormat == "comma-separated" {
+							params.Add(tags[0], strings.Join(values, ","))
+						} else {
+							params[tags[0]] = append(params[tags[0]], values...)
 						}
 					case reflect.Map:
 						if v.Type().Key().Kind() == reflect.String && v.Type().Elem().Kind() == reflect.String {
@@ -401,22 +414,22 @@ It accepts an arbitrary tagged structure and produces a string map that's
 suitable for use as the HTTP headers of an outgoing request. Field names are
 mapped to header names based in "h" tags.
 
-  type struct Something {
-    Bar string `h:"x_bar"`
-    Baz int    `h:"lorem_ipsum"`
-  }
+	type struct Something {
+	  Bar string `h:"x_bar"`
+	  Baz int    `h:"lorem_ipsum"`
+	}
 
-  instance := Something{
-    Bar: "AAA",
-    Baz: "BBB",
-  }
+	instance := Something{
+	  Bar: "AAA",
+	  Baz: "BBB",
+	}
 
 will be converted into:
 
-  map[string]string{
-    "x_bar": "AAA",
-    "lorem_ipsum": "BBB",
-  }
+	map[string]string{
+	  "x_bar": "AAA",
+	  "lorem_ipsum": "BBB",
+	}
 
 Untagged fields and fields left at their zero values are skipped. Integers,
 booleans and string values are supported.

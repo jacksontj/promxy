@@ -17,7 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promslog"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/model/labels"
@@ -51,15 +51,14 @@ func NewServerGroup() (*ServerGroup, error) {
 		ctxCancel: ctxCancel,
 		Ready:     make(chan struct{}),
 	}
+	logCfg := &promslog.Config{}
 
-	logCfg := &promlog.Config{
-		Level:  &promlog.AllowedLevel{},
-		Format: &promlog.AllowedFormat{},
-	}
+	logger := promslog.New(logCfg)
+
 	if err := logCfg.Level.Set("info"); err != nil {
 		return nil, err
 	}
-	sg.targetManager = discovery.NewManager(ctx, promlog.New(logCfg))
+	sg.targetManager = discovery.NewManager(ctx, logger, prometheus.NewRegistry(), nil, discovery.Name("target"))
 	// Background the updating
 	go sg.targetManager.Run()
 	go sg.Sync()
@@ -172,7 +171,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				lset := labels.New(lbls...)
 
 				logrus.Tracef("Potential target pre-relabel: %v", lset)
-				lset = relabel.Process(lset, s.Cfg.RelabelConfigs...)
+				lset, _ = relabel.Process(lset, s.Cfg.RelabelConfigs...)
 				logrus.Tracef("Potential target post-relabel: %v", lset)
 				// Check if the target was dropped, if so we skip it
 				if len(lset) == 0 {
@@ -348,13 +347,24 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	// If a bearer token is provided, create a round tripper that will set the
 	// Authorization header correctly on each request.
 	if len(cfg.HTTPConfig.HTTPConfig.BearerToken) > 0 {
-		rt = config_util.NewAuthorizationCredentialsRoundTripper("Bearer", cfg.HTTPConfig.HTTPConfig.BearerToken, rt)
+		rt = config_util.NewAuthorizationCredentialsRoundTripper(
+			"Bearer",
+			config_util.NewInlineSecret(string(cfg.HTTPConfig.HTTPConfig.BearerToken)),
+			rt,
+		)
 	} else if len(cfg.HTTPConfig.HTTPConfig.BearerTokenFile) > 0 {
-		rt = config_util.NewAuthorizationCredentialsFileRoundTripper("Bearer", cfg.HTTPConfig.HTTPConfig.BearerTokenFile, rt)
+		rt = config_util.NewAuthorizationCredentialsRoundTripper("Bearer", config_util.NewFileSecret(string(cfg.HTTPConfig.HTTPConfig.BearerTokenFile)), rt)
 	}
 
 	if cfg.HTTPConfig.HTTPConfig.BasicAuth != nil {
-		rt = config_util.NewBasicAuthRoundTripper(cfg.HTTPConfig.HTTPConfig.BasicAuth.Username, cfg.HTTPConfig.HTTPConfig.BasicAuth.Password, cfg.HTTPConfig.HTTPConfig.BasicAuth.PasswordFile, rt)
+		username := config_util.NewInlineSecret(cfg.HTTPConfig.HTTPConfig.BasicAuth.Username)
+		var password config_util.SecretReader
+		if len(cfg.HTTPConfig.HTTPConfig.BasicAuth.PasswordFile) > 0 {
+			password = config_util.NewFileSecret(cfg.HTTPConfig.HTTPConfig.BasicAuth.PasswordFile)
+		} else {
+			password = config_util.NewInlineSecret(string(cfg.HTTPConfig.HTTPConfig.BasicAuth.Password))
+		}
+		rt = config_util.NewBasicAuthRoundTripper(username, password, rt)
 	}
 
 	s.client = &http.Client{Transport: rt}

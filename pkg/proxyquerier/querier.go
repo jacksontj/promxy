@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 	"github.com/sirupsen/logrus"
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
@@ -28,7 +29,7 @@ type ProxyQuerier struct {
 
 // Select returns a set of series that matches the given label matchers.
 // TODO: switch based on sortSeries bool(first arg)
-func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+func (h *ProxyQuerier) Select(ctx context.Context, _ bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
@@ -39,7 +40,7 @@ func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*l
 	}()
 
 	var result model.Value
-	var warnings storage.Warnings
+	var warnings annotations.Annotations
 	var err error
 	// Select() is a combined API call for query/query_range/series.
 	// as of right now there is no great way of differentiating between a
@@ -51,7 +52,7 @@ func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*l
 		if err != nil {
 			return NewSeriesSet(nil, nil, err)
 		}
-		labelsets, w, err := h.Client.Series(h.Ctx, []string{matcherString}, h.Start, h.End)
+		labelsets, w, err := h.Client.Series(ctx, []string{matcherString}, h.Start, h.End)
 		warnings = promhttputil.WarningsConvert(w)
 		if err != nil {
 			return NewSeriesSet(nil, warnings, err)
@@ -67,7 +68,9 @@ func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*l
 		result = retVector
 	} else {
 		var w v1.Warnings
-		result, w, err = h.Client.GetValue(h.Ctx, timestamp.Time(hints.Start), timestamp.Time(hints.End), matchers)
+		t1 := timestamp.Time(hints.Start)
+		t2 := timestamp.Time(hints.End)
+		result, w, err = h.Client.GetValue(ctx, t1, t2, matchers)
 		warnings = promhttputil.WarningsConvert(w)
 	}
 	if err != nil {
@@ -85,7 +88,7 @@ func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*l
 }
 
 // LabelValues returns all potential values for a label name.
-func (h *ProxyQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (h *ProxyQuerier) LabelValues(ctx context.Context, name string, hints *storage.LabelHints, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
@@ -104,7 +107,7 @@ func (h *ProxyQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]
 		matchersStrings = []string{s}
 	}
 
-	result, w, err := h.Client.LabelValues(h.Ctx, name, matchersStrings, h.Start, h.End)
+	result, w, err := h.Client.LabelValues(ctx, name, matchersStrings, h.Start, h.End)
 	warnings := promhttputil.WarningsConvert(w)
 	if err != nil {
 		return nil, warnings, err
@@ -119,7 +122,7 @@ func (h *ProxyQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (h *ProxyQuerier) LabelNames(matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (h *ProxyQuerier) LabelNames(ctx context.Context, hints *storage.LabelHints, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
@@ -136,7 +139,7 @@ func (h *ProxyQuerier) LabelNames(matchers ...*labels.Matcher) ([]string, storag
 		matchersStrings = []string{s}
 	}
 
-	v, w, err := h.Client.LabelNames(h.Ctx, matchersStrings, h.Start, h.End)
+	v, w, err := h.Client.LabelNames(ctx, matchersStrings, h.Start, h.End)
 	return v, promhttputil.WarningsConvert(w), err
 }
 

@@ -202,7 +202,7 @@ func (c *MetricsRelabelClient) LabelNames(ctx context.Context, matchers []string
 		lbls[i] = labels.Label{Name: lName, Value: "placeholder"}
 	}
 
-	lbls = relabel.Process(lbls, c.RelabelConfigs...)
+	lbls, _ = relabel.Process(lbls, c.RelabelConfigs...)
 
 	newLabelNames := make([]string, len(lbls))
 	for i, lbl := range lbls {
@@ -304,7 +304,7 @@ func (c *MetricsRelabelClient) Series(ctx context.Context, matchers []string, st
 			lbls = append(lbls, labels.Label{Name: string(k), Value: string(v)})
 		}
 
-		lbls = relabel.Process(lbls, c.RelabelConfigs...)
+		lbls, _ = relabel.Process(lbls, c.RelabelConfigs...)
 		newLabelset := make(model.LabelSet, len(lbls))
 		for _, lbl := range lbls {
 			newLabelset[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
@@ -342,7 +342,7 @@ func (c *MetricsRelabelClient) replaceValueLabels(a model.Value) error {
 				labelStrings = append(labelStrings, string(k), string(v))
 			}
 
-			lbls := relabel.Process(labels.FromStrings(labelStrings...), c.RelabelConfigs...)
+			lbls, _ := relabel.Process(labels.FromStrings(labelStrings...), c.RelabelConfigs...)
 			item.Metric = make(map[model.LabelName]model.LabelValue)
 			for _, lbl := range lbls {
 				item.Metric[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
@@ -357,7 +357,8 @@ func (c *MetricsRelabelClient) replaceValueLabels(a model.Value) error {
 			}
 
 			item.Metric = make(map[model.LabelName]model.LabelValue)
-			for _, lbl := range relabel.Process(labels.FromStrings(labelStrings...), c.RelabelConfigs...) {
+			lbls, _ := relabel.Process(labels.FromStrings(labelStrings...), c.RelabelConfigs...)
+			for _, lbl := range lbls {
 				item.Metric[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
 			}
 		}

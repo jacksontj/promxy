@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/promql/promqltest"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -21,7 +23,21 @@ func BenchmarkEvaluations(b *testing.B) {
 	if err != nil {
 		b.Errorf("error creating test for %s: %s", "benchdata/load.test", err)
 	}
-	testLoad.Run()
+	engineOpts := promql.EngineOpts{
+		Logger:                   nil,
+		Reg:                      nil,
+		MaxSamples:               50000000,
+		Timeout:                  0,
+		ActiveQueryTracker:       nil,
+		LookbackDelta:            0,
+		NoStepSubqueryIntervalFn: func(int64) int64 { return (1 * time.Minute).Milliseconds() },
+		EnableAtModifier:         true,
+		EnableNegativeOffset:     false,
+		EnablePerStepStats:       false,
+		EnableDelayedNameRemoval: false,
+	}
+	engine := promqltest.NewTestEngineWithOpts(b, engineOpts)
+	testLoad.Run(engine)
 
 	for _, fn := range files {
 		if fn == "benchdata/load.test" {
@@ -49,7 +65,7 @@ func BenchmarkEvaluations(b *testing.B) {
 
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					test.Run()
+					test.Run(engine)
 					// We specifically don't check the correctness here, since the values
 					// will be off since this isn't aggregating
 				}
@@ -69,11 +85,11 @@ func BenchmarkEvaluations(b *testing.B) {
 				lStorage := &LayeredStorage{ps, testLoad.Storage()}
 				// Replace the test storage with the promxy one
 				test.SetStorage(lStorage)
-				test.QueryEngine().NodeReplacer = ps.NodeReplacer
+				engine.NodeReplacer = ps.NodeReplacer
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
-					test.Run()
+					test.Run(engine)
 				}
 
 				b.StopTimer()
@@ -87,11 +103,11 @@ func BenchmarkEvaluations(b *testing.B) {
 				lStorage := &LayeredStorage{psRemoteRead, testLoad.Storage()}
 				// Replace the test storage with the promxy one
 				test.SetStorage(lStorage)
-				test.QueryEngine().NodeReplacer = psRemoteRead.NodeReplacer
+				engine.NodeReplacer = psRemoteRead.NodeReplacer
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
-					test.Run()
+					test.Run(engine)
 				}
 
 				b.StopTimer()
@@ -117,8 +133,8 @@ type SwappableStorage struct {
 	s storage.Storage
 }
 
-func (p *SwappableStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
-	return p.s.Querier(ctx, mint, maxt)
+func (p *SwappableStorage) Querier(mint, maxt int64) (storage.Querier, error) {
+	return p.s.Querier(mint, maxt)
 }
 func (p *SwappableStorage) StartTime() (int64, error) {
 	return p.s.StartTime()
@@ -129,6 +145,6 @@ func (p *SwappableStorage) Appender(ctx context.Context) storage.Appender {
 func (p *SwappableStorage) Close() error {
 	return p.s.Close()
 }
-func (p *SwappableStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (storage.ChunkQuerier, error) {
-	return p.s.ChunkQuerier(ctx, mint, maxt)
+func (p *SwappableStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
+	return p.s.ChunkQuerier(mint, maxt)
 }

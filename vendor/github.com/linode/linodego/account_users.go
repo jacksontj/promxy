@@ -3,16 +3,37 @@ package linodego
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"time"
+
+	"github.com/linode/linodego/internal/parseabletime"
 )
+
+type UserType string
+
+const (
+	UserTypeProxy   UserType = "proxy"
+	UserTypeParent  UserType = "parent"
+	UserTypeChild   UserType = "child"
+	UserTypeDefault UserType = "default"
+)
+
+// LastLogin represents a LastLogin object
+type LastLogin struct {
+	LoginDatetime *time.Time `json:"-"`
+	Status        string     `json:"status"`
+}
 
 // User represents a User object
 type User struct {
-	Username   string   `json:"username"`
-	Email      string   `json:"email"`
-	Restricted bool     `json:"restricted"`
-	TFAEnabled bool     `json:"tfa_enabled"`
-	SSHKeys    []string `json:"ssh_keys"`
+	Username            string     `json:"username"`
+	Email               string     `json:"email"`
+	LastLogin           *LastLogin `json:"last_login"`
+	UserType            UserType   `json:"user_type"`
+	Restricted          bool       `json:"restricted"`
+	TFAEnabled          bool       `json:"tfa_enabled"`
+	SSHKeys             []string   `json:"ssh_keys"`
+	PasswordCreated     *time.Time `json:"-"`
+	VerifiedPhoneNumber *string    `json:"verified_phone_number"`
 }
 
 // UserCreateOptions fields are those accepted by CreateUser
@@ -26,6 +47,46 @@ type UserCreateOptions struct {
 type UserUpdateOptions struct {
 	Username   string `json:"username,omitempty"`
 	Restricted *bool  `json:"restricted,omitempty"`
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface
+func (ll *LastLogin) UnmarshalJSON(b []byte) error {
+	type Mask LastLogin
+
+	p := struct {
+		*Mask
+		LoginDatetime *parseabletime.ParseableTime `json:"login_datetime"`
+	}{
+		Mask: (*Mask)(ll),
+	}
+
+	if err := json.Unmarshal(b, &p); err != nil {
+		return err
+	}
+
+	ll.LoginDatetime = (*time.Time)(p.LoginDatetime)
+
+	return nil
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface
+func (i *User) UnmarshalJSON(b []byte) error {
+	type Mask User
+
+	p := struct {
+		*Mask
+		PasswordCreated *parseabletime.ParseableTime `json:"password_created"`
+	}{
+		Mask: (*Mask)(i),
+	}
+
+	if err := json.Unmarshal(b, &p); err != nil {
+		return err
+	}
+
+	i.PasswordCreated = (*time.Time)(p.PasswordCreated)
+
+	return nil
 }
 
 // GetCreateOptions converts a User to UserCreateOptions for use in CreateUser
@@ -45,121 +106,53 @@ func (i User) GetUpdateOptions() (o UserUpdateOptions) {
 	return
 }
 
-// UsersPagedResponse represents a paginated User API response
-type UsersPagedResponse struct {
-	*PageOptions
-	Data []User `json:"data"`
-}
-
-// endpoint gets the endpoint URL for User
-func (UsersPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Users.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-
-	return endpoint
-}
-
-// appendData appends Users when processing paginated User responses
-func (resp *UsersPagedResponse) appendData(r *UsersPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
 // ListUsers lists Users on the account
 func (c *Client) ListUsers(ctx context.Context, opts *ListOptions) ([]User, error) {
-	response := UsersPagedResponse{}
-	err := c.listHelper(ctx, &response, opts)
+	response, err := getPaginatedResults[User](ctx, c, "account/users", opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return response, nil
 }
 
 // GetUser gets the user with the provided ID
-func (c *Client) GetUser(ctx context.Context, id string) (*User, error) {
-	e, err := c.Users.Endpoint()
+func (c *Client) GetUser(ctx context.Context, userID string) (*User, error) {
+	e := formatAPIPath("account/users/%s", userID)
+	response, err := doGETRequest[User](ctx, c, e)
 	if err != nil {
 		return nil, err
 	}
 
-	e = fmt.Sprintf("%s/%s", e, id)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&User{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*User), nil
+	return response, nil
 }
 
 // CreateUser creates a User.  The email address must be confirmed before the
 // User account can be accessed.
-func (c *Client) CreateUser(ctx context.Context, createOpts UserCreateOptions) (*User, error) {
-	var body string
-
-	e, err := c.Users.Endpoint()
+func (c *Client) CreateUser(ctx context.Context, opts UserCreateOptions) (*User, error) {
+	e := "account/users"
+	response, err := doPOSTRequest[User](ctx, c, e, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	req := c.R(ctx).SetResult(&User{})
-
-	if bodyData, err := json.Marshal(createOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Post(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*User), nil
+	return response, nil
 }
 
 // UpdateUser updates the User with the specified id
-func (c *Client) UpdateUser(ctx context.Context, id string, updateOpts UserUpdateOptions) (*User, error) {
-	var body string
-
-	e, err := c.Users.Endpoint()
+func (c *Client) UpdateUser(ctx context.Context, userID string, opts UserUpdateOptions) (*User, error) {
+	e := formatAPIPath("account/users/%s", userID)
+	response, err := doPUTRequest[User](ctx, c, e, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	e = fmt.Sprintf("%s/%s", e, id)
-
-	req := c.R(ctx).SetResult(&User{})
-
-	if bodyData, err := json.Marshal(updateOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*User), nil
+	return response, nil
 }
 
 // DeleteUser deletes the User with the specified id
-func (c *Client) DeleteUser(ctx context.Context, id string) error {
-	e, err := c.Users.Endpoint()
-	if err != nil {
-		return err
-	}
-
-	e = fmt.Sprintf("%s/%s", e, id)
-
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
-
+func (c *Client) DeleteUser(ctx context.Context, userID string) error {
+	e := formatAPIPath("account/users/%s", userID)
+	err := doDELETERequest(ctx, c, e)
 	return err
 }

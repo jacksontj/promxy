@@ -9,6 +9,8 @@ import (
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/promql/promqltest"
+	"github.com/prometheus/prometheus/storage"
 )
 
 func TestEngineAPI(t *testing.T) {
@@ -18,15 +20,32 @@ func TestEngineAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	test, err := promql.NewTest(t, string(content))
+	test, err := promqltest.NewTest(t, string(content))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := test.Run(); err != nil {
+
+	engineOpts := promql.EngineOpts{
+		Logger:                   nil,
+		Reg:                      nil,
+		MaxSamples:               50000000,
+		Timeout:                  10 * time.Minute,
+		ActiveQueryTracker:       nil,
+		LookbackDelta:            0,
+		NoStepSubqueryIntervalFn: func(int64) int64 { return (1 * time.Minute).Milliseconds() },
+		EnableAtModifier:         true,
+		EnableNegativeOffset:     false,
+		EnablePerStepStats:       false,
+		EnableDelayedNameRemoval: false,
+	}
+
+	queryEngine := promql.NewEngine(engineOpts)
+
+	if err := test.Run(queryEngine); err != nil {
 		t.Fatal(err)
 	}
 
-	api, err := NewEngineAPI(test.QueryEngine(), test.Queryable())
+	api, err := NewEngineAPI(queryEngine, test.Storage().(storage.SampleAndChunkQueryable))
 	if err != nil {
 		t.Fatal(err)
 	}

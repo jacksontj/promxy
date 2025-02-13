@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,7 +16,7 @@ import (
 
 // GroupProperties struct for GroupProperties
 type GroupProperties struct {
-	// The name of the  resource.
+	// The name of the resource.
 	Name *string `json:"name,omitempty"`
 	// Create data center privilege.
 	CreateDataCenter *bool `json:"createDataCenter,omitempty"`
@@ -26,7 +26,7 @@ type GroupProperties struct {
 	ReserveIp *bool `json:"reserveIp,omitempty"`
 	// Activity log access privilege.
 	AccessActivityLog *bool `json:"accessActivityLog,omitempty"`
-	// Create pcc privilege.
+	// User privilege to create a cross connect.
 	CreatePcc *bool `json:"createPcc,omitempty"`
 	// S3 privilege.
 	S3Privilege *bool `json:"s3Privilege,omitempty"`
@@ -42,6 +42,14 @@ type GroupProperties struct {
 	AccessAndManageMonitoring *bool `json:"accessAndManageMonitoring,omitempty"`
 	// Privilege for a group to access and manage certificates.
 	AccessAndManageCertificates *bool `json:"accessAndManageCertificates,omitempty"`
+	// Privilege for a group to manage DBaaS related functionality.
+	ManageDBaaS *bool `json:"manageDBaaS,omitempty"`
+	// Privilege for a group to access and manage dns records.
+	AccessAndManageDns *bool `json:"accessAndManageDns,omitempty"`
+	// Privilege for group accessing container registry related functionality.
+	ManageRegistry *bool `json:"manageRegistry,omitempty"`
+	// Privilege for a group to access and manage the Data Platform.
+	ManageDataplatform *bool `json:"manageDataplatform,omitempty"`
 }
 
 // NewGroupProperties instantiates a new GroupProperties object
@@ -63,7 +71,7 @@ func NewGroupPropertiesWithDefaults() *GroupProperties {
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -101,7 +109,7 @@ func (o *GroupProperties) HasName() bool {
 }
 
 // GetCreateDataCenter returns the CreateDataCenter field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetCreateDataCenter() *bool {
 	if o == nil {
 		return nil
@@ -139,7 +147,7 @@ func (o *GroupProperties) HasCreateDataCenter() bool {
 }
 
 // GetCreateSnapshot returns the CreateSnapshot field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetCreateSnapshot() *bool {
 	if o == nil {
 		return nil
@@ -177,7 +185,7 @@ func (o *GroupProperties) HasCreateSnapshot() bool {
 }
 
 // GetReserveIp returns the ReserveIp field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetReserveIp() *bool {
 	if o == nil {
 		return nil
@@ -215,7 +223,7 @@ func (o *GroupProperties) HasReserveIp() bool {
 }
 
 // GetAccessActivityLog returns the AccessActivityLog field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetAccessActivityLog() *bool {
 	if o == nil {
 		return nil
@@ -253,7 +261,7 @@ func (o *GroupProperties) HasAccessActivityLog() bool {
 }
 
 // GetCreatePcc returns the CreatePcc field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetCreatePcc() *bool {
 	if o == nil {
 		return nil
@@ -291,7 +299,7 @@ func (o *GroupProperties) HasCreatePcc() bool {
 }
 
 // GetS3Privilege returns the S3Privilege field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetS3Privilege() *bool {
 	if o == nil {
 		return nil
@@ -329,7 +337,7 @@ func (o *GroupProperties) HasS3Privilege() bool {
 }
 
 // GetCreateBackupUnit returns the CreateBackupUnit field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetCreateBackupUnit() *bool {
 	if o == nil {
 		return nil
@@ -367,7 +375,7 @@ func (o *GroupProperties) HasCreateBackupUnit() bool {
 }
 
 // GetCreateInternetAccess returns the CreateInternetAccess field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetCreateInternetAccess() *bool {
 	if o == nil {
 		return nil
@@ -405,7 +413,7 @@ func (o *GroupProperties) HasCreateInternetAccess() bool {
 }
 
 // GetCreateK8sCluster returns the CreateK8sCluster field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetCreateK8sCluster() *bool {
 	if o == nil {
 		return nil
@@ -443,7 +451,7 @@ func (o *GroupProperties) HasCreateK8sCluster() bool {
 }
 
 // GetCreateFlowLog returns the CreateFlowLog field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetCreateFlowLog() *bool {
 	if o == nil {
 		return nil
@@ -481,7 +489,7 @@ func (o *GroupProperties) HasCreateFlowLog() bool {
 }
 
 // GetAccessAndManageMonitoring returns the AccessAndManageMonitoring field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetAccessAndManageMonitoring() *bool {
 	if o == nil {
 		return nil
@@ -519,7 +527,7 @@ func (o *GroupProperties) HasAccessAndManageMonitoring() bool {
 }
 
 // GetAccessAndManageCertificates returns the AccessAndManageCertificates field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupProperties) GetAccessAndManageCertificates() *bool {
 	if o == nil {
 		return nil
@@ -556,47 +564,228 @@ func (o *GroupProperties) HasAccessAndManageCertificates() bool {
 	return false
 }
 
+// GetManageDBaaS returns the ManageDBaaS field value
+// If the value is explicit nil, nil is returned
+func (o *GroupProperties) GetManageDBaaS() *bool {
+	if o == nil {
+		return nil
+	}
+
+	return o.ManageDBaaS
+
+}
+
+// GetManageDBaaSOk returns a tuple with the ManageDBaaS field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *GroupProperties) GetManageDBaaSOk() (*bool, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.ManageDBaaS, true
+}
+
+// SetManageDBaaS sets field value
+func (o *GroupProperties) SetManageDBaaS(v bool) {
+
+	o.ManageDBaaS = &v
+
+}
+
+// HasManageDBaaS returns a boolean if a field has been set.
+func (o *GroupProperties) HasManageDBaaS() bool {
+	if o != nil && o.ManageDBaaS != nil {
+		return true
+	}
+
+	return false
+}
+
+// GetAccessAndManageDns returns the AccessAndManageDns field value
+// If the value is explicit nil, nil is returned
+func (o *GroupProperties) GetAccessAndManageDns() *bool {
+	if o == nil {
+		return nil
+	}
+
+	return o.AccessAndManageDns
+
+}
+
+// GetAccessAndManageDnsOk returns a tuple with the AccessAndManageDns field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *GroupProperties) GetAccessAndManageDnsOk() (*bool, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.AccessAndManageDns, true
+}
+
+// SetAccessAndManageDns sets field value
+func (o *GroupProperties) SetAccessAndManageDns(v bool) {
+
+	o.AccessAndManageDns = &v
+
+}
+
+// HasAccessAndManageDns returns a boolean if a field has been set.
+func (o *GroupProperties) HasAccessAndManageDns() bool {
+	if o != nil && o.AccessAndManageDns != nil {
+		return true
+	}
+
+	return false
+}
+
+// GetManageRegistry returns the ManageRegistry field value
+// If the value is explicit nil, nil is returned
+func (o *GroupProperties) GetManageRegistry() *bool {
+	if o == nil {
+		return nil
+	}
+
+	return o.ManageRegistry
+
+}
+
+// GetManageRegistryOk returns a tuple with the ManageRegistry field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *GroupProperties) GetManageRegistryOk() (*bool, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.ManageRegistry, true
+}
+
+// SetManageRegistry sets field value
+func (o *GroupProperties) SetManageRegistry(v bool) {
+
+	o.ManageRegistry = &v
+
+}
+
+// HasManageRegistry returns a boolean if a field has been set.
+func (o *GroupProperties) HasManageRegistry() bool {
+	if o != nil && o.ManageRegistry != nil {
+		return true
+	}
+
+	return false
+}
+
+// GetManageDataplatform returns the ManageDataplatform field value
+// If the value is explicit nil, nil is returned
+func (o *GroupProperties) GetManageDataplatform() *bool {
+	if o == nil {
+		return nil
+	}
+
+	return o.ManageDataplatform
+
+}
+
+// GetManageDataplatformOk returns a tuple with the ManageDataplatform field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *GroupProperties) GetManageDataplatformOk() (*bool, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.ManageDataplatform, true
+}
+
+// SetManageDataplatform sets field value
+func (o *GroupProperties) SetManageDataplatform(v bool) {
+
+	o.ManageDataplatform = &v
+
+}
+
+// HasManageDataplatform returns a boolean if a field has been set.
+func (o *GroupProperties) HasManageDataplatform() bool {
+	if o != nil && o.ManageDataplatform != nil {
+		return true
+	}
+
+	return false
+}
+
 func (o GroupProperties) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.CreateDataCenter != nil {
 		toSerialize["createDataCenter"] = o.CreateDataCenter
 	}
+
 	if o.CreateSnapshot != nil {
 		toSerialize["createSnapshot"] = o.CreateSnapshot
 	}
+
 	if o.ReserveIp != nil {
 		toSerialize["reserveIp"] = o.ReserveIp
 	}
+
 	if o.AccessActivityLog != nil {
 		toSerialize["accessActivityLog"] = o.AccessActivityLog
 	}
+
 	if o.CreatePcc != nil {
 		toSerialize["createPcc"] = o.CreatePcc
 	}
+
 	if o.S3Privilege != nil {
 		toSerialize["s3Privilege"] = o.S3Privilege
 	}
+
 	if o.CreateBackupUnit != nil {
 		toSerialize["createBackupUnit"] = o.CreateBackupUnit
 	}
+
 	if o.CreateInternetAccess != nil {
 		toSerialize["createInternetAccess"] = o.CreateInternetAccess
 	}
+
 	if o.CreateK8sCluster != nil {
 		toSerialize["createK8sCluster"] = o.CreateK8sCluster
 	}
+
 	if o.CreateFlowLog != nil {
 		toSerialize["createFlowLog"] = o.CreateFlowLog
 	}
+
 	if o.AccessAndManageMonitoring != nil {
 		toSerialize["accessAndManageMonitoring"] = o.AccessAndManageMonitoring
 	}
+
 	if o.AccessAndManageCertificates != nil {
 		toSerialize["accessAndManageCertificates"] = o.AccessAndManageCertificates
 	}
+
+	if o.ManageDBaaS != nil {
+		toSerialize["manageDBaaS"] = o.ManageDBaaS
+	}
+
+	if o.AccessAndManageDns != nil {
+		toSerialize["accessAndManageDns"] = o.AccessAndManageDns
+	}
+
+	if o.ManageRegistry != nil {
+		toSerialize["manageRegistry"] = o.ManageRegistry
+	}
+
+	if o.ManageDataplatform != nil {
+		toSerialize["manageDataplatform"] = o.ManageDataplatform
+	}
+
 	return json.Marshal(toSerialize)
 }
 

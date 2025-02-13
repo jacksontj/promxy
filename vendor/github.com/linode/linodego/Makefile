@@ -4,20 +4,20 @@ BIN_DIR := $(GOPATH)/bin
 INTEGRATION_DIR := ./test/integration
 FIXTURES_DIR    := $(INTEGRATION_DIR)/fixtures
 
-TEST_TIMEOUT := 2h
+TEST_TIMEOUT := 5h
 
 SKIP_DOCKER       ?= 0
 GOLANGCILINT      := golangci-lint
-GOLANGCILINT_IMG  := golangci/golangci-lint:v1.46.2-alpine
+GOLANGCILINT_IMG  := golangci/golangci-lint:latest
 GOLANGCILINT_ARGS := run
 
-LINODE_URL := https://api.linode.com/
+LINODE_URL ?= https://api.linode.com/
 
 PACKAGES := $(shell go list ./... | grep -v integration)
 
 SKIP_LINT ?= 0
 
-.PHONY: build vet test refresh-fixtures clean-fixtures lint run_fixtures sanitize fixtures godoc testint testunit tidy
+.PHONY: build vet test refresh-fixtures clean clean-cov clean-fixtures lint run_fixtures sanitize fixtures godoc testint testunit testcov tidy
 
 test: build lint testunit testint
 
@@ -25,9 +25,22 @@ citest: lint test
 
 testunit:
 	go test -v $(PACKAGES) $(ARGS)
+	cd test && make testunit
 
 testint:
-	cd test && make test
+	cd test && make testint
+
+testcov-func:
+	@go test -v -coverprofile="coverage.txt" . > /dev/null 2>&1
+	@go tool cover -func coverage.txt
+
+# Note for WSL Users, set BROWSER=wslview
+testcov-html:
+	@go test -v -coverprofile="coverage.txt" . > /dev/null 2>&1
+	@go tool cover -html coverage.txt
+
+smoketest:
+	cd test && make smoketest
 
 build: vet lint
 	go build ./...
@@ -46,8 +59,13 @@ else
 	docker run --rm -v $(shell pwd):/app -w /app $(GOLANGCILINT_IMG) $(GOLANGCILINT) $(GOLANGCILINT_ARGS)
 endif
 
+clean: clean-cov
+
+clean-cov:
+	@-rm -f coverage.txt
+
 clean-fixtures:
-	@-rm fixtures/*.yaml
+	@-rm -f fixtures/*.yaml
 
 refresh-fixtures: clean-fixtures fixtures
 
@@ -59,7 +77,7 @@ run_fixtures:
 	LINODE_API_VERSION="v4beta" \
 	LINODE_URL="$(LINODE_URL)" \
 	GO111MODULE="on" \
-	go test -timeout=$(TEST_TIMEOUT) -v $(ARGS)
+	go test --tags $(TEST_TAGS) -timeout=$(TEST_TIMEOUT) -v $(ARGS)
 
 sanitize:
 	@echo "* Sanitizing fixtures"

@@ -5,18 +5,21 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/api"
 	clientv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/route"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/promql/promqltest"
 	"github.com/prometheus/prometheus/storage"
-	webv1 "github.com/prometheus/prometheus/web/api/v1"
+	v1 "github.com/prometheus/prometheus/web/api/v1"
 )
 
 // CreateTestServer simply will create a test HTTP server on the path defined and return
 // an API client, a clode method, and any error when creating
+
 func CreateTestServer(t *testing.T, path string) (API, func(), error) {
 	var close func()
 	content, err := os.ReadFile(path)
@@ -24,14 +27,30 @@ func CreateTestServer(t *testing.T, path string) (API, func(), error) {
 		return nil, close, err
 	}
 
-	test, err := promql.NewTest(t, string(content))
+	test, err := promqltest.NewTest(t, string(content))
 	if err != nil {
 		return nil, nil, err
 	}
 	close = test.Close
 
+	engineOpts := promql.EngineOpts{
+		Logger:                   nil,
+		Reg:                      nil,
+		MaxSamples:               50000000,
+		Timeout:                  10 * time.Minute,
+		ActiveQueryTracker:       nil,
+		LookbackDelta:            0,
+		NoStepSubqueryIntervalFn: func(int64) int64 { return (1 * time.Minute).Milliseconds() },
+		EnableAtModifier:         true,
+		EnableNegativeOffset:     false,
+		EnablePerStepStats:       false,
+		EnableDelayedNameRemoval: false,
+	}
+
+	queryEngine := promql.NewEngine(engineOpts)
+
 	// Load the data
-	if err := test.Run(); err != nil {
+	if err := test.Run(queryEngine); err != nil {
 		return nil, close, err
 	}
 
@@ -44,18 +63,18 @@ func CreateTestServer(t *testing.T, path string) (API, func(), error) {
 	cfgFunc := func() config.Config { return config.DefaultConfig }
 	// Return 503 until ready (for us there isn't much startup, so this might not need to be implemented
 	readyFunc := func(f http.HandlerFunc) http.HandlerFunc { return f }
-
 	apiRouter := route.New()
-	webv1.NewAPI(
-		test.QueryEngine(), // Query Engine
+	v1.NewAPI(
+		queryEngine, // Query Engine
 		test.Storage().(storage.SampleAndChunkQueryable), // SampleAndChunkQueryable
 		nil, //appendable
 		nil, // exemplarQueryable
 		nil, //factoryTr
 		nil, //factoryAr
+		nil,
 		cfgFunc,
 		nil, // flags
-		webv1.GlobalURLOptions{
+		v1.GlobalURLOptions{
 			ListenAddress: ln.Addr().String(),
 			Host:          "localhost",
 			Scheme:        "http",
@@ -73,15 +92,20 @@ func CreateTestServer(t *testing.T, path string) (API, func(), error) {
 		nil,       // CORSOrigin
 		nil,       // runtimeInfo
 		nil,       // buildInfo
-		nil,       // gatherer
-		nil,       // registerer
-		nil,       // statsRenderer
+		nil,
+		nil,
+		nil, // gatherer
+		nil, // registerer
+		nil, // statsRenderer
+		false,
+		nil,
+		false,
 	).Register(apiRouter.WithPrefix("/api/v1"))
 
 	srv := &http.Server{Handler: apiRouter}
 	go srv.Serve(ln) // TODO: cancel/stop ability
 	close = func() {
-		test.Close()
+		//test.Close()
 		srv.Close()
 	}
 

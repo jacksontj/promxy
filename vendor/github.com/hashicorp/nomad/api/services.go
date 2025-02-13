@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 import (
@@ -209,6 +212,8 @@ type ServiceCheck struct {
 	Interval               time.Duration       `hcl:"interval,optional"`
 	Timeout                time.Duration       `hcl:"timeout,optional"`
 	InitialStatus          string              `mapstructure:"initial_status" hcl:"initial_status,optional"`
+	Notes                  string              `hcl:"notes,optional"`
+	TLSServerName          string              `mapstructure:"tls_server_name" hcl:"tls_server_name,optional"`
 	TLSSkipVerify          bool                `mapstructure:"tls_skip_verify" hcl:"tls_skip_verify,optional"`
 	Header                 map[string][]string `hcl:"header,block"`
 	Method                 string              `hcl:"method,optional"`
@@ -218,6 +223,7 @@ type ServiceCheck struct {
 	TaskName               string              `mapstructure:"task" hcl:"task,optional"`
 	SuccessBeforePassing   int                 `mapstructure:"success_before_passing" hcl:"success_before_passing,optional"`
 	FailuresBeforeCritical int                 `mapstructure:"failures_before_critical" hcl:"failures_before_critical,optional"`
+	FailuresBeforeWarning  int                 `mapstructure:"failures_before_warning" hcl:"failures_before_warning,optional"`
 	Body                   string              `hcl:"body,optional"`
 	OnUpdate               string              `mapstructure:"on_update" hcl:"on_update,optional"`
 }
@@ -239,10 +245,14 @@ type Service struct {
 	TaggedAddresses   map[string]string `hcl:"tagged_addresses,block"`
 	TaskName          string            `mapstructure:"task" hcl:"task,optional"`
 	OnUpdate          string            `mapstructure:"on_update" hcl:"on_update,optional"`
+	Identity          *WorkloadIdentity `hcl:"identity,block"`
 
 	// Provider defines which backend system provides the service registration,
 	// either "consul" (default) or "nomad".
 	Provider string `hcl:"provider,optional"`
+
+	// Cluster is valid only for Nomad Enterprise with provider: consul
+	Cluster string `hcl:"cluster,optional"`
 }
 
 const (
@@ -280,6 +290,9 @@ func (s *Service) Canonicalize(t *Task, tg *TaskGroup, job *Job) {
 	if s.Provider == "" {
 		s.Provider = ServiceProviderConsul
 	}
+	if s.Cluster == "" {
+		s.Cluster = "default"
+	}
 
 	if len(s.Meta) == 0 {
 		s.Meta = nil
@@ -307,6 +320,10 @@ func (s *Service) Canonicalize(t *Task, tg *TaskGroup, job *Job) {
 
 		if s.Checks[i].FailuresBeforeCritical < 0 {
 			s.Checks[i].FailuresBeforeCritical = 0
+		}
+
+		if s.Checks[i].FailuresBeforeWarning < 0 {
+			s.Checks[i].FailuresBeforeWarning = 0
 		}
 
 		// Inhert Service

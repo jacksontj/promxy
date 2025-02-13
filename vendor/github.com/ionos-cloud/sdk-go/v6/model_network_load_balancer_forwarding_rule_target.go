@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -21,8 +21,10 @@ type NetworkLoadBalancerForwardingRuleTarget struct {
 	// The port of the balanced target service; valid range is 1 to 65535.
 	Port *int32 `json:"port"`
 	// Traffic is distributed in proportion to target weight, relative to the combined weight of all targets. A target with higher weight receives a greater share of traffic. Valid range is 0 to 256 and default is 1. Targets with weight of 0 do not participate in load balancing but still accept persistent connections. It is best to assign weights in the middle of the range to leave room for later adjustments.
-	Weight      *int32                                              `json:"weight"`
-	HealthCheck *NetworkLoadBalancerForwardingRuleTargetHealthCheck `json:"healthCheck,omitempty"`
+	Weight *int32 `json:"weight"`
+	// Proxy protocol version.
+	ProxyProtocol *string                                             `json:"proxyProtocol,omitempty"`
+	HealthCheck   *NetworkLoadBalancerForwardingRuleTargetHealthCheck `json:"healthCheck,omitempty"`
 }
 
 // NewNetworkLoadBalancerForwardingRuleTarget instantiates a new NetworkLoadBalancerForwardingRuleTarget object
@@ -35,6 +37,8 @@ func NewNetworkLoadBalancerForwardingRuleTarget(ip string, port int32, weight in
 	this.Ip = &ip
 	this.Port = &port
 	this.Weight = &weight
+	var proxyProtocol string = "none"
+	this.ProxyProtocol = &proxyProtocol
 
 	return &this
 }
@@ -44,11 +48,13 @@ func NewNetworkLoadBalancerForwardingRuleTarget(ip string, port int32, weight in
 // but it doesn't guarantee that properties required by API are set
 func NewNetworkLoadBalancerForwardingRuleTargetWithDefaults() *NetworkLoadBalancerForwardingRuleTarget {
 	this := NetworkLoadBalancerForwardingRuleTarget{}
+	var proxyProtocol string = "none"
+	this.ProxyProtocol = &proxyProtocol
 	return &this
 }
 
 // GetIp returns the Ip field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NetworkLoadBalancerForwardingRuleTarget) GetIp() *string {
 	if o == nil {
 		return nil
@@ -86,7 +92,7 @@ func (o *NetworkLoadBalancerForwardingRuleTarget) HasIp() bool {
 }
 
 // GetPort returns the Port field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *NetworkLoadBalancerForwardingRuleTarget) GetPort() *int32 {
 	if o == nil {
 		return nil
@@ -124,7 +130,7 @@ func (o *NetworkLoadBalancerForwardingRuleTarget) HasPort() bool {
 }
 
 // GetWeight returns the Weight field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *NetworkLoadBalancerForwardingRuleTarget) GetWeight() *int32 {
 	if o == nil {
 		return nil
@@ -161,8 +167,46 @@ func (o *NetworkLoadBalancerForwardingRuleTarget) HasWeight() bool {
 	return false
 }
 
+// GetProxyProtocol returns the ProxyProtocol field value
+// If the value is explicit nil, nil is returned
+func (o *NetworkLoadBalancerForwardingRuleTarget) GetProxyProtocol() *string {
+	if o == nil {
+		return nil
+	}
+
+	return o.ProxyProtocol
+
+}
+
+// GetProxyProtocolOk returns a tuple with the ProxyProtocol field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *NetworkLoadBalancerForwardingRuleTarget) GetProxyProtocolOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.ProxyProtocol, true
+}
+
+// SetProxyProtocol sets field value
+func (o *NetworkLoadBalancerForwardingRuleTarget) SetProxyProtocol(v string) {
+
+	o.ProxyProtocol = &v
+
+}
+
+// HasProxyProtocol returns a boolean if a field has been set.
+func (o *NetworkLoadBalancerForwardingRuleTarget) HasProxyProtocol() bool {
+	if o != nil && o.ProxyProtocol != nil {
+		return true
+	}
+
+	return false
+}
+
 // GetHealthCheck returns the HealthCheck field value
-// If the value is explicit nil, the zero value for NetworkLoadBalancerForwardingRuleTargetHealthCheck will be returned
+// If the value is explicit nil, nil is returned
 func (o *NetworkLoadBalancerForwardingRuleTarget) GetHealthCheck() *NetworkLoadBalancerForwardingRuleTargetHealthCheck {
 	if o == nil {
 		return nil
@@ -204,15 +248,23 @@ func (o NetworkLoadBalancerForwardingRuleTarget) MarshalJSON() ([]byte, error) {
 	if o.Ip != nil {
 		toSerialize["ip"] = o.Ip
 	}
+
 	if o.Port != nil {
 		toSerialize["port"] = o.Port
 	}
+
 	if o.Weight != nil {
 		toSerialize["weight"] = o.Weight
 	}
+
+	if o.ProxyProtocol != nil {
+		toSerialize["proxyProtocol"] = o.ProxyProtocol
+	}
+
 	if o.HealthCheck != nil {
 		toSerialize["healthCheck"] = o.HealthCheck
 	}
+
 	return json.Marshal(toSerialize)
 }
 

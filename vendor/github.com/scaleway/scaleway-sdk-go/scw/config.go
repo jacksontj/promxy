@@ -2,9 +2,10 @@ package scw
 
 import (
 	"bytes"
-	"io/ioutil"
+	goerrors "errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"github.com/scaleway/scaleway-sdk-go/internal/auth"
@@ -15,7 +16,7 @@ import (
 
 const (
 	documentationLink       = "https://github.com/scaleway/scaleway-sdk-go/blob/master/scw/README.md"
-	defaultConfigPermission = 0600
+	defaultConfigPermission = 0o600
 
 	// Reserved name for the default profile.
 	DefaultProfileName = "default"
@@ -30,7 +31,7 @@ const configFileTemplate = `# Scaleway configuration file
 # - Scaleway Terraform Provider (https://www.terraform.io/docs/providers/scaleway/index.html)
 
 # You need an access key and a secret key to connect to Scaleway API.
-# Generate your token at the following address: https://console.scaleway.com/project/credentials
+# Generate your token at the following address: https://console.scaleway.com/iam/api-keys
 
 # An access key is a secret key identifier.
 {{ if .AccessKey }}access_key: {{.AccessKey}}{{ else }}# access_key: SCW11111111111111111{{ end }}
@@ -185,7 +186,24 @@ func MustLoadConfig() *Config {
 
 // LoadConfig read the config from the default path.
 func LoadConfig() (*Config, error) {
-	return LoadConfigFromPath(GetConfigPath())
+	configPath := GetConfigPath()
+	cfg, err := LoadConfigFromPath(configPath)
+
+	// Special case if using default config path
+	// if config.yaml does not exist, we should try to read config.yml
+	if os.Getenv(ScwConfigPathEnv) == "" {
+		var configNotFoundError *ConfigFileNotFoundError
+		if err != nil && goerrors.As(err, &configNotFoundError) && strings.HasSuffix(configPath, ".yaml") {
+			configPath = strings.TrimSuffix(configPath, ".yaml") + ".yml"
+			cfgYml, errYml := LoadConfigFromPath(configPath)
+			// If .yml config is not found, return first error when reading .yaml
+			if errYml == nil || (errYml != nil && !goerrors.As(errYml, &configNotFoundError)) {
+				return cfgYml, errYml
+			}
+		}
+	}
+
+	return cfg, err
 }
 
 // LoadConfigFromPath read the config from the given path.
@@ -198,15 +216,9 @@ func LoadConfigFromPath(path string) (*Config, error) {
 		return nil, err
 	}
 
-	file, err := ioutil.ReadFile(path)
+	file, err := os.ReadFile(path)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot read config file")
-	}
-
-	_, err = unmarshalConfV1(file)
-	if err == nil {
-		// reject V1 config
-		return nil, errors.New("found legacy config in %s: legacy config is not allowed, please switch to the new config file format: %s", path, documentationLink)
 	}
 
 	confV2, err := unmarshalConfV2(file)
@@ -241,10 +253,10 @@ func (c *Config) GetProfile(profileName string) (*Profile, error) {
 func (c *Config) GetActiveProfile() (*Profile, error) {
 	switch {
 	case os.Getenv(ScwActiveProfileEnv) != "":
-		logger.Debugf("using active profile from env: %s=%s", ScwActiveProfileEnv, os.Getenv(ScwActiveProfileEnv))
+		logger.Debugf("using active profile from env: %s=%s\n", ScwActiveProfileEnv, os.Getenv(ScwActiveProfileEnv))
 		return c.GetProfile(os.Getenv(ScwActiveProfileEnv))
 	case c.ActiveProfile != nil:
-		logger.Debugf("using active profile from config: active_profile=%s", ScwActiveProfileEnv, *c.ActiveProfile)
+		logger.Debugf("using active profile from config: active_profile=%s\n", *c.ActiveProfile)
 		return c.GetProfile(*c.ActiveProfile)
 	default:
 		return &c.Profile, nil
@@ -285,13 +297,13 @@ func (c *Config) SaveTo(path string) error {
 	}
 
 	// STEP 2: create config path dir in cases it didn't exist before
-	err = os.MkdirAll(filepath.Dir(path), 0700)
+	err = os.MkdirAll(filepath.Dir(path), 0o700)
 	if err != nil {
 		return err
 	}
 
 	// STEP 3: write new config file
-	err = ioutil.WriteFile(path, []byte(file), defaultConfigPermission)
+	err = os.WriteFile(path, []byte(file), defaultConfigPermission)
 	if err != nil {
 		return err
 	}
@@ -310,6 +322,7 @@ func MergeProfiles(original *Profile, others ...*Profile) *Profile {
 		DefaultProjectID:      original.DefaultProjectID,
 		DefaultRegion:         original.DefaultRegion,
 		DefaultZone:           original.DefaultZone,
+		SendTelemetry:         original.SendTelemetry,
 	}
 
 	for _, other := range others {
@@ -336,6 +349,9 @@ func MergeProfiles(original *Profile, others ...*Profile) *Profile {
 		}
 		if other.DefaultZone != nil {
 			np.DefaultZone = other.DefaultZone
+		}
+		if other.SendTelemetry != nil {
+			np.SendTelemetry = other.SendTelemetry
 		}
 	}
 

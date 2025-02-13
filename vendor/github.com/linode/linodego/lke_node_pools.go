@@ -2,8 +2,6 @@ package linodego
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 )
 
 // LKELinodeStatus constants start with LKELinode and include
@@ -35,6 +33,25 @@ type LKENodePoolLinode struct {
 	Status     LKELinodeStatus `json:"status"`
 }
 
+// LKENodePoolTaintEffect represents the effect value of a taint
+type LKENodePoolTaintEffect string
+
+const (
+	LKENodePoolTaintEffectNoSchedule       LKENodePoolTaintEffect = "NoSchedule"
+	LKENodePoolTaintEffectPreferNoSchedule LKENodePoolTaintEffect = "PreferNoSchedule"
+	LKENodePoolTaintEffectNoExecute        LKENodePoolTaintEffect = "NoExecute"
+)
+
+// LKENodePoolTaint represents a corev1.Taint to add to an LKENodePool
+type LKENodePoolTaint struct {
+	Key    string                 `json:"key"`
+	Value  string                 `json:"value,omitempty"`
+	Effect LKENodePoolTaintEffect `json:"effect"`
+}
+
+// LKENodePoolLabels represents Kubernetes labels to add to an LKENodePool
+type LKENodePoolLabels map[string]string
+
 // LKENodePool represents a LKENodePool object
 type LKENodePool struct {
 	ID      int                 `json:"id"`
@@ -43,24 +60,33 @@ type LKENodePool struct {
 	Disks   []LKENodePoolDisk   `json:"disks"`
 	Linodes []LKENodePoolLinode `json:"nodes"`
 	Tags    []string            `json:"tags"`
+	Labels  LKENodePoolLabels   `json:"labels"`
+	Taints  []LKENodePoolTaint  `json:"taints"`
 
 	Autoscaler LKENodePoolAutoscaler `json:"autoscaler"`
+
+	// NOTE: Disk encryption may not currently be available to all users.
+	DiskEncryption InstanceDiskEncryption `json:"disk_encryption,omitempty"`
 }
 
 // LKENodePoolCreateOptions fields are those accepted by CreateLKENodePool
 type LKENodePoolCreateOptions struct {
-	Count int               `json:"count"`
-	Type  string            `json:"type"`
-	Disks []LKENodePoolDisk `json:"disks"`
-	Tags  []string          `json:"tags"`
+	Count  int                `json:"count"`
+	Type   string             `json:"type"`
+	Disks  []LKENodePoolDisk  `json:"disks"`
+	Tags   []string           `json:"tags"`
+	Labels LKENodePoolLabels  `json:"labels"`
+	Taints []LKENodePoolTaint `json:"taints"`
 
 	Autoscaler *LKENodePoolAutoscaler `json:"autoscaler,omitempty"`
 }
 
 // LKENodePoolUpdateOptions fields are those accepted by UpdateLKENodePoolUpdate
 type LKENodePoolUpdateOptions struct {
-	Count int       `json:"count,omitempty"`
-	Tags  *[]string `json:"tags,omitempty"`
+	Count  int                 `json:"count,omitempty"`
+	Tags   *[]string           `json:"tags,omitempty"`
+	Labels *LKENodePoolLabels  `json:"labels,omitempty"`
+	Taints *[]LKENodePoolTaint `json:"taints,omitempty"`
 
 	Autoscaler *LKENodePoolAutoscaler `json:"autoscaler,omitempty"`
 }
@@ -71,6 +97,8 @@ func (l LKENodePool) GetCreateOptions() (o LKENodePoolCreateOptions) {
 	o.Count = l.Count
 	o.Disks = l.Disks
 	o.Tags = l.Tags
+	o.Labels = l.Labels
+	o.Taints = l.Taints
 	o.Autoscaler = &l.Autoscaler
 	return
 }
@@ -79,126 +107,65 @@ func (l LKENodePool) GetCreateOptions() (o LKENodePoolCreateOptions) {
 func (l LKENodePool) GetUpdateOptions() (o LKENodePoolUpdateOptions) {
 	o.Count = l.Count
 	o.Tags = &l.Tags
+	o.Labels = &l.Labels
+	o.Taints = &l.Taints
 	o.Autoscaler = &l.Autoscaler
 	return
 }
 
-// LKENodePoolsPagedResponse represents a paginated LKENodePool API response
-type LKENodePoolsPagedResponse struct {
-	*PageOptions
-	Data []LKENodePool `json:"data"`
-}
-
-// endpointWithID gets the endpoint URL for InstanceConfigs of a given Instance
-func (LKENodePoolsPagedResponse) endpointWithID(c *Client, id int) string {
-	endpoint, err := c.LKENodePools.endpointWithParams(id)
-	if err != nil {
-		panic(err)
-	}
-	return endpoint
-}
-
-// appendData appends LKENodePools when processing paginated LKENodePool responses
-func (resp *LKENodePoolsPagedResponse) appendData(r *LKENodePoolsPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
 // ListLKENodePools lists LKENodePools
 func (c *Client) ListLKENodePools(ctx context.Context, clusterID int, opts *ListOptions) ([]LKENodePool, error) {
-	response := LKENodePoolsPagedResponse{}
-	err := c.listHelperWithID(ctx, &response, clusterID, opts)
+	response, err := getPaginatedResults[LKENodePool](ctx, c, formatAPIPath("lke/clusters/%d/pools", clusterID), opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	return response, nil
 }
 
 // GetLKENodePool gets the LKENodePool with the provided ID
-func (c *Client) GetLKENodePool(ctx context.Context, clusterID, id int) (*LKENodePool, error) {
-	e, err := c.LKENodePools.endpointWithParams(clusterID)
+func (c *Client) GetLKENodePool(ctx context.Context, clusterID, poolID int) (*LKENodePool, error) {
+	e := formatAPIPath("lke/clusters/%d/pools/%d", clusterID, poolID)
+	response, err := doGETRequest[LKENodePool](ctx, c, e)
 	if err != nil {
 		return nil, err
 	}
-	e = fmt.Sprintf("%s/%d", e, id)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&LKENodePool{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*LKENodePool), nil
+
+	return response, nil
 }
 
 // CreateLKENodePool creates a LKENodePool
-func (c *Client) CreateLKENodePool(ctx context.Context, clusterID int, createOpts LKENodePoolCreateOptions) (*LKENodePool, error) {
-	var body string
-	e, err := c.LKENodePools.endpointWithParams(clusterID)
+func (c *Client) CreateLKENodePool(ctx context.Context, clusterID int, opts LKENodePoolCreateOptions) (*LKENodePool, error) {
+	e := formatAPIPath("lke/clusters/%d/pools", clusterID)
+	response, err := doPOSTRequest[LKENodePool](ctx, c, e, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	req := c.R(ctx).SetResult(&LKENodePool{})
-
-	if bodyData, err := json.Marshal(createOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Post(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*LKENodePool), nil
+	return response, nil
 }
 
 // UpdateLKENodePool updates the LKENodePool with the specified id
-func (c *Client) UpdateLKENodePool(ctx context.Context, clusterID, id int, updateOpts LKENodePoolUpdateOptions) (*LKENodePool, error) {
-	var body string
-	e, err := c.LKENodePools.endpointWithParams(clusterID)
+func (c *Client) UpdateLKENodePool(ctx context.Context, clusterID, poolID int, opts LKENodePoolUpdateOptions) (*LKENodePool, error) {
+	e := formatAPIPath("lke/clusters/%d/pools/%d", clusterID, poolID)
+	response, err := doPUTRequest[LKENodePool](ctx, c, e, opts)
 	if err != nil {
 		return nil, err
 	}
-	e = fmt.Sprintf("%s/%d", e, id)
 
-	req := c.R(ctx).SetResult(&LKENodePool{})
-
-	if bodyData, err := json.Marshal(updateOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*LKENodePool), nil
+	return response, nil
 }
 
 // DeleteLKENodePool deletes the LKENodePool with the specified id
-func (c *Client) DeleteLKENodePool(ctx context.Context, clusterID, id int) error {
-	e, err := c.LKENodePools.endpointWithParams(clusterID)
-	if err != nil {
-		return err
-	}
-	e = fmt.Sprintf("%s/%d", e, id)
-
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
+func (c *Client) DeleteLKENodePool(ctx context.Context, clusterID, poolID int) error {
+	e := formatAPIPath("lke/clusters/%d/pools/%d", clusterID, poolID)
+	err := doDELETERequest(ctx, c, e)
 	return err
 }
 
 // DeleteLKENodePoolNode deletes a given node from a node pool
-func (c *Client) DeleteLKENodePoolNode(ctx context.Context, clusterID int, id string) error {
-	e, err := c.LKEClusters.Endpoint()
-	if err != nil {
-		return err
-	}
-	e = fmt.Sprintf("%s/%d/nodes/%s", e, clusterID, id)
-
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
+func (c *Client) DeleteLKENodePoolNode(ctx context.Context, clusterID int, nodeID string) error {
+	e := formatAPIPath("lke/clusters/%d/nodes/%s", clusterID, nodeID)
+	err := doDELETERequest(ctx, c, e)
 	return err
 }

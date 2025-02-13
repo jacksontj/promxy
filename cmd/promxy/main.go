@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"os/signal"
@@ -16,18 +17,16 @@ import (
 	"syscall"
 	"time"
 
-	_ "net/http/pprof"
-
-	kitlog "github.com/go-kit/log"
 	"github.com/golang/glog"
 	"github.com/grafana/regexp"
 	"github.com/jessevdk/go-flags"
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus"
+	collectorVersion "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promslog"
 	"github.com/prometheus/common/version"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
@@ -70,7 +69,7 @@ var (
 )
 
 func init() {
-	prometheus.MustRegister(version.NewCollector("promxy"))
+	prometheus.MustRegister(collectorVersion.NewCollector("promxy"))
 }
 
 type cliOpts struct {
@@ -109,7 +108,7 @@ type cliOpts struct {
 	ResendDelay               time.Duration `long:"rules.alert.resend-delay" description:"Minimum amount of time to wait before resending an alert to Alertmanager." default:"1m"`
 	AlertBackfill             bool          `long:"rules.alertbackfill" description:"Enable promxy to recalculate alert state on startup when the downstream datastore doesn't have an ALERTS_FOR_STATE"`
 
-	ShutdownDelay   time.Duration `long:"http.shutdown-delay" description:"time to wait before shutting down the http server, this allows for a grace period for upstreams (e.g. LoadBalancers) to discover the new stopping status through healthchecks" default:"10s"`
+	ShutdownDelay   time.Duration `long:"http.shutdown-delay" description:"time to wait before shutting down the http server, this allows for a grace period for upstreams (e.g. LoadBalancers) to discover the new stopping status through healthchecks" default:"1s"`
 	ShutdownTimeout time.Duration `long:"http.shutdown-timeout" description:"max time to wait for a graceful shutdown of the HTTP server" default:"60s"`
 }
 
@@ -238,15 +237,15 @@ func main() {
 	reloadables = append(reloadables, ps)
 	proxyStorage = ps
 
-	logCfg := &promlog.Config{
-		Level:  &promlog.AllowedLevel{},
-		Format: &promlog.AllowedFormat{},
+	logCfg := &promslog.Config{
+		Level:  &promslog.AllowedLevel{},
+		Format: &promslog.AllowedFormat{},
 	}
 	if err := logCfg.Level.Set("info"); err != nil {
 		logrus.Fatalf("Unable to set log level: %v", err)
 	}
 
-	logger := promlog.New(logCfg)
+	logger := promslog.New(logCfg)
 
 	engineOpts := promql.EngineOpts{
 		Reg:                      prometheus.DefaultRegisterer,
@@ -265,7 +264,7 @@ func main() {
 		if opts.LocalStoragePath == "" {
 			logrus.Fatalf("local storage path must be defined if you wish to enable max query concurrency limits")
 		}
-		engineOpts.ActiveQueryTracker = promql.NewActiveQueryTracker(opts.LocalStoragePath, opts.QueryMaxConcurrency, kitlog.With(logger, "component", "activeQueryTracker"))
+		engineOpts.ActiveQueryTracker = promql.NewActiveQueryTracker(opts.LocalStoragePath, opts.QueryMaxConcurrency, logger.With("component", "activeQueryTracker"))
 	}
 
 	engine := promql.NewEngine(engineOpts)
@@ -282,11 +281,11 @@ func main() {
 			Registerer:    prometheus.DefaultRegisterer,
 			QueueCapacity: opts.NotificationQueueCapacity,
 		},
-		kitlog.With(logger, "component", "notifier"),
+		logger.With("component", "notifier"),
 	)
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(notifierManager))
 
-	discoveryManagerNotify := discovery.NewManager(ctx, kitlog.With(logger, "component", "discovery manager notify"))
+	discoveryManagerNotify := discovery.NewManager(ctx, logger.With("component", "discovery manager notify"), prometheus.DefaultRegisterer, nil, discovery.Name("notify"))
 
 	reloadables = append(reloadables,
 		proxyconfig.WrapPromReloadable(&proxyconfig.ApplyConfigFunc{func(cfg *config.Config) error {
@@ -387,7 +386,8 @@ func main() {
 	}}))
 
 	// We need an empty scrape manager, simply to make the API not panic and error out
-	scrapeManager := scrape.NewManager(nil, kitlog.With(logger, "component", "scrape manager"), nil)
+	scrapeManager, _ := scrape.NewManager(nil, logger.With("component", "scrape manager"), nil, proxyStorage, prometheus.DefaultRegisterer)
+	listenAddresses := []string{opts.BindAddr}
 
 	webOptions := &web.Options{
 		Registerer:      prometheus.DefaultRegisterer,
@@ -406,9 +406,10 @@ func main() {
 
 		EnableLifecycle: opts.EnableLifecycle,
 
-		Flags:       opts.ToFlags(),
-		RoutePrefix: opts.RoutePrefix,
-		ExternalURL: externalUrl,
+		Flags:           opts.ToFlags(),
+		ListenAddresses: listenAddresses,
+		RoutePrefix:     opts.RoutePrefix,
+		ExternalURL:     externalUrl,
 		Version: &web.PrometheusVersion{
 			Version:   version.Version,
 			Revision:  version.Revision,
@@ -433,7 +434,7 @@ func main() {
 
 	webHandler := web.New(logger, webOptions)
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(webHandler))
-	webHandler.SetReady(true)
+	webHandler.SetReady(web.Ready)
 
 	apiPrefix := path.Join(webOptions.RoutePrefix, "/api/v1")
 	// Register API endpoint with correct route prefix

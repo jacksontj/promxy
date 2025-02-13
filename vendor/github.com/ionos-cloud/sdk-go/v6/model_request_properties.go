@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -41,7 +41,7 @@ func NewRequestPropertiesWithDefaults() *RequestProperties {
 }
 
 // GetMethod returns the Method field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *RequestProperties) GetMethod() *string {
 	if o == nil {
 		return nil
@@ -79,7 +79,7 @@ func (o *RequestProperties) HasMethod() bool {
 }
 
 // GetHeaders returns the Headers field value
-// If the value is explicit nil, the zero value for map[string]string will be returned
+// If the value is explicit nil, nil is returned
 func (o *RequestProperties) GetHeaders() *map[string]string {
 	if o == nil {
 		return nil
@@ -117,7 +117,7 @@ func (o *RequestProperties) HasHeaders() bool {
 }
 
 // GetBody returns the Body field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *RequestProperties) GetBody() *string {
 	if o == nil {
 		return nil
@@ -155,7 +155,7 @@ func (o *RequestProperties) HasBody() bool {
 }
 
 // GetUrl returns the Url field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *RequestProperties) GetUrl() *string {
 	if o == nil {
 		return nil
@@ -197,15 +197,19 @@ func (o RequestProperties) MarshalJSON() ([]byte, error) {
 	if o.Method != nil {
 		toSerialize["method"] = o.Method
 	}
+
 	if o.Headers != nil {
 		toSerialize["headers"] = o.Headers
 	}
+
 	if o.Body != nil {
 		toSerialize["body"] = o.Body
 	}
+
 	if o.Url != nil {
 		toSerialize["url"] = o.Url
 	}
+
 	return json.Marshal(toSerialize)
 }
 

@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,16 +16,20 @@ import (
 
 // ApplicationLoadBalancerProperties struct for ApplicationLoadBalancerProperties
 type ApplicationLoadBalancerProperties struct {
-	// The name of the Application Load Balancer.
+	// The Application Load Balancer name.
 	Name *string `json:"name"`
-	// ID of the listening (inbound) LAN.
+	// The ID of the listening (inbound) LAN.
 	ListenerLan *int32 `json:"listenerLan"`
-	// Collection of the Application Load Balancer IP addresses. (Inbound and outbound) IPs of the listenerLan are customer-reserved public IPs for the public Load Balancers, and private IPs for the private Load Balancers.
+	// Collection of the Application Load Balancer IP addresses. (Inbound and outbound) IPs of the 'listenerLan' are customer-reserved public IPs for the public load balancers, and private IPs for the private load balancers.
 	Ips *[]string `json:"ips,omitempty"`
-	// ID of the balanced private target LAN (outbound).
+	// The ID of the balanced private target LAN (outbound).
 	TargetLan *int32 `json:"targetLan"`
 	// Collection of private IP addresses with the subnet mask of the Application Load Balancer. IPs must contain valid a subnet mask. If no IP is provided, the system will generate an IP with /24 subnet.
 	LbPrivateIps *[]string `json:"lbPrivateIps,omitempty"`
+	// Turn logging on and off for this product. Default value is 'false'.
+	CentralLogging *bool `json:"centralLogging,omitempty"`
+	// Specifies the format of the logs.
+	LoggingFormat *string `json:"loggingFormat,omitempty"`
 }
 
 // NewApplicationLoadBalancerProperties instantiates a new ApplicationLoadBalancerProperties object
@@ -51,7 +55,7 @@ func NewApplicationLoadBalancerPropertiesWithDefaults() *ApplicationLoadBalancer
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *ApplicationLoadBalancerProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -89,7 +93,7 @@ func (o *ApplicationLoadBalancerProperties) HasName() bool {
 }
 
 // GetListenerLan returns the ListenerLan field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ApplicationLoadBalancerProperties) GetListenerLan() *int32 {
 	if o == nil {
 		return nil
@@ -127,7 +131,7 @@ func (o *ApplicationLoadBalancerProperties) HasListenerLan() bool {
 }
 
 // GetIps returns the Ips field value
-// If the value is explicit nil, the zero value for []string will be returned
+// If the value is explicit nil, nil is returned
 func (o *ApplicationLoadBalancerProperties) GetIps() *[]string {
 	if o == nil {
 		return nil
@@ -165,7 +169,7 @@ func (o *ApplicationLoadBalancerProperties) HasIps() bool {
 }
 
 // GetTargetLan returns the TargetLan field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ApplicationLoadBalancerProperties) GetTargetLan() *int32 {
 	if o == nil {
 		return nil
@@ -203,7 +207,7 @@ func (o *ApplicationLoadBalancerProperties) HasTargetLan() bool {
 }
 
 // GetLbPrivateIps returns the LbPrivateIps field value
-// If the value is explicit nil, the zero value for []string will be returned
+// If the value is explicit nil, nil is returned
 func (o *ApplicationLoadBalancerProperties) GetLbPrivateIps() *[]string {
 	if o == nil {
 		return nil
@@ -240,23 +244,112 @@ func (o *ApplicationLoadBalancerProperties) HasLbPrivateIps() bool {
 	return false
 }
 
+// GetCentralLogging returns the CentralLogging field value
+// If the value is explicit nil, nil is returned
+func (o *ApplicationLoadBalancerProperties) GetCentralLogging() *bool {
+	if o == nil {
+		return nil
+	}
+
+	return o.CentralLogging
+
+}
+
+// GetCentralLoggingOk returns a tuple with the CentralLogging field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *ApplicationLoadBalancerProperties) GetCentralLoggingOk() (*bool, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.CentralLogging, true
+}
+
+// SetCentralLogging sets field value
+func (o *ApplicationLoadBalancerProperties) SetCentralLogging(v bool) {
+
+	o.CentralLogging = &v
+
+}
+
+// HasCentralLogging returns a boolean if a field has been set.
+func (o *ApplicationLoadBalancerProperties) HasCentralLogging() bool {
+	if o != nil && o.CentralLogging != nil {
+		return true
+	}
+
+	return false
+}
+
+// GetLoggingFormat returns the LoggingFormat field value
+// If the value is explicit nil, nil is returned
+func (o *ApplicationLoadBalancerProperties) GetLoggingFormat() *string {
+	if o == nil {
+		return nil
+	}
+
+	return o.LoggingFormat
+
+}
+
+// GetLoggingFormatOk returns a tuple with the LoggingFormat field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *ApplicationLoadBalancerProperties) GetLoggingFormatOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.LoggingFormat, true
+}
+
+// SetLoggingFormat sets field value
+func (o *ApplicationLoadBalancerProperties) SetLoggingFormat(v string) {
+
+	o.LoggingFormat = &v
+
+}
+
+// HasLoggingFormat returns a boolean if a field has been set.
+func (o *ApplicationLoadBalancerProperties) HasLoggingFormat() bool {
+	if o != nil && o.LoggingFormat != nil {
+		return true
+	}
+
+	return false
+}
+
 func (o ApplicationLoadBalancerProperties) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.ListenerLan != nil {
 		toSerialize["listenerLan"] = o.ListenerLan
 	}
+
 	if o.Ips != nil {
 		toSerialize["ips"] = o.Ips
 	}
+
 	if o.TargetLan != nil {
 		toSerialize["targetLan"] = o.TargetLan
 	}
+
 	if o.LbPrivateIps != nil {
 		toSerialize["lbPrivateIps"] = o.LbPrivateIps
 	}
+
+	if o.CentralLogging != nil {
+		toSerialize["centralLogging"] = o.CentralLogging
+	}
+
+	if o.LoggingFormat != nil {
+		toSerialize["loggingFormat"] = o.LoggingFormat
+	}
+
 	return json.Marshal(toSerialize)
 }
 

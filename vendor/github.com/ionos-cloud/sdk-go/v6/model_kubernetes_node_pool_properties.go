@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -18,35 +18,35 @@ import (
 type KubernetesNodePoolProperties struct {
 	// A Kubernetes node pool name. Valid Kubernetes node pool name must be 63 characters or less and must be empty or begin and end with an alphanumeric character ([a-z0-9A-Z]) with dashes (-), underscores (_), dots (.), and alphanumerics between.
 	Name *string `json:"name"`
-	// A valid ID of the data center, to which user has access.
+	// The unique identifier of the VDC where the worker nodes of the node pool are provisioned.Note that the data center is located in the exact place where the parent cluster of the node pool is located.
 	DatacenterId *string `json:"datacenterId"`
-	// The number of nodes that make up the node pool.
+	// The number of worker nodes of the node pool.
 	NodeCount *int32 `json:"nodeCount"`
-	// A valid CPU family name.
+	// The CPU type for the nodes.
 	CpuFamily *string `json:"cpuFamily"`
-	// The number of cores for the node.
+	// The total number of cores for the nodes.
 	CoresCount *int32 `json:"coresCount"`
-	// The RAM size for the node. Must be set in multiples of 1024 MB, with minimum size is of 2048 MB.
+	// The RAM size for the nodes. Must be specified in multiples of 1024 MB, with a minimum size of 2048 MB.
 	RamSize *int32 `json:"ramSize"`
 	// The availability zone in which the target VM should be provisioned.
 	AvailabilityZone *string `json:"availabilityZone"`
-	// The type of hardware for the volume.
+	// The storage type for the nodes.
 	StorageType *string `json:"storageType"`
-	// The size of the volume in GB. The size should be greater than 10GB.
+	// The allocated volume size in GB. The allocated volume size in GB. To achieve good performance, we recommend a size greater than 100GB for SSD.
 	StorageSize *int32 `json:"storageSize"`
-	// The Kubernetes version the nodepool is running. This imposes restrictions on what Kubernetes versions can be run in a cluster's nodepools. Additionally, not all Kubernetes versions are viable upgrade targets for all prior versions.
+	// The Kubernetes version running in the node pool. Note that this imposes restrictions on which Kubernetes versions can run in the node pools of a cluster. Also, not all Kubernetes versions are suitable upgrade targets for all earlier versions.
 	K8sVersion        *string                      `json:"k8sVersion,omitempty"`
 	MaintenanceWindow *KubernetesMaintenanceWindow `json:"maintenanceWindow,omitempty"`
 	AutoScaling       *KubernetesAutoScaling       `json:"autoScaling,omitempty"`
-	// array of additional LANs attached to worker nodes
+	// The array of existing private LANs to attach to worker nodes.
 	Lans *[]KubernetesNodePoolLan `json:"lans,omitempty"`
-	// map of labels attached to node pool.
+	// The labels attached to the node pool.
 	Labels *map[string]string `json:"labels,omitempty"`
-	// map of annotations attached to node pool.
+	// The annotations attached to the node pool.
 	Annotations *map[string]string `json:"annotations,omitempty"`
-	// Optional array of reserved public IP addresses to be used by the nodes. IPs must be from same location as the data center used for the node pool. The array must contain one more IP than maximum number possible number of nodes (nodeCount+1 for fixed number of nodes or maxNodeCount+1 when auto scaling is used). The extra IP is used when the nodes are rebuilt.
+	// Optional array of reserved public IP addresses to be used by the nodes. The IPs must be from the exact location of the node pool's data center. If autoscaling is used, the array must contain one more IP than the maximum possible number of nodes (nodeCount+1 for a fixed number of nodes or maxNodeCount+1). The extra IP is used when the nodes are rebuilt.
 	PublicIps *[]string `json:"publicIps,omitempty"`
-	// List of available versions for upgrading the node pool.
+	// The list of available versions for upgrading the node pool.
 	AvailableUpgradeVersions *[]string `json:"availableUpgradeVersions,omitempty"`
 }
 
@@ -79,7 +79,7 @@ func NewKubernetesNodePoolPropertiesWithDefaults() *KubernetesNodePoolProperties
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -117,7 +117,7 @@ func (o *KubernetesNodePoolProperties) HasName() bool {
 }
 
 // GetDatacenterId returns the DatacenterId field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetDatacenterId() *string {
 	if o == nil {
 		return nil
@@ -155,7 +155,7 @@ func (o *KubernetesNodePoolProperties) HasDatacenterId() bool {
 }
 
 // GetNodeCount returns the NodeCount field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetNodeCount() *int32 {
 	if o == nil {
 		return nil
@@ -193,7 +193,7 @@ func (o *KubernetesNodePoolProperties) HasNodeCount() bool {
 }
 
 // GetCpuFamily returns the CpuFamily field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetCpuFamily() *string {
 	if o == nil {
 		return nil
@@ -231,7 +231,7 @@ func (o *KubernetesNodePoolProperties) HasCpuFamily() bool {
 }
 
 // GetCoresCount returns the CoresCount field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetCoresCount() *int32 {
 	if o == nil {
 		return nil
@@ -269,7 +269,7 @@ func (o *KubernetesNodePoolProperties) HasCoresCount() bool {
 }
 
 // GetRamSize returns the RamSize field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetRamSize() *int32 {
 	if o == nil {
 		return nil
@@ -307,7 +307,7 @@ func (o *KubernetesNodePoolProperties) HasRamSize() bool {
 }
 
 // GetAvailabilityZone returns the AvailabilityZone field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetAvailabilityZone() *string {
 	if o == nil {
 		return nil
@@ -345,7 +345,7 @@ func (o *KubernetesNodePoolProperties) HasAvailabilityZone() bool {
 }
 
 // GetStorageType returns the StorageType field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetStorageType() *string {
 	if o == nil {
 		return nil
@@ -383,7 +383,7 @@ func (o *KubernetesNodePoolProperties) HasStorageType() bool {
 }
 
 // GetStorageSize returns the StorageSize field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetStorageSize() *int32 {
 	if o == nil {
 		return nil
@@ -421,7 +421,7 @@ func (o *KubernetesNodePoolProperties) HasStorageSize() bool {
 }
 
 // GetK8sVersion returns the K8sVersion field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetK8sVersion() *string {
 	if o == nil {
 		return nil
@@ -459,7 +459,7 @@ func (o *KubernetesNodePoolProperties) HasK8sVersion() bool {
 }
 
 // GetMaintenanceWindow returns the MaintenanceWindow field value
-// If the value is explicit nil, the zero value for KubernetesMaintenanceWindow will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetMaintenanceWindow() *KubernetesMaintenanceWindow {
 	if o == nil {
 		return nil
@@ -497,7 +497,7 @@ func (o *KubernetesNodePoolProperties) HasMaintenanceWindow() bool {
 }
 
 // GetAutoScaling returns the AutoScaling field value
-// If the value is explicit nil, the zero value for KubernetesAutoScaling will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetAutoScaling() *KubernetesAutoScaling {
 	if o == nil {
 		return nil
@@ -535,7 +535,7 @@ func (o *KubernetesNodePoolProperties) HasAutoScaling() bool {
 }
 
 // GetLans returns the Lans field value
-// If the value is explicit nil, the zero value for []KubernetesNodePoolLan will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetLans() *[]KubernetesNodePoolLan {
 	if o == nil {
 		return nil
@@ -573,7 +573,7 @@ func (o *KubernetesNodePoolProperties) HasLans() bool {
 }
 
 // GetLabels returns the Labels field value
-// If the value is explicit nil, the zero value for map[string]string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetLabels() *map[string]string {
 	if o == nil {
 		return nil
@@ -611,7 +611,7 @@ func (o *KubernetesNodePoolProperties) HasLabels() bool {
 }
 
 // GetAnnotations returns the Annotations field value
-// If the value is explicit nil, the zero value for map[string]string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetAnnotations() *map[string]string {
 	if o == nil {
 		return nil
@@ -649,7 +649,7 @@ func (o *KubernetesNodePoolProperties) HasAnnotations() bool {
 }
 
 // GetPublicIps returns the PublicIps field value
-// If the value is explicit nil, the zero value for []string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetPublicIps() *[]string {
 	if o == nil {
 		return nil
@@ -687,7 +687,7 @@ func (o *KubernetesNodePoolProperties) HasPublicIps() bool {
 }
 
 // GetAvailableUpgradeVersions returns the AvailableUpgradeVersions field value
-// If the value is explicit nil, the zero value for []string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolProperties) GetAvailableUpgradeVersions() *[]string {
 	if o == nil {
 		return nil
@@ -729,54 +729,71 @@ func (o KubernetesNodePoolProperties) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.DatacenterId != nil {
 		toSerialize["datacenterId"] = o.DatacenterId
 	}
+
 	if o.NodeCount != nil {
 		toSerialize["nodeCount"] = o.NodeCount
 	}
+
 	if o.CpuFamily != nil {
 		toSerialize["cpuFamily"] = o.CpuFamily
 	}
+
 	if o.CoresCount != nil {
 		toSerialize["coresCount"] = o.CoresCount
 	}
+
 	if o.RamSize != nil {
 		toSerialize["ramSize"] = o.RamSize
 	}
+
 	if o.AvailabilityZone != nil {
 		toSerialize["availabilityZone"] = o.AvailabilityZone
 	}
+
 	if o.StorageType != nil {
 		toSerialize["storageType"] = o.StorageType
 	}
+
 	if o.StorageSize != nil {
 		toSerialize["storageSize"] = o.StorageSize
 	}
+
 	if o.K8sVersion != nil {
 		toSerialize["k8sVersion"] = o.K8sVersion
 	}
+
 	if o.MaintenanceWindow != nil {
 		toSerialize["maintenanceWindow"] = o.MaintenanceWindow
 	}
+
 	if o.AutoScaling != nil {
 		toSerialize["autoScaling"] = o.AutoScaling
 	}
+
 	if o.Lans != nil {
 		toSerialize["lans"] = o.Lans
 	}
+
 	if o.Labels != nil {
 		toSerialize["labels"] = o.Labels
 	}
+
 	if o.Annotations != nil {
 		toSerialize["annotations"] = o.Annotations
 	}
+
 	if o.PublicIps != nil {
 		toSerialize["publicIps"] = o.PublicIps
 	}
+
 	if o.AvailableUpgradeVersions != nil {
 		toSerialize["availableUpgradeVersions"] = o.AvailableUpgradeVersions
 	}
+
 	return json.Marshal(toSerialize)
 }
 

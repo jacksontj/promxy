@@ -27,21 +27,28 @@ const (
 	ZoneNlAms1 = Zone("nl-ams-1")
 	// ZoneNlAms2 represents the nl-ams-2 zone
 	ZoneNlAms2 = Zone("nl-ams-2")
+	// ZoneNlAms3 represents the nl-ams-3 zone
+	ZoneNlAms3 = Zone("nl-ams-3")
 	// ZonePlWaw1 represents the pl-waw-1 zone
 	ZonePlWaw1 = Zone("pl-waw-1")
+	// ZonePlWaw2 represents the pl-waw-2 zone
+	ZonePlWaw2 = Zone("pl-waw-2")
+	// ZonePlWaw3 represents the pl-waw-3 zone
+	ZonePlWaw3 = Zone("pl-waw-3")
 )
 
-var (
-	// AllZones is an array that list all zones
-	AllZones = []Zone{
-		ZoneFrPar1,
-		ZoneFrPar2,
-		ZoneFrPar3,
-		ZoneNlAms1,
-		ZoneNlAms2,
-		ZonePlWaw1,
-	}
-)
+// AllZones is an array that list all zones
+var AllZones = []Zone{
+	ZoneFrPar1,
+	ZoneFrPar2,
+	ZoneFrPar3,
+	ZoneNlAms1,
+	ZoneNlAms2,
+	ZoneNlAms3,
+	ZonePlWaw1,
+	ZonePlWaw2,
+	ZonePlWaw3,
+}
 
 // Exists checks whether a zone exists
 func (zone Zone) Exists() bool {
@@ -81,14 +88,12 @@ const (
 	RegionPlWaw = Region("pl-waw")
 )
 
-var (
-	// AllRegions is an array that list all regions
-	AllRegions = []Region{
-		RegionFrPar,
-		RegionNlAms,
-		RegionPlWaw,
-	}
-)
+// AllRegions is an array that list all regions
+var AllRegions = []Region{
+	RegionFrPar,
+	RegionNlAms,
+	RegionPlWaw,
+}
 
 // Exists checks whether a region exists
 func (region Region) Exists() bool {
@@ -106,9 +111,9 @@ func (region Region) GetZones() []Zone {
 	case RegionFrPar:
 		return []Zone{ZoneFrPar1, ZoneFrPar2, ZoneFrPar3}
 	case RegionNlAms:
-		return []Zone{ZoneNlAms1, ZoneNlAms2}
+		return []Zone{ZoneNlAms1, ZoneNlAms2, ZoneNlAms3}
 	case RegionPlWaw:
-		return []Zone{ZonePlWaw1}
+		return []Zone{ZonePlWaw1, ZonePlWaw2, ZonePlWaw3}
 	default:
 		return []Zone{}
 	}
