@@ -1500,7 +1500,7 @@ func (ev *evaluator) evalSeries(ctx context.Context, series []storage.Series, of
 
 	mat := make(Matrix, 0, len(series))
 	var prevSS *Series
-	it := storage.NewMemoizedEmptyIterator(durationMilliseconds(ev.lookbackDelta))
+	it := storage.NewMemoizedEmptyIterator(ev.interval)
 	var chkIter chunkenc.Iterator
 	for _, s := range series {
 		if err := contextDone(ctx, "expression evaluation"); err != nil {
@@ -2156,7 +2156,7 @@ func (ev *evaluator) rangeEvalTimestampFunctionOverVectorSelector(ctx context.Co
 	seriesIterators := make([]*storage.MemoizedSeriesIterator, len(vs.Series))
 	for i, s := range vs.Series {
 		it := s.Iterator(nil)
-		seriesIterators[i] = storage.NewMemoizedIterator(it, durationMilliseconds(ev.lookbackDelta)-1)
+		seriesIterators[i] = storage.NewMemoizedIterator(it, ev.interval-1)
 	}
 
 	return ev.rangeEval(ctx, nil, func(v []parser.Value, _ [][]EvalSeriesHelper, enh *EvalNodeHelper) (Vector, annotations.Annotations) {
@@ -2218,7 +2218,7 @@ func (ev *evaluator) vectorSelectorSingle(it *storage.MemoizedSeriesIterator, of
 	if valueType == chunkenc.ValNone || t > refTime {
 		var ok bool
 		t, v, h, ok = it.PeekPrev()
-		if !ok || t <= refTime-durationMilliseconds(ev.lookbackDelta) {
+		if !ok || t <= refTime-ev.interval {
 			return 0, 0, nil, false
 		}
 	}
