@@ -1,16 +1,16 @@
 module github.com/jacksontj/promxy
 
-go 1.21
+go 1.24
 
 require (
 	github.com/Azure/go-autorest/autorest v0.11.30
 	github.com/go-kit/log v0.2.1
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang/glog v1.1.0
-	github.com/golang/snappy v0.0.4
-	github.com/google/go-cmp v0.6.0
-	github.com/grafana/regexp v0.0.0-20221122212121-6b5c0a4cb7fd
-	github.com/jessevdk/go-flags v1.5.0
+	github.com/golang/glog v1.2.4
+	github.com/golang/snappy v1.0.0
+	github.com/google/go-cmp v0.7.0
+	github.com/grafana/regexp v0.0.0-20240518133315-a468a5bfb3bc
+	github.com/jessevdk/go-flags v1.6.1
 	github.com/json-iterator/go v1.1.12
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/pkg/errors v0.9.1
@@ -20,17 +20,16 @@ require (
 	github.com/prometheus/exporter-toolkit v0.7.3
 	github.com/prometheus/prometheus v1.8.2-0.20210707132820-dc8f50559534
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.8.4
-	go.uber.org/atomic v1.10.0
-	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af
+	github.com/stretchr/testify v1.10.0
+	go.uber.org/atomic v1.11.0
+	golang.org/x/time v0.11.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/klog v1.0.0
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
 )
 
 require (
-	cloud.google.com/go/compute v1.23.0 // indirect
-	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	github.com/Azure/azure-sdk-for-go v65.0.0+incompatible // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
@@ -142,17 +141,17 @@ require (
 	go.opentelemetry.io/otel/metric v1.18.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.18.0 // indirect
 	go.opentelemetry.io/otel/trace v1.18.0 // indirect
-	go.uber.org/goleak v1.1.12 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
-	golang.org/x/exp v0.0.0-20240213143201-ec583247a57a // indirect
-	golang.org/x/mod v0.17.0 // indirect
-	golang.org/x/net v0.35.0 // indirect
-	golang.org/x/oauth2 v0.10.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/term v0.29.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
-	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
+	go.uber.org/goleak v1.3.0 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
+	golang.org/x/mod v0.24.0 // indirect
+	golang.org/x/net v0.37.0 // indirect
+	golang.org/x/oauth2 v0.28.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/term v0.30.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/tools v0.31.0 // indirect
 	google.golang.org/api v0.128.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230711160842-782d3b101e98 // indirect
