@@ -20,7 +20,7 @@ require (
 	github.com/prometheus/exporter-toolkit v0.7.3
 	github.com/prometheus/prometheus v1.8.2-0.20210707132820-dc8f50559534
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.8.4
 	go.uber.org/atomic v1.11.0
 	golang.org/x/time v0.11.0
 	gopkg.in/yaml.v2 v2.4.0
