@@ -215,7 +215,7 @@ func (c *MetricsRelabelClient) LabelNames(ctx context.Context, matchers []string
 // Query performs a query for the given time.
 func (c *MetricsRelabelClient) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
 	// rewrite the query to the new labels
-	logrus.Debugf("Query before label replacement: " + query)
+	logrus.Debugf("Query before label replacement: %s", query)
 	e, err := parser.ParseExpr(query)
 	if err != nil {
 		return nil, nil, err
@@ -231,7 +231,7 @@ func (c *MetricsRelabelClient) Query(ctx context.Context, query string, ts time.
 	}
 
 	newQuery := e.String()
-	logrus.Debugf("Query after label replacement: " + newQuery)
+	logrus.Debugf("Query after label replacement: %s", newQuery)
 
 	val, w, err := c.API.Query(ctx, newQuery, ts)
 	if err != nil {
@@ -248,7 +248,7 @@ func (c *MetricsRelabelClient) Query(ctx context.Context, query string, ts time.
 // QueryRange performs a query for the given range.
 func (c *MetricsRelabelClient) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
 	// rewrite the query to the new labels
-	logrus.Debugf("Query before label replacement: " + query)
+	logrus.Debugf("Query before label replacement: %s", query)
 	e, err := parser.ParseExpr(query)
 	if err != nil {
 		return nil, nil, err
@@ -264,7 +264,7 @@ func (c *MetricsRelabelClient) QueryRange(ctx context.Context, query string, r v
 	}
 
 	newQuery := e.String()
-	logrus.Debugf("Query after label replacement: " + newQuery)
+	logrus.Debugf("Query after label replacement: %s", newQuery)
 
 	val, w, err := c.API.QueryRange(ctx, newQuery, r)
 	if err != nil {

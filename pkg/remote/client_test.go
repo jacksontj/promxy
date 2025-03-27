@@ -42,15 +42,15 @@ func TestStoreHTTPErrorHandling(t *testing.T) {
 		},
 		{
 			code: 300,
-			err:  fmt.Errorf("server returned HTTP status 300 Multiple Choices: " + longErrMessage[:maxErrMsgLen]),
+			err:  fmt.Errorf("server returned HTTP status 300 Multiple Choices: %s", longErrMessage[:maxErrMsgLen]),
 		},
 		{
 			code: 404,
-			err:  fmt.Errorf("server returned HTTP status 404 Not Found: " + longErrMessage[:maxErrMsgLen]),
+			err:  fmt.Errorf("server returned HTTP status 404 Not Found: %s", longErrMessage[:maxErrMsgLen]),
 		},
 		{
 			code: 500,
-			err:  recoverableError{fmt.Errorf("server returned HTTP status 500 Internal Server Error: " + longErrMessage[:maxErrMsgLen])},
+			err:  recoverableError{fmt.Errorf("server returned HTTP status 500 Internal Server Error: %s", longErrMessage[:maxErrMsgLen])},
 		},
 	}
 
