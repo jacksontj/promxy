@@ -1,6 +1,7 @@
 module github.com/jacksontj/promxy
 
 go 1.21
+toolchain go1.24.1
 
 require (
 	github.com/Azure/go-autorest/autorest v0.11.30
@@ -143,7 +144,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.18.0 // indirect
 	go.opentelemetry.io/otel/trace v1.18.0 // indirect
 	go.uber.org/goleak v1.1.12 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
 	golang.org/x/exp v0.0.0-20240213143201-ec583247a57a // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
