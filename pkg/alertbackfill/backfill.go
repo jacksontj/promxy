@@ -49,6 +49,10 @@ func (q *AlertBackfillQueryable) Querier(mint, maxt int64) (storage.Querier, err
 		return nil, err
 	}
 
+	if q.f == nil {
+		return nil, fmt.Errorf("RuleGroupFetcher not set, call SetRuleGroupFetcher before using")
+	}
+	
 	return &AlertBackfillQuerier{
 		ctx:        context.Background(),
 		api:        api,
@@ -68,11 +72,12 @@ type queryResult struct {
 
 // TODO: move to a util package?
 func StringsToWarnings(ins []string) annotations.Annotations {
-	warnings := make(annotations.Annotations, len(ins))
+	// Create basic annotations map
+	warnings := make(annotations.Annotations)
 	for _, in := range ins {
-		warnings.Add(errors.New(in))
+		// Add each warning string as a new error
+		warnings[in] = errors.New(in)
 	}
-
 	return warnings
 }
 
@@ -98,7 +103,7 @@ func (q *AlertBackfillQuerier) Select(ctx context.Context, sortSeries bool, hint
 	// somewhere where promxy is also configured to read from
 	querier, err := q.q.Querier(q.mint, q.maxt)
 	if err != nil {
-		return proxyquerier.NewSeriesSet(nil, nil, err)
+		return proxyquerier.NewSeriesSet(nil, make(annotations.Annotations), err)
 	}
 	ret := querier.Select(ctx, sortSeries, hints, matchers...)
 	downstreamSeries := make([]storage.Series, 0)
@@ -115,7 +120,7 @@ func (q *AlertBackfillQuerier) Select(ctx context.Context, sortSeries bool, hint
 
 	// If we can't find a matching rule; return an empty set
 	if matchingRule == nil {
-		return proxyquerier.NewSeriesSet(nil, nil, nil)
+		return proxyquerier.NewSeriesSet(nil, make(annotations.Annotations), nil)
 	}
 
 	result, ok := q.ruleValues[key]
@@ -143,7 +148,7 @@ func (q *AlertBackfillQuerier) Select(ctx context.Context, sortSeries bool, hint
 
 	resultMatrix, ok := result.v.(model.Matrix)
 	if !ok {
-		return proxyquerier.NewSeriesSet(nil, nil, fmt.Errorf("backfill query returned unexpected type: %T", result.v))
+		return proxyquerier.NewSeriesSet(nil, make(annotations.Annotations), fmt.Errorf("backfill query returned unexpected type: %T", result.v))
 	}
 
 	iterators := promclient.IteratorsForValue(GenerateAlertStateMatrix(resultMatrix, matchers, matchingRule.Labels(), interval))

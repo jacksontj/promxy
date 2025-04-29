@@ -31,7 +31,7 @@ func FindGroupAndAlert(groups []*rules.Group, matchers []*labels.Matcher) (strin
 		}
 	}
 	if alertname == "" {
-		panic("what")
+		return "", nil, time.Duration(0)
 	}
 
 FIND_RULE:

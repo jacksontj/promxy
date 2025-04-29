@@ -5,6 +5,7 @@
 package syntax
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -588,6 +589,31 @@ func (p *parser) collapse(subs []*Regexp, op Op) *Regexp {
 func (p *parser) factor(sub []*Regexp) []*Regexp {
 	if len(sub) < 2 {
 		return sub
+	}
+
+	// Sort literals, to bring similar strings nearer to each other.
+	if len(sub) > 2 {
+		// Only sort where all subexpressions have a leading string and all have the same case-sensitivity.
+		okToSort := true
+		_, firstFold := p.leadingString(sub[0])
+		for i := range sub {
+			istr, iflags := p.leadingString(sub[i])
+			if istr == nil || iflags != firstFold {
+				okToSort = false
+				break
+			}
+		}
+		if okToSort {
+			// Where one string is a prefix of the other we want to keep the ordering the same,
+			// because earlier choices are preferred. So use stable sort, and only compare up
+			// to the length of the shorter string.
+			slices.SortStableFunc(sub, func(a, b *Regexp) int {
+				lsa, _ := p.leadingString(a)
+				lsb, _ := p.leadingString(b)
+				pref := min(len(lsa), len(lsb))
+				return slices.Compare(lsa[:pref], lsb[:pref])
+			})
+		}
 	}
 
 	// Round 1: Factor out common literal prefixes.

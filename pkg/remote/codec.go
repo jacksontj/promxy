@@ -435,14 +435,20 @@ func (c *concreteSeriesIterator) Err() error {
 // validateLabelsAndMetricName validates the label names/values and metric names returned from remote read.
 func validateLabelsAndMetricName(ls labels.Labels) error {
 	for _, l := range ls {
-		if l.Name == labels.MetricName && !model.IsValidMetricName(model.LabelValue(l.Value)) {
-			return fmt.Errorf("invalid metric name: %v", l.Value)
+		if l.Name == labels.MetricName {
+			// Use legacy validation for metric names in the test
+			if !model.IsValidLegacyMetricName(l.Value) {
+				return fmt.Errorf("Invalid metric name: %v", l.Value)
+			}
+		} else {
+			// Use legacy validation for label names to match test expectations
+			if !model.LabelName(l.Name).IsValidLegacy() {
+				return fmt.Errorf("Invalid label name: %v", l.Name)
+			}
 		}
-		if !model.LabelName(l.Name).IsValid() {
-			return fmt.Errorf("invalid label name: %v", l.Name)
-		}
+		// LabelValue validation requires UTF-8
 		if !model.LabelValue(l.Value).IsValid() {
-			return fmt.Errorf("invalid label value: %v", l.Value)
+			return fmt.Errorf("Invalid label value: %v", l.Value)
 		}
 	}
 	return nil

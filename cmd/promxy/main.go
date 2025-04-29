@@ -44,10 +44,15 @@ import (
 	"go.uber.org/atomic"
 	"k8s.io/klog"
 
+	_ "github.com/gogo/protobuf/gogoproto"
+	_ "github.com/grafana/dskit/httpgrpc"
+	_ "github.com/grafana/mimir/pkg/querier/stats"
+
 	"github.com/jacksontj/promxy/pkg/alertbackfill"
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/logging"
 	"github.com/jacksontj/promxy/pkg/middleware"
+	"github.com/jacksontj/promxy/pkg/mimirfrontend"
 	"github.com/jacksontj/promxy/pkg/proxystorage"
 	"github.com/jacksontj/promxy/pkg/server"
 )
@@ -110,6 +115,7 @@ type cliOpts struct {
 
 	ShutdownDelay   time.Duration `long:"http.shutdown-delay" description:"time to wait before shutting down the http server, this allows for a grace period for upstreams (e.g. LoadBalancers) to discover the new stopping status through healthchecks" default:"1s"`
 	ShutdownTimeout time.Duration `long:"http.shutdown-timeout" description:"max time to wait for a graceful shutdown of the HTTP server" default:"60s"`
+	GRPCAddr        string        `long:"grpc-addr" description:"address for gRPC server to listen on" default:":9095"`
 }
 
 func (c *cliOpts) ToFlags() map[string]string {
@@ -493,6 +499,15 @@ func main() {
 		logrus.Fatalf("Error creating server: %v", err)
 	}
 
+	// Create and start gRPC server
+	grpcLogger := logger.With("component", "grpc_server")
+	grpcServer := mimirfrontend.NewGRPCServer(grpcLogger, opts.GRPCAddr)
+	go func() {
+		if err := grpcServer.Start(); err != nil {
+			logrus.Errorf("Error starting gRPC server: %v", err)
+		}
+	}()
+
 	// wait for signals etc.
 	for {
 		select {
@@ -518,6 +533,7 @@ func main() {
 				stopping = true        // start failing healthchecks
 				notifierManager.Stop() // stop alert notifier
 				ruleManager.Stop()     // Stop rule manager
+				grpcServer.Stop()      // Stop gRPC server
 
 				if opts.ShutdownDelay > 0 {
 					logrus.Infof("promxy delaying shutdown by %v", opts.ShutdownDelay)

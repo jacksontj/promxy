@@ -68,6 +68,20 @@ var (
 
 		return a
 	}
+	defaultReplaceAttrFunc = func(groups []string, a slog.Attr) slog.Attr {
+		key := a.Key
+		switch key {
+		case slog.TimeKey:
+			t := a.Value.Time()
+			a.Value = slog.TimeValue(t.UTC())
+		case slog.SourceKey:
+			src, _ := a.Value.Any().(*slog.Source)
+			a.Value = slog.StringValue(filepath.Base(src.File) + ":" + strconv.Itoa(src.Line))
+		default:
+		}
+
+		return a
+	}
 )
 
 // AllowedLevel is a settable identifier for the minimum level a log entry
@@ -104,7 +118,7 @@ func (l *AllowedLevel) Set(s string) error {
 		l.lvl = &slog.LevelVar{}
 	}
 
-	switch s {
+	switch strings.ToLower(s) {
 	case "debug":
 		l.lvl.Set(slog.LevelDebug)
 		callerAddFunc = true
@@ -165,8 +179,9 @@ func New(config *Config) *slog.Logger {
 	}
 
 	logHandlerOpts := &slog.HandlerOptions{
-		Level:     config.Level.lvl,
-		AddSource: true,
+		Level:       config.Level.lvl,
+		AddSource:   true,
+		ReplaceAttr: defaultReplaceAttrFunc,
 	}
 
 	if config.Style == GoKitStyle {
