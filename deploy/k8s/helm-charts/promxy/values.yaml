@@ -15,6 +15,12 @@ image:
   tag: "master" # rewrites Chart.AppVersion
   pullPolicy: IfNotPresent
 
+configmapReloader:
+  image:
+    repository: jimmidyson/configmap-reload
+    tag: "v0.5.0"
+    pullPolicy: IfNotPresent
+
 podDisruptionBudget:
   enabled: false
   # minAvailable: 1
