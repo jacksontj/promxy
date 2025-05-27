@@ -99,7 +99,8 @@ spec:
         args:
         - "--volume-dir=/etc/promxy"
         - "--webhook-url=http://localhost:8082/-/reload"
-        image: jimmidyson/configmap-reload:v0.5.0
+        image: "{{ .Values.configmapReloader.image.repository }}:{{ .Values.configmapReloader.image.tag }}"
+        imagePullPolicy: {{ .Values.configmapReloader.image.pullPolicy }}
         volumeMounts:
         - mountPath: "/etc/promxy/"
           name: config
