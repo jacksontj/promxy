@@ -359,8 +359,15 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	}
 
 	if aggFinder.Found > 0 {
-		// If there was a single agg and that was us, then we're okay
-		if !((isAgg(node) || isSubQuery(node) || isBinaryExpr(node)) && aggFinder.Found == 1) {
+
+		switch {
+		// // If there was a single agg and that was us, then we're okay
+		case (isAgg(node) || isBinaryExpr(node)) && aggFinder.Found == 1:
+			break
+		// If the aggregations are in a SubQuery; we can allow Subquery to run through NodeReplacerZz
+		case isSubQuery(node):
+			break
+		default:
 			return nil, nil
 		}
 	}
