@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -116,24 +117,25 @@ func (s *ServerGroup) RoundTrip(r *http.Request) (*http.Response, error) {
 // Sync updates the targets from our discovery manager
 func (s *ServerGroup) Sync() {
 	syncCh := s.targetManager.SyncCh()
-
+	triggerSyncCh := make(chan map[string][]*targetgroup.Group, 1)
+	defer close(triggerSyncCh)
+	retryBackoff := backoff.NewExponentialBackOff(backoff.WithInitialInterval(time.Second), backoff.WithMultiplier(2), backoff.WithMaxInterval(time.Minute))
 	for {
 		select {
 		case <-s.ctx.Done():
 			return
 		case targetGroupMap := <-syncCh:
+			triggerSyncCh <- targetGroupMap
+		case targetGroupMap := <-triggerSyncCh:
 			logrus.Debug("Updating targets from discovery manager")
-			// TODO: retry and error handling
-			err := s.loadTargetGroupMap(targetGroupMap)
-			for err != nil {
+			if err := s.loadTargetGroupMap(targetGroupMap); err != nil {
 				logrus.Errorf("Error loading servergroup, retrying: %v", err)
-				// TODO: configurable backoff
-				select {
-				case <-time.After(time.Second):
-					err = s.loadTargetGroupMap(targetGroupMap)
-				case <-s.ctx.Done():
-					return
-				}
+				go func() {
+					<-time.After(retryBackoff.NextBackOff())
+					triggerSyncCh <- targetGroupMap
+				}()
+			} else {
+				retryBackoff.Reset()
 			}
 		}
 	}
