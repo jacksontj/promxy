@@ -3,8 +3,9 @@
 ##
 global:
   evaluation_interval: 5s
+  # labels to be added to all metrics retrieved by promxy 
   external_labels:
-    source: promxy
+    source: promxy-1
 
 # Rule files specifies a list of globs. Rules and alerts are read from
 # all matching files.
@@ -35,30 +36,40 @@ promxy:
     - static_configs:
         - targets:
           - localhost:9090
+
       # labels to be added to metrics retrieved from this server_group
       labels:
         sg: localhost_9090
+
       # anti-affinity for merging values in timeseries between hosts in the server_group
+      # Best practice for this value is to set it to your scrape interval
       anti_affinity: 10s
+
       # time to wait for a server's response headers after fully writing the request (including its body, if any).
       # This time does not include the time to read the response body.
       timeout: 5s
+
       # Controls whether to use remote_read or the prom API for fetching remote RAW data (e.g. matrix selectors)
       # Note, some prometheus implementations (e.g. [VictoriaMetrics](https://github.com/prometheus/prometheus/issues/4456) don't support remote_read.
       remote_read: true
+
       # configures the path to send remote read requests to. The default is "api/v1/read"
       remote_read_path: api/v1/read
+
       # path_prefix defines a prefix to prepend to all queries to hosts in this servergroup
       # This can be relabeled using __path_prefix__
       path_prefix: /example/prefix
+
       # query_params adds the following map of query parameters to downstream requests.
       # The initial use-case for this is to add `nocache=1` to VictoriaMetrics downstreams
       # (see https://github.com/jacksontj/promxy/issues/202)
       query_params:
         nocache: 1
+
       # configures the protocol scheme used for requests. Defaults to http
       scheme: http
       # options for promxy's HTTP client when talking to hosts in server_groups
+
       http_client:
         # dial_timeout controls how long promxy will wait for a connection to the downstream
         # the default is 200ms.
@@ -86,6 +97,95 @@ promxy:
         start: '2009-10-10T23:00:00Z'
         end: '2009-10-11T23:00:00Z'
         truncate: true
+
+      # RelabelConfigs are similar in function and identical in configuration as prometheus'
+      # relabel config for scrape jobs. The difference here being that the source labels
+      # you can pull from are from the downstream servergroup target and the labels you are
+      # relabeling are that of the timeseries being returned. This allows you to mutate the
+      # labelsets returned by that target at runtime.
+      relabel_configs:
+      - source_labels: [__meta_consul_tags]
+        regex: '.*,prod,.*'
+        action: keep
+      - source_labels: [__meta_consul_dc]
+        regex: '.+'
+        action: replace
+        target_label: datacenter
+
+      # MetricsRelabelConfigs are similar in spirit to prometheus' relabel config but quite different.
+      # As this relabeling is being done within the query-path all relabel actions need to be reversible
+      # so that we can alter queries (e.g. matchers) based on the relabel config. This is done by strictly
+      # limiting the rewrite capability to just those subset of actions that can be reversed. Similar to
+      # prometheus' relabel capability these rules are executed in an order -- so the rules can be compounded
+      # to create relatively complex relabel behavior.
+      metrics_relabel_configs:
+        - action: labeldrop
+          source_label: replica
+        # this will replace the `job` label with `scrape_job`
+        - action: replace
+          source_label: job
+          target_label: scrape_job
+        # this will drop the label `job`.
+        - action: labeldrop
+          source_label: job
+        # this will lowecase the `branch` label in-place (as source_label and target_label match)
+        - action: lowercase
+          source_label: branch
+          target_label: branch
+        # this will uppercase the `instance` label into `instanceUpper`
+        - action: uppercase
+          source_label: instance
+          target_label: instanceUpper
+
+      # The servergroup's maximum number of idle connections to keep open.
+      max_idle_conns: 20000
+
+      # The servergroup's maximum number of idle connections to keep open per host.
+      max_idle_conns_per_host: 1000
+
+      # Time wait to close a idle connections.
+      idle_conn_timeout: 300s
+
+      # Converts all errors to warnings from this given servergroup effectively making
+      # the responses from this servergroup "not required" for the result.
+      downgrade_error: true
+
+      # Ignore_error will make the given server group's response "optional"
+      # meaning if this servergroup returns an error and others don't the overall
+      # query can still succeed
+      ignore_error: true
+
+
+      # LabelFilterConfig is a mechanism to restrict which queries are sent to the particular downstream.
+      # This is done by maintaining a "filter" of labels that are downstream and ensuring that the
+      # matchers for any particular query match that in-memory filter. This can be defined both
+      # statically and dynamically.
+      # NOTE: this is not a "secure" mechanism as it is relying on the query's matchers. So it is trivial
+      #       for a malicious actor to work around this filter by changing matchers.
+      # A way to use this more securely is to use a trusted label set by something like the prom-label-proxy
+      label_filter:
+        # This will dynamically query the downstream for the values of `__name__` and `job`
+        dynamic_labels:
+          - __name__
+          - job
+        # (optional) this will define a re-sync interval for dynamic labels from the downstream
+        sync_interval: 5m
+        # This will statically define a filter of labels
+        static_labels_include:
+          instance:
+            - instance1
+        # This will statically define an exclusion list (removed from the filter)
+        static_labels_exclude:
+          __name__:
+            - up
+
+      # Map of HTTP headers to add to remote read HTTP calls made to this downstream
+      # the main use-case for this is to support the X-Scope-OrgID header required by Mimir and Cortex
+      # in multi-tenancy mode
+      http_headers:
+        X-Scope-OrgID: tenat-A
+        X-Promxy-Source: promxy-1
+
 
     # as many additional server groups as you have
     - static_configs:
