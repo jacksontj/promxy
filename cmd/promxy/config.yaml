@@ -155,7 +155,6 @@ promxy:
       # query can still succeed
       ignore_error: true
 
-
       # LabelFilterConfig is a mechanism to restrict which queries are sent to the particular downstream.
       # This is done by maintaining a "filter" of labels that are downstream and ensuring that the
       # matchers for any particular query match that in-memory filter. This can be defined both
@@ -183,9 +182,8 @@ promxy:
       # the main use-case for this is to support the X-Scope-OrgID header required by Mimir and Cortex
       # in multi-tenancy mode
       http_headers:
-        X-Scope-OrgID: tenat-A
+        X-Scope-OrgID: tenant-A
         X-Promxy-Source: promxy-1
-
 
     # as many additional server groups as you have
     - static_configs:
