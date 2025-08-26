@@ -30,7 +30,7 @@ import (
 // AppendFunc is used to add a matching item to whatever list the caller is using
 type AppendFunc func(interface{})
 
-// ListAll calls appendFn with each value retrieved from store which matches the selector.
+// ListAll lists items in the store matching the given selector, calling appendFn on each one.
 func ListAll(store Store, selector labels.Selector, appendFn AppendFunc) error {
 	selectAll := selector.Empty()
 	for _, m := range store.List() {
@@ -51,32 +51,23 @@ func ListAll(store Store, selector labels.Selector, appendFn AppendFunc) error {
 	return nil
 }
 
-// ListAllByNamespace used to list items belongs to namespace from Indexer.
+// ListAllByNamespace lists items in the given namespace in the store matching the given selector,
+// calling appendFn on each one.
+// If a blank namespace (NamespaceAll) is specified, this delegates to ListAll().
 func ListAllByNamespace(indexer Indexer, namespace string, selector labels.Selector, appendFn AppendFunc) error {
-	selectAll := selector.Empty()
 	if namespace == metav1.NamespaceAll {
-		for _, m := range indexer.List() {
-			if selectAll {
-				// Avoid computing labels of the objects to speed up common flows
-				// of listing all objects.
-				appendFn(m)
-				continue
-			}
-			metadata, err := meta.Accessor(m)
-			if err != nil {
-				return err
-			}
-			if selector.Matches(labels.Set(metadata.GetLabels())) {
-				appendFn(m)
-			}
-		}
-		return nil
+		return ListAll(indexer, selector, appendFn)
 	}
 
 	items, err := indexer.Index(NamespaceIndex, &metav1.ObjectMeta{Namespace: namespace})
 	if err != nil {
 		// Ignore error; do slow search without index.
-		klog.Warningf("can not retrieve list of objects using index : %v", err)
+		//
+		// ListAllByNamespace is called by generated code
+		// (k8s.io/client-go/listers) and probably not worth converting
+		// to contextual logging, which would require changing all of
+		// those APIs.
+		klog.TODO().Info("Warning: can not retrieve list of objects using index", "err", err)
 		for _, m := range indexer.List() {
 			metadata, err := meta.Accessor(m)
 			if err != nil {
@@ -89,6 +80,8 @@ func ListAllByNamespace(indexer Indexer, namespace string, selector labels.Selec
 		}
 		return nil
 	}
+
+	selectAll := selector.Empty()
 	for _, m := range items {
 		if selectAll {
 			// Avoid computing labels of the objects to speed up common flows

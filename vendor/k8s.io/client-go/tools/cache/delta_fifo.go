@@ -51,6 +51,13 @@ type DeltaFIFOOptions struct {
 	// When true, `Replaced` events will be sent for items passed to a Replace() call.
 	// When false, `Sync` events will be sent instead.
 	EmitDeltaTypeReplaced bool
+
+	// If set, will be called for objects before enqueueing them. Please
+	// see the comment on TransformFunc for details.
+	Transformer TransformFunc
+
+	// If set, log output will go to this logger instead of klog.Background().
+	Logger *klog.Logger
 }
 
 // DeltaFIFO is like FIFO, but differs in two ways.  One is that the
@@ -74,11 +81,11 @@ type DeltaFIFOOptions struct {
 // the Pop() method.
 //
 // DeltaFIFO solves this use case:
-//  * You want to process every object change (delta) at most once.
-//  * When you process an object, you want to see everything
-//    that's happened to it since you last processed it.
-//  * You want to process the deletion of some of the objects.
-//  * You might want to periodically reprocess objects.
+//   - You want to process every object change (delta) at most once.
+//   - When you process an object, you want to see everything
+//     that's happened to it since you last processed it.
+//   - You want to process the deletion of some of the objects.
+//   - You might want to periodically reprocess objects.
 //
 // DeltaFIFO's Pop(), Get(), and GetByKey() methods return
 // interface{} to satisfy the Store/Queue interfaces, but they
@@ -129,7 +136,32 @@ type DeltaFIFO struct {
 	// emitDeltaTypeReplaced is whether to emit the Replaced or Sync
 	// DeltaType when Replace() is called (to preserve backwards compat).
 	emitDeltaTypeReplaced bool
+
+	// Called with every object if non-nil.
+	transformer TransformFunc
+
+	// logger is a per-instance logger. This gets chosen when constructing
+	// the instance, with klog.Background() as default.
+	logger klog.Logger
 }
+
+// TransformFunc allows for transforming an object before it will be processed.
+//
+// The most common usage pattern is to clean-up some parts of the object to
+// reduce component memory usage if a given component doesn't care about them.
+//
+// New in v1.27: TransformFunc sees the object before any other actor, and it
+// is now safe to mutate the object in place instead of making a copy.
+//
+// It's recommended for the TransformFunc to be idempotent.
+// It MUST be idempotent if objects already present in the cache are passed to
+// the Replace() to avoid re-mutating them. Default informers do not pass
+// existing objects to Replace though.
+//
+// Note that TransformFunc is called while inserting objects into the
+// notification queue and is therefore extremely performance sensitive; please
+// do not do anything that will take a long time.
+type TransformFunc func(interface{}) (interface{}, error)
 
 // DeltaType is the type of a change (addition, deletion, etc)
 type DeltaType string
@@ -179,21 +211,21 @@ type Deltas []Delta
 // "known" keys when Pop() is called. Have to think about how that
 // affects error retrying.
 //
-//       NOTE: It is possible to misuse this and cause a race when using an
-//       external known object source.
-//       Whether there is a potential race depends on how the consumer
-//       modifies knownObjects. In Pop(), process function is called under
-//       lock, so it is safe to update data structures in it that need to be
-//       in sync with the queue (e.g. knownObjects).
+//	NOTE: It is possible to misuse this and cause a race when using an
+//	external known object source.
+//	Whether there is a potential race depends on how the consumer
+//	modifies knownObjects. In Pop(), process function is called under
+//	lock, so it is safe to update data structures in it that need to be
+//	in sync with the queue (e.g. knownObjects).
 //
-//       Example:
-//       In case of sharedIndexInformer being a consumer
-//       (https://github.com/kubernetes/kubernetes/blob/0cdd940f/staging/src/k8s.io/client-go/tools/cache/shared_informer.go#L192),
-//       there is no race as knownObjects (s.indexer) is modified safely
-//       under DeltaFIFO's lock. The only exceptions are GetStore() and
-//       GetIndexer() methods, which expose ways to modify the underlying
-//       storage. Currently these two methods are used for creating Lister
-//       and internal tests.
+//	Example:
+//	In case of sharedIndexInformer being a consumer
+//	(https://github.com/kubernetes/kubernetes/blob/0cdd940f/staging/src/k8s.io/client-go/tools/cache/shared_informer.go#L192),
+//	there is no race as knownObjects (s.indexer) is modified safely
+//	under DeltaFIFO's lock. The only exceptions are GetStore() and
+//	GetIndexer() methods, which expose ways to modify the underlying
+//	storage. Currently these two methods are used for creating Lister
+//	and internal tests.
 //
 // Also see the comment on DeltaFIFO.
 //
@@ -227,6 +259,11 @@ func NewDeltaFIFOWithOptions(opts DeltaFIFOOptions) *DeltaFIFO {
 		knownObjects: opts.KnownObjects,
 
 		emitDeltaTypeReplaced: opts.EmitDeltaTypeReplaced,
+		transformer:           opts.Transformer,
+		logger:                klog.Background(),
+	}
+	if opts.Logger != nil {
+		f.logger = *opts.Logger
 	}
 	f.cond.L = &f.lock
 	return f
@@ -271,6 +308,10 @@ func (f *DeltaFIFO) KeyOf(obj interface{}) (string, error) {
 func (f *DeltaFIFO) HasSynced() bool {
 	f.lock.Lock()
 	defer f.lock.Unlock()
+	return f.hasSynced_locked()
+}
+
+func (f *DeltaFIFO) hasSynced_locked() bool {
 	return f.populated && f.initialPopulationCount == 0
 }
 
@@ -328,43 +369,6 @@ func (f *DeltaFIFO) Delete(obj interface{}) error {
 	return f.queueActionLocked(Deleted, obj)
 }
 
-// AddIfNotPresent inserts an item, and puts it in the queue. If the item is already
-// present in the set, it is neither enqueued nor added to the set.
-//
-// This is useful in a single producer/consumer scenario so that the consumer can
-// safely retry items without contending with the producer and potentially enqueueing
-// stale items.
-//
-// Important: obj must be a Deltas (the output of the Pop() function). Yes, this is
-// different from the Add/Update/Delete functions.
-func (f *DeltaFIFO) AddIfNotPresent(obj interface{}) error {
-	deltas, ok := obj.(Deltas)
-	if !ok {
-		return fmt.Errorf("object must be of type deltas, but got: %#v", obj)
-	}
-	id, err := f.KeyOf(deltas)
-	if err != nil {
-		return KeyError{obj, err}
-	}
-	f.lock.Lock()
-	defer f.lock.Unlock()
-	f.addIfNotPresent(id, deltas)
-	return nil
-}
-
-// addIfNotPresent inserts deltas under id if it does not exist, and assumes the caller
-// already holds the fifo lock.
-func (f *DeltaFIFO) addIfNotPresent(id string, deltas Deltas) {
-	f.populated = true
-	if _, exists := f.items[id]; exists {
-		return
-	}
-
-	f.queue = append(f.queue, id)
-	f.items[id] = deltas
-	f.cond.Broadcast()
-}
-
 // re-listing and watching can deliver the same update multiple times in any
 // order. This will combine the most recent two deltas if they are the same.
 func dedupDeltas(deltas Deltas) Deltas {
@@ -407,10 +411,41 @@ func isDeletionDup(a, b *Delta) *Delta {
 // queueActionLocked appends to the delta list for the object.
 // Caller must lock first.
 func (f *DeltaFIFO) queueActionLocked(actionType DeltaType, obj interface{}) error {
+	return f.queueActionInternalLocked(actionType, actionType, obj)
+}
+
+// queueActionInternalLocked appends to the delta list for the object.
+// The actionType is emitted and must honor emitDeltaTypeReplaced.
+// The internalActionType is only used within this function and must
+// ignore emitDeltaTypeReplaced.
+// Caller must lock first.
+func (f *DeltaFIFO) queueActionInternalLocked(actionType, internalActionType DeltaType, obj interface{}) error {
 	id, err := f.KeyOf(obj)
 	if err != nil {
 		return KeyError{obj, err}
 	}
+
+	// Every object comes through this code path once, so this is a good
+	// place to call the transform func.
+	//
+	// If obj is a DeletedFinalStateUnknown tombstone or the action is a Sync,
+	// then the object have already gone through the transformer.
+	//
+	// If the objects already present in the cache are passed to Replace(),
+	// the transformer must be idempotent to avoid re-mutating them,
+	// or coordinate with all readers from the cache to avoid data races.
+	// Default informers do not pass existing objects to Replace.
+	if f.transformer != nil {
+		_, isTombstone := obj.(DeletedFinalStateUnknown)
+		if !isTombstone && internalActionType != Sync {
+			var err error
+			obj, err = f.transformer(obj)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	oldDeltas := f.items[id]
 	newDeltas := append(oldDeltas, Delta{actionType, obj})
 	newDeltas = dedupDeltas(newDeltas)
@@ -426,69 +461,14 @@ func (f *DeltaFIFO) queueActionLocked(actionType DeltaType, obj interface{}) err
 		// when given a non-empty list (as it is here).
 		// If somehow it happens anyway, deal with it but complain.
 		if oldDeltas == nil {
-			klog.Errorf("Impossible dedupDeltas for id=%q: oldDeltas=%#+v, obj=%#+v; ignoring", id, oldDeltas, obj)
+			f.logger.Error(nil, "Impossible dedupDeltas, ignoring", "id", id, "oldDeltas", oldDeltas, "obj", obj)
 			return nil
 		}
-		klog.Errorf("Impossible dedupDeltas for id=%q: oldDeltas=%#+v, obj=%#+v; breaking invariant by storing empty Deltas", id, oldDeltas, obj)
+		f.logger.Error(nil, "Impossible dedupDeltas, breaking invariant by storing empty Deltas", "id", id, "oldDeltas", oldDeltas, "obj", obj)
 		f.items[id] = newDeltas
 		return fmt.Errorf("Impossible dedupDeltas for id=%q: oldDeltas=%#+v, obj=%#+v; broke DeltaFIFO invariant by storing empty Deltas", id, oldDeltas, obj)
 	}
 	return nil
-}
-
-// List returns a list of all the items; it returns the object
-// from the most recent Delta.
-// You should treat the items returned inside the deltas as immutable.
-func (f *DeltaFIFO) List() []interface{} {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-	return f.listLocked()
-}
-
-func (f *DeltaFIFO) listLocked() []interface{} {
-	list := make([]interface{}, 0, len(f.items))
-	for _, item := range f.items {
-		list = append(list, item.Newest().Object)
-	}
-	return list
-}
-
-// ListKeys returns a list of all the keys of the objects currently
-// in the FIFO.
-func (f *DeltaFIFO) ListKeys() []string {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-	list := make([]string, 0, len(f.queue))
-	for _, key := range f.queue {
-		list = append(list, key)
-	}
-	return list
-}
-
-// Get returns the complete list of deltas for the requested item,
-// or sets exists=false.
-// You should treat the items returned inside the deltas as immutable.
-func (f *DeltaFIFO) Get(obj interface{}) (item interface{}, exists bool, err error) {
-	key, err := f.KeyOf(obj)
-	if err != nil {
-		return nil, false, KeyError{obj, err}
-	}
-	return f.GetByKey(key)
-}
-
-// GetByKey returns the complete list of deltas for the requested item,
-// setting exists=false if that list is empty.
-// You should treat the items returned inside the deltas as immutable.
-func (f *DeltaFIFO) GetByKey(key string) (item interface{}, exists bool, err error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-	d, exists := f.items[key]
-	if exists {
-		// Copy item's slice so operations on this slice
-		// won't interfere with the object we return.
-		d = copyDeltas(d)
-	}
-	return d, exists, nil
 }
 
 // IsClosed checks if the queue is closed
@@ -504,9 +484,7 @@ func (f *DeltaFIFO) IsClosed() bool {
 // is returned, so if you don't successfully process it, you need to add it back
 // with AddIfNotPresent().
 // process function is called under lock, so it is safe to update data structures
-// in it that need to be in sync with the queue (e.g. knownKeys). The PopProcessFunc
-// may return an instance of ErrRequeue with a nested error to indicate the current
-// item should be requeued (equivalent to calling AddIfNotPresent under the lock).
+// in it that need to be in sync with the queue (e.g. knownKeys).
 // process should avoid expensive I/O operation so that other queue operations, i.e.
 // Add() and Get(), won't be blocked for too long.
 //
@@ -526,6 +504,7 @@ func (f *DeltaFIFO) Pop(process PopProcessFunc) (interface{}, error) {
 
 			f.cond.Wait()
 		}
+		isInInitialList := !f.hasSynced_locked()
 		id := f.queue[0]
 		f.queue = f.queue[1:]
 		depth := len(f.queue)
@@ -535,7 +514,7 @@ func (f *DeltaFIFO) Pop(process PopProcessFunc) (interface{}, error) {
 		item, ok := f.items[id]
 		if !ok {
 			// This should never happen
-			klog.Errorf("Inconceivable! %q was in f.queue but not f.items; ignoring.", id)
+			f.logger.Error(nil, "Inconceivable! Item was in f.queue but not f.items; ignoring", "id", id)
 			continue
 		}
 		delete(f.items, id)
@@ -551,11 +530,7 @@ func (f *DeltaFIFO) Pop(process PopProcessFunc) (interface{}, error) {
 				utiltrace.Field{Key: "Reason", Value: "slow event handlers blocking the queue"})
 			defer trace.LogIfLong(100 * time.Millisecond)
 		}
-		err := process(item)
-		if e, ok := err.(ErrRequeue); ok {
-			f.addIfNotPresent(id, item)
-			err = e.Err
-		}
+		err := process(item, isInInitialList)
 		// Don't need to copyDeltas here, because we're transferring
 		// ownership to the caller.
 		return item, err
@@ -566,12 +541,11 @@ func (f *DeltaFIFO) Pop(process PopProcessFunc) (interface{}, error) {
 // using the Sync or Replace DeltaType and then (2) it does some deletions.
 // In particular: for every pre-existing key K that is not the key of
 // an object in `list` there is the effect of
-// `Delete(DeletedFinalStateUnknown{K, O})` where O is current object
-// of K.  If `f.knownObjects == nil` then the pre-existing keys are
-// those in `f.items` and the current object of K is the `.Newest()`
-// of the Deltas associated with K.  Otherwise the pre-existing keys
-// are those listed by `f.knownObjects` and the current object of K is
-// what `f.knownObjects.GetByKey(K)` returns.
+// `Delete(DeletedFinalStateUnknown{K, O})` where O is the latest known
+// object of K. The pre-existing keys are those in the union set of the keys in
+// `f.items` and `f.knownObjects` (if not nil). The last known object for key K is
+// the one present in the last delta in `f.items`. If there is no delta for K
+// in `f.items`, it is the object in `f.knownObjects`
 func (f *DeltaFIFO) Replace(list []interface{}, _ string) error {
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -590,60 +564,58 @@ func (f *DeltaFIFO) Replace(list []interface{}, _ string) error {
 			return KeyError{item, err}
 		}
 		keys.Insert(key)
-		if err := f.queueActionLocked(action, item); err != nil {
+		if err := f.queueActionInternalLocked(action, Replaced, item); err != nil {
 			return fmt.Errorf("couldn't enqueue object: %v", err)
 		}
 	}
 
-	if f.knownObjects == nil {
-		// Do deletion detection against our own list.
-		queuedDeletions := 0
-		for k, oldItem := range f.items {
+	// Do deletion detection against objects in the queue
+	queuedDeletions := 0
+	for k, oldItem := range f.items {
+		if keys.Has(k) {
+			continue
+		}
+		// Delete pre-existing items not in the new list.
+		// This could happen if watch deletion event was missed while
+		// disconnected from apiserver.
+		var deletedObj interface{}
+		if n := oldItem.Newest(); n != nil {
+			deletedObj = n.Object
+
+			// if the previous object is a DeletedFinalStateUnknown, we have to extract the actual Object
+			if d, ok := deletedObj.(DeletedFinalStateUnknown); ok {
+				deletedObj = d.Obj
+			}
+		}
+		queuedDeletions++
+		if err := f.queueActionLocked(Deleted, DeletedFinalStateUnknown{k, deletedObj}); err != nil {
+			return err
+		}
+	}
+
+	if f.knownObjects != nil {
+		// Detect deletions for objects not present in the queue, but present in KnownObjects
+		knownKeys := f.knownObjects.ListKeys()
+		for _, k := range knownKeys {
 			if keys.Has(k) {
 				continue
 			}
-			// Delete pre-existing items not in the new list.
-			// This could happen if watch deletion event was missed while
-			// disconnected from apiserver.
-			var deletedObj interface{}
-			if n := oldItem.Newest(); n != nil {
-				deletedObj = n.Object
+			if len(f.items[k]) > 0 {
+				continue
+			}
+
+			deletedObj, exists, err := f.knownObjects.GetByKey(k)
+			if err != nil {
+				deletedObj = nil
+				f.logger.Error(err, "Unexpected error during lookup, placing DeleteFinalStateUnknown marker without object", "key", k)
+			} else if !exists {
+				deletedObj = nil
+				f.logger.Info("Key does not exist in known objects store, placing DeleteFinalStateUnknown marker without object", "key", k)
 			}
 			queuedDeletions++
 			if err := f.queueActionLocked(Deleted, DeletedFinalStateUnknown{k, deletedObj}); err != nil {
 				return err
 			}
-		}
-
-		if !f.populated {
-			f.populated = true
-			// While there shouldn't be any queued deletions in the initial
-			// population of the queue, it's better to be on the safe side.
-			f.initialPopulationCount = keys.Len() + queuedDeletions
-		}
-
-		return nil
-	}
-
-	// Detect deletions not already in the queue.
-	knownKeys := f.knownObjects.ListKeys()
-	queuedDeletions := 0
-	for _, k := range knownKeys {
-		if keys.Has(k) {
-			continue
-		}
-
-		deletedObj, exists, err := f.knownObjects.GetByKey(k)
-		if err != nil {
-			deletedObj = nil
-			klog.Errorf("Unexpected error %v during lookup of key %v, placing DeleteFinalStateUnknown marker without object", err, k)
-		} else if !exists {
-			deletedObj = nil
-			klog.Infof("Key %v does not exist in known objects store, placing DeleteFinalStateUnknown marker without object", k)
-		}
-		queuedDeletions++
-		if err := f.queueActionLocked(Deleted, DeletedFinalStateUnknown{k, deletedObj}); err != nil {
-			return err
 		}
 	}
 
@@ -678,10 +650,10 @@ func (f *DeltaFIFO) Resync() error {
 func (f *DeltaFIFO) syncKeyLocked(key string) error {
 	obj, exists, err := f.knownObjects.GetByKey(key)
 	if err != nil {
-		klog.Errorf("Unexpected error %v during lookup of key %v, unable to queue object for sync", err, key)
+		f.logger.Error(err, "Unexpected error during lookup, unable to queue object for sync", "key", key)
 		return nil
 	} else if !exists {
-		klog.Infof("Key %v does not exist in known objects store, unable to queue object for sync", key)
+		f.logger.Info("Key does not exist in known objects store, unable to queue object for sync", "key", key)
 		return nil
 	}
 

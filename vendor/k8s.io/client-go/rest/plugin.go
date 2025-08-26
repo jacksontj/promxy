@@ -21,8 +21,6 @@ import (
 	"net/http"
 	"sync"
 
-	"k8s.io/klog/v2"
-
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
@@ -36,9 +34,10 @@ type AuthProvider interface {
 }
 
 // Factory generates an AuthProvider plugin.
-//  clusterAddress is the address of the current cluster.
-//  config is the initial configuration for this plugin.
-//  persister allows the plugin to save updated configuration.
+//
+//	clusterAddress is the address of the current cluster.
+//	config is the initial configuration for this plugin.
+//	persister allows the plugin to save updated configuration.
 type Factory func(clusterAddress string, config map[string]string, persister AuthProviderConfigPersister) (AuthProvider, error)
 
 // AuthProviderConfigPersister allows a plugin to persist configuration info
@@ -64,7 +63,10 @@ func RegisterAuthProviderPlugin(name string, plugin Factory) error {
 	if _, found := plugins[name]; found {
 		return fmt.Errorf("auth Provider Plugin %q was registered twice", name)
 	}
-	klog.V(4).Infof("Registered Auth Provider Plugin %q", name)
+	// RegisterAuthProviderPlugin gets called during the init phase before
+	// logging is initialized and therefore should not emit logs. If you
+	// need this message for debugging something, then uncomment it.
+	// klog.V(4).Infof("Registered Auth Provider Plugin %q", name)
 	plugins[name] = plugin
 	return nil
 }
