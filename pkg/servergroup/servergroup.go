@@ -254,7 +254,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				}
 
 				// Add labels
-				apiClient = &promclient.AddLabelClient{apiClient, modelLabelSet.Merge(s.Cfg.Labels)}
+				apiClient = promclient.NewAddLabelClient(apiClient, modelLabelSet.Merge(s.Cfg.Labels), s.Cfg.ExternalLabels)
 
 				// Add MetricRelabel if set
 				if len(s.Cfg.MetricsRelabelConfigs) > 0 {
