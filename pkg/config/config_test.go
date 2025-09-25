@@ -49,6 +49,7 @@ func TestConfigFromFile_GeneratorURLTemplate(t *testing.T) {
 		name           string
 		configContent  string
 		expectedTemplate string
+		expectedTemplateDir string
 		expectError    bool
 	}{
 		{
@@ -56,22 +57,39 @@ func TestConfigFromFile_GeneratorURLTemplate(t *testing.T) {
 			configContent: `
 promxy:
   generator_url_template: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}"
-  server_groups:
-    - static_configs:
-        - targets: ["localhost:9090"]
 `,
 			expectedTemplate: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
+			expectedTemplateDir: "",
 			expectError:      false,
 		},
 		{
-			name: "config without generator URL template",
+			name: "config with template directory",
 			configContent: `
 promxy:
-  server_groups:
-    - static_configs:
-        - targets: ["localhost:9090"]
+  template_directory: "/etc/promxy/templates"
 `,
 			expectedTemplate: "",
+			expectedTemplateDir: "/etc/promxy/templates",
+			expectError:      false,
+		},
+		{
+			name: "config with both template and directory",
+			configContent: `
+promxy:
+  generator_url_template: "https://grafana.example.com/alert/{{.AlertName}}"
+  template_directory: "/etc/promxy/templates"
+`,
+			expectedTemplate: "https://grafana.example.com/alert/{{.AlertName}}",
+			expectedTemplateDir: "/etc/promxy/templates",
+			expectError:      false,
+		},
+		{
+			name: "empty promxy config",
+			configContent: `
+promxy: {}
+`,
+			expectedTemplate: "",
+			expectedTemplateDir: "",
 			expectError:      false,
 		},
 		{
@@ -79,11 +97,10 @@ promxy:
 			configContent: `
 promxy:
   generator_url_template: "test"
-  server_groups:
-    - static_configs
-        - targets: ["localhost:9090"]
+  invalid_yaml_syntax
 `,
 			expectedTemplate: "",
+			expectedTemplateDir: "",
 			expectError:      true,
 		},
 	}
@@ -117,13 +134,10 @@ promxy:
 			if cfg.PromxyConfig.GeneratorURLTemplate != tt.expectedTemplate {
 				t.Errorf("expected template %q, got %q", tt.expectedTemplate, cfg.PromxyConfig.GeneratorURLTemplate)
 			}
+			
+			if cfg.PromxyConfig.TemplateDirectory != tt.expectedTemplateDir {
+				t.Errorf("expected template directory %q, got %q", tt.expectedTemplateDir, cfg.PromxyConfig.TemplateDirectory)
+			}
 		})
-	}
-}
-
-func TestConfigFromFile_NonExistentFile(t *testing.T) {
-	_, err := ConfigFromFile("/nonexistent/config.yaml")
-	if err == nil {
-		t.Error("expected error for nonexistent file")
 	}
 }

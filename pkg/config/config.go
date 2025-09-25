@@ -62,4 +62,6 @@ type PromxyConfig struct {
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
 	// Template for generating alert GeneratorURLs
 	GeneratorURLTemplate string `yaml:"generator_url_template,omitempty"`
+	// Directory containing template files for alert GeneratorURLs
+	TemplateDirectory string `yaml:"template_directory,omitempty"`
 }

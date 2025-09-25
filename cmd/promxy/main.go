@@ -110,6 +110,7 @@ type cliOpts struct {
 	ResendDelay               time.Duration `long:"rules.alert.resend-delay" description:"Minimum amount of time to wait before resending an alert to Alertmanager." default:"1m"`
 	AlertBackfill             bool          `long:"rules.alertbackfill" description:"Enable promxy to recalculate alert state on startup when the downstream datastore doesn't have an ALERTS_FOR_STATE"`
 	GeneratorURLTemplate      string        `long:"rules.alert.generator-url-template" description:"Go template for alert GeneratorURL"`
+	TemplateDirectory         string        `long:"rules.alert.template-dir" description:"Directory containing GeneratorURL templates"`
 
 	ShutdownDelay   time.Duration `long:"http.shutdown-delay" description:"time to wait before shutting down the http server, this allows for a grace period for upstreams (e.g. LoadBalancers) to discover the new stopping status through healthchecks" default:"10s"`
 	ShutdownTimeout time.Duration `long:"http.shutdown-timeout" description:"max time to wait for a graceful shutdown of the HTTP server" default:"60s"`
@@ -322,7 +323,9 @@ func main() {
 	}
 	
 	// Create alert configuration
-	alertCfg := &alertConfig{}
+	alertCfg := &alertConfig{
+		templateManager: alerttemplate.NewTemplateManager(),
+	}
 	
 	ruleManager := rules.NewManager(&rules.ManagerOptions{
 		Context:         ctx,         // base context for all background tasks
@@ -345,7 +348,11 @@ func main() {
 	go ruleManager.Run()
 
 	// Add promxy-specific alert configuration reloadable
-	reloadables = append(reloadables, &alertConfigReloadable{alertCfg: alertCfg, cliTemplate: opts.GeneratorURLTemplate})
+	reloadables = append(reloadables, &alertConfigReloadable{
+		alertCfg:       alertCfg, 
+		cliTemplate:    opts.GeneratorURLTemplate,
+		cliTemplateDir: opts.TemplateDirectory,
+	})
 
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(&proxyconfig.ApplyConfigFunc{func(cfg *config.Config) error {
 		// Get all rule files matching the configuration oaths.
@@ -550,6 +557,7 @@ func main() {
 // alertConfig holds the configuration for alert processing
 type alertConfig struct {
 	generatorURLTemplate string
+	templateManager      *alerttemplate.TemplateManager
 }
 
 // setGeneratorURLTemplate sets the generator URL template with CLI override support
@@ -563,13 +571,28 @@ func (ac *alertConfig) setGeneratorURLTemplate(configTemplate, cliTemplate strin
 
 // alertConfigReloadable implements the Reloadable interface for alert configuration
 type alertConfigReloadable struct {
-	alertCfg    *alertConfig
-	cliTemplate string
+	alertCfg         *alertConfig
+	cliTemplate      string
+	cliTemplateDir   string
 }
 
 // ApplyConfig applies the new configuration to the alert config
 func (acr *alertConfigReloadable) ApplyConfig(cfg *proxyconfig.Config) error {
 	acr.alertCfg.setGeneratorURLTemplate(cfg.PromxyConfig.GeneratorURLTemplate, acr.cliTemplate)
+	
+	// Load templates from directory (CLI takes precedence over config)
+	templateDir := acr.cliTemplateDir
+	if templateDir == "" {
+		templateDir = cfg.PromxyConfig.TemplateDirectory
+	}
+	
+	if templateDir != "" {
+		if err := acr.alertCfg.templateManager.LoadFromDirectory(templateDir); err != nil {
+			logrus.Errorf("Failed to load templates from directory %s: %v", templateDir, err)
+			// Don't return error - continue with existing templates
+		}
+	}
+	
 	return nil
 }
 
