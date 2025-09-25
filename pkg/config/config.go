@@ -60,4 +60,6 @@ func (c *Config) String() string {
 type PromxyConfig struct {
 	// Config for each of the server groups promxy is configured to aggregate
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
+	// Template for generating alert GeneratorURLs
+	GeneratorURLTemplate string `yaml:"generator_url_template,omitempty"`
 }

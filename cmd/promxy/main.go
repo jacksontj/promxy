@@ -46,6 +46,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/jacksontj/promxy/pkg/alertbackfill"
+	"github.com/jacksontj/promxy/pkg/alerttemplate"
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/logging"
 	"github.com/jacksontj/promxy/pkg/middleware"
@@ -108,6 +109,7 @@ type cliOpts struct {
 	ForGracePeriod            time.Duration `long:"rules.alert.for-grace-period" description:"Minimum duration between alert and restored for state. This is maintained only for alerts with configured for time greater than grace period." default:"10m"`
 	ResendDelay               time.Duration `long:"rules.alert.resend-delay" description:"Minimum amount of time to wait before resending an alert to Alertmanager." default:"1m"`
 	AlertBackfill             bool          `long:"rules.alertbackfill" description:"Enable promxy to recalculate alert state on startup when the downstream datastore doesn't have an ALERTS_FOR_STATE"`
+	GeneratorURLTemplate      string        `long:"rules.alert.generator-url-template" description:"Go template for alert GeneratorURL"`
 
 	ShutdownDelay   time.Duration `long:"http.shutdown-delay" description:"time to wait before shutting down the http server, this allows for a grace period for upstreams (e.g. LoadBalancers) to discover the new stopping status through healthchecks" default:"10s"`
 	ShutdownTimeout time.Duration `long:"http.shutdown-timeout" description:"max time to wait for a graceful shutdown of the HTTP server" default:"60s"`
@@ -318,11 +320,15 @@ func main() {
 	} else {
 		ruleQueryable = proxyStorage
 	}
+	
+	// Create alert configuration
+	alertCfg := &alertConfig{}
+	
 	ruleManager := rules.NewManager(&rules.ManagerOptions{
 		Context:         ctx,         // base context for all background tasks
 		ExternalURL:     externalUrl, // URL listed as URL for "who fired this alert"
 		QueryFunc:       rules.EngineQueryFunc(engine, proxyStorage),
-		NotifyFunc:      sendAlerts(notifierManager, externalUrl.String()),
+		NotifyFunc:      sendAlerts(notifierManager, externalUrl.String(), alertCfg),
 		Appendable:      proxyStorage,
 		Queryable:       ruleQueryable,
 		Logger:          logger,
@@ -337,6 +343,9 @@ func main() {
 	}
 
 	go ruleManager.Run()
+
+	// Add promxy-specific alert configuration reloadable
+	reloadables = append(reloadables, &alertConfigReloadable{alertCfg: alertCfg, cliTemplate: opts.GeneratorURLTemplate})
 
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(&proxyconfig.ApplyConfigFunc{func(cfg *config.Config) error {
 		// Get all rule files matching the configuration oaths.
@@ -538,9 +547,37 @@ func main() {
 	}
 }
 
+// alertConfig holds the configuration for alert processing
+type alertConfig struct {
+	generatorURLTemplate string
+}
+
+// setGeneratorURLTemplate sets the generator URL template with CLI override support
+func (ac *alertConfig) setGeneratorURLTemplate(configTemplate, cliTemplate string) {
+	if cliTemplate != "" {
+		ac.generatorURLTemplate = cliTemplate
+	} else {
+		ac.generatorURLTemplate = configTemplate
+	}
+}
+
+// alertConfigReloadable implements the Reloadable interface for alert configuration
+type alertConfigReloadable struct {
+	alertCfg    *alertConfig
+	cliTemplate string
+}
+
+// ApplyConfig applies the new configuration to the alert config
+func (acr *alertConfigReloadable) ApplyConfig(cfg *proxyconfig.Config) error {
+	acr.alertCfg.setGeneratorURLTemplate(cfg.PromxyConfig.GeneratorURLTemplate, acr.cliTemplate)
+	return nil
+}
+
+
+
 // sendAlerts implements the rules.NotifyFunc for a Notifier.
 // It filters any non-firing alerts from the input.
-func sendAlerts(n *notifier.Manager, externalURL string) rules.NotifyFunc {
+func sendAlerts(n *notifier.Manager, externalURL string, alertCfg *alertConfig) rules.NotifyFunc {
 	return func(ctx context.Context, expr string, alerts ...*rules.Alert) {
 		var res []*notifier.Alert
 
@@ -549,11 +586,26 @@ func sendAlerts(n *notifier.Manager, externalURL string) rules.NotifyFunc {
 			if alert.State == rules.StatePending {
 				continue
 			}
+			
+			// Generate the URL using template if configured, otherwise use default
+			var generatorURL string
+			if alertCfg.generatorURLTemplate != "" {
+				templateURL, err := alerttemplate.ExecuteGeneratorURLTemplate(alertCfg.generatorURLTemplate, alert, expr, externalURL)
+				if err != nil {
+					logrus.Errorf("Failed to execute GeneratorURL template for alert %s: %v", alert.Labels.Get("alertname"), err)
+					generatorURL = externalURL + strutil.TableLinkForExpression(expr)
+				} else {
+					generatorURL = templateURL
+				}
+			} else {
+				generatorURL = externalURL + strutil.TableLinkForExpression(expr)
+			}
+			
 			a := &notifier.Alert{
 				StartsAt:     alert.FiredAt,
 				Labels:       alert.Labels,
 				Annotations:  alert.Annotations,
-				GeneratorURL: externalURL + strutil.TableLinkForExpression(expr),
+				GeneratorURL: generatorURL,
 			}
 			if !alert.ResolvedAt.IsZero() {
 				a.EndsAt = alert.ResolvedAt
