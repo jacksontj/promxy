@@ -1,11 +1,19 @@
 package alerttemplate
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/rules"
+	"github.com/prometheus/prometheus/util/strutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExecuteGeneratorURLTemplate(t *testing.T) {
@@ -405,6 +413,356 @@ func TestTemplateWithNilAlert(t *testing.T) {
 	expectedMsg := "alert cannot be nil"
 	if !strings.Contains(err.Error(), expectedMsg) {
 		t.Errorf("expected error to contain %q, got %q", expectedMsg, err.Error())
+	}
+}
+
+// TestTemplateManager tests template loading and management
+func TestTemplateManager(t *testing.T) {
+	t.Run("directory loading", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "template_test_*")
+		require.NoError(t, err)
+		defer os.RemoveAll(tempDir)
+
+		// Create test files including nested directories and non-template files
+		testFiles := map[string]string{
+			"grafana.tmpl":         "https://grafana.example.com/alert/{{.AlertName}}",
+			"subdir/custom.tmpl":   "https://custom.example.com/{{.Labels.severity}}",
+			"invalid.tmpl":         "https://example.com/{{.InvalidSyntax", // Invalid template
+			"readme.txt":           "This is not a template",               // Non-template file
+		}
+
+		for filePath, content := range testFiles {
+			fullPath := filepath.Join(tempDir, filePath)
+			dir := filepath.Dir(fullPath)
+			if dir != tempDir {
+				err := os.MkdirAll(dir, 0755)
+				require.NoError(t, err)
+			}
+			err := os.WriteFile(fullPath, []byte(content), 0644)
+			require.NoError(t, err)
+		}
+
+		tm := NewTemplateManager()
+		err = tm.LoadFromDirectory(tempDir)
+		require.NoError(t, err)
+
+		// Should load 2 valid templates (grafana and subdir.custom)
+		names := tm.ListTemplates()
+		assert.Len(t, names, 2)
+		assert.Contains(t, names, "grafana")
+		assert.Contains(t, names, "subdir.custom")
+
+		// Verify template content
+		content, exists := tm.GetTemplate("grafana")
+		assert.True(t, exists)
+		assert.Equal(t, "https://grafana.example.com/alert/{{.AlertName}}", content)
+	})
+
+	t.Run("inline template validation", func(t *testing.T) {
+		tm := NewTemplateManager()
+
+		// Test valid templates
+		validTemplates := map[string]string{
+			"valid1": "https://example.com/{{.AlertName}}",
+			"valid2": "https://example.com/{{.Labels.severity}}",
+		}
+		err := tm.LoadInlineTemplates(validTemplates)
+		assert.NoError(t, err)
+		assert.Len(t, tm.GetInlineTemplates(), 2)
+
+		// Test invalid templates (should be skipped)
+		invalidTemplates := map[string]string{
+			"":          "https://example.com/empty-name",     // Empty name
+			"path/name": "https://example.com/{{.AlertName}}", // Path separator
+			".hidden":   "https://example.com/{{.AlertName}}", // Starts with dot
+			"empty":     "",                                   // Empty content
+			"malformed": "https://example.com/{{.AlertName",   // Malformed template
+		}
+		err = tm.LoadInlineTemplates(invalidTemplates)
+		assert.NoError(t, err)
+		assert.Len(t, tm.GetInlineTemplates(), 0) // All should be rejected
+	})
+
+	t.Run("directory override behavior", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "template_override_test_*")
+		require.NoError(t, err)
+		defer os.RemoveAll(tempDir)
+
+		// Create directory template
+		err = os.WriteFile(filepath.Join(tempDir, "shared.tmpl"), 
+			[]byte("https://directory.example.com/{{.AlertName}}"), 0644)
+		require.NoError(t, err)
+
+		tm := NewTemplateManager()
+		
+		// Load inline template first
+		inlineTemplates := map[string]string{
+			"shared":      "https://inline.example.com/{{.AlertName}}",
+			"inline_only": "https://inline-only.example.com/{{.AlertName}}",
+		}
+		err = tm.LoadInlineTemplates(inlineTemplates)
+		require.NoError(t, err)
+
+		// Load directory templates (should override inline)
+		err = tm.LoadFromDirectory(tempDir)
+		require.NoError(t, err)
+
+		// Verify directory template overrides inline template
+		content, exists := tm.GetTemplate("shared")
+		assert.True(t, exists)
+		assert.Equal(t, "https://directory.example.com/{{.AlertName}}", content)
+
+		// Verify inline-only template still exists
+		content, exists = tm.GetTemplate("inline_only")
+		assert.True(t, exists)
+		assert.Equal(t, "https://inline-only.example.com/{{.AlertName}}", content)
+	})
+
+	t.Run("edge cases", func(t *testing.T) {
+		tm := NewTemplateManager()
+		
+		// Empty path should not error
+		err := tm.LoadFromDirectory("")
+		assert.NoError(t, err)
+		assert.Len(t, tm.ListTemplates(), 0)
+		
+		// Non-existent directory should not error
+		err = tm.LoadFromDirectory("/non/existent/directory")
+		assert.NoError(t, err)
+		assert.Len(t, tm.ListTemplates(), 0)
+	})
+}
+
+// TestTemplateSelection tests rule-based template selection
+func TestTemplateSelection(t *testing.T) {
+	// Create a template manager with named templates
+	tm := NewTemplateManager()
+	namedTemplates := map[string]string{
+		"grafana":   "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
+		"pagerduty": "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}",
+	}
+	err := tm.LoadInlineTemplates(namedTemplates)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name            string
+		rules           []TemplateRule
+		defaultTemplate string
+		alertLabels     map[string]string
+		expected        string
+	}{
+		{
+			name:            "no rules, use default named template",
+			rules:           []TemplateRule{},
+			defaultTemplate: "grafana",
+			alertLabels:     map[string]string{"alertname": "TestAlert"},
+			expected:        "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
+		},
+		{
+			name: "single matching rule with inline template",
+			rules: []TemplateRule{
+				{
+					MatchLabels: map[string]string{"severity": "critical"},
+					Template:    "https://critical.example.com/alert/{{.AlertName}}",
+				},
+			},
+			defaultTemplate: "grafana",
+			alertLabels:     map[string]string{"alertname": "CriticalAlert", "severity": "critical"},
+			expected:        "https://critical.example.com/alert/{{.AlertName}}",
+		},
+		{
+			name: "multiple rules, first match wins",
+			rules: []TemplateRule{
+				{
+					MatchLabels: map[string]string{"severity": "critical"},
+					Template:    "https://critical.example.com/alert/{{.AlertName}}",
+				},
+				{
+					MatchLabels: map[string]string{"alertname": "CriticalAlert"},
+					Template:    "https://alertname.example.com/alert/{{.AlertName}}",
+				},
+			},
+			defaultTemplate: "grafana",
+			alertLabels:     map[string]string{"alertname": "CriticalAlert", "severity": "critical"},
+			expected:        "https://critical.example.com/alert/{{.AlertName}}",
+		},
+		{
+			name: "multiple match labels, all must match",
+			rules: []TemplateRule{
+				{
+					MatchLabels: map[string]string{"severity": "critical", "team": "frontend"},
+					Template:    "https://frontend-critical.example.com/alert/{{.AlertName}}",
+				},
+			},
+			defaultTemplate: "grafana",
+			alertLabels:     map[string]string{"alertname": "Alert", "severity": "critical", "team": "frontend"},
+			expected:        "https://frontend-critical.example.com/alert/{{.AlertName}}",
+		},
+		{
+			name: "partial match fails, use default",
+			rules: []TemplateRule{
+				{
+					MatchLabels: map[string]string{"severity": "critical", "team": "frontend"},
+					Template:    "https://frontend-critical.example.com/alert/{{.AlertName}}",
+				},
+			},
+			defaultTemplate: "grafana",
+			alertLabels:     map[string]string{"alertname": "Alert", "severity": "critical", "team": "backend"},
+			expected:        "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			alert := &rules.Alert{
+				Labels: labels.FromMap(tt.alertLabels),
+			}
+			result := SelectTemplate(tt.rules, tt.defaultTemplate, tm, alert)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+
+	// Test nil alert
+	result := SelectTemplate([]TemplateRule{}, "grafana", tm, nil)
+	assert.Equal(t, "grafana", result)
+}
+
+// TestEndToEndIntegration tests complete workflow from template selection to alert processing
+func TestEndToEndIntegration(t *testing.T) {
+	externalURL := "http://prometheus.example.com:9090"
+	expr := "up{instance=\"web-server-01\"}"
+	
+	alert := &rules.Alert{
+		Labels: labels.FromMap(map[string]string{
+			"alertname": "HighMemoryUsage",
+			"instance":  "web-server-01:9100",
+			"severity":  "critical",
+		}),
+		State:   rules.StateFiring,
+		FiredAt: time.Now(),
+	}
+
+	t.Run("template manager with rule selection", func(t *testing.T) {
+		// Create template manager with inline and directory templates
+		tm := NewTemplateManager()
+		
+		// Add inline templates first
+		namedTemplates := map[string]string{
+			"pagerduty": "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}",
+		}
+		err := tm.LoadInlineTemplates(namedTemplates)
+		require.NoError(t, err)
+
+		// Create directory template (will override inline if same name)
+		tempDir, err := os.MkdirTemp("", "integration_test_*")
+		require.NoError(t, err)
+		defer os.RemoveAll(tempDir)
+
+		err = os.WriteFile(filepath.Join(tempDir, "grafana.tmpl"), 
+			[]byte("https://grafana.example.com/alert/{{.AlertName}}"), 0644)
+		require.NoError(t, err)
+
+		err = tm.LoadFromDirectory(tempDir)
+		require.NoError(t, err)
+
+		// Test rule-based selection
+		rules := []TemplateRule{
+			{
+				MatchLabels: map[string]string{"severity": "critical"},
+				Template:    "grafana", // References directory template
+			},
+		}
+
+		selectedTemplate := SelectTemplate(rules, "pagerduty", tm, alert)
+		assert.Equal(t, "https://grafana.example.com/alert/{{.AlertName}}", selectedTemplate)
+
+		// Execute the selected template
+		result, err := ExecuteGeneratorURLTemplate(selectedTemplate, alert, expr, externalURL)
+		assert.NoError(t, err)
+		assert.Equal(t, "https://grafana.example.com/alert/HighMemoryUsage", result)
+	})
+
+	t.Run("alert processing with fallback", func(t *testing.T) {
+		mockNotifier := &mockNotifierManager{}
+		alertCfg := &mockAlertConfig{}
+		
+		// Test successful template execution
+		alertCfg.setGeneratorURLTemplate("https://grafana.example.com/alert/{{.AlertName}}", "")
+		sendAlertsFunc := createSendAlertsFunc(mockNotifier, externalURL, alertCfg)
+		
+		sendAlertsFunc(context.Background(), expr, alert)
+		
+		require.Len(t, mockNotifier.sentAlerts, 1)
+		assert.Equal(t, "https://grafana.example.com/alert/HighMemoryUsage", mockNotifier.sentAlerts[0].GeneratorURL)
+
+		// Test fallback on template error
+		mockNotifier.sentAlerts = nil
+		alertCfg.setGeneratorURLTemplate("{{.InvalidField}}", "")
+		sendAlertsFunc(context.Background(), expr, alert)
+		
+		require.Len(t, mockNotifier.sentAlerts, 1)
+		expectedFallbackURL := externalURL + strutil.TableLinkForExpression(expr)
+		assert.Equal(t, expectedFallbackURL, mockNotifier.sentAlerts[0].GeneratorURL)
+	})
+}
+
+// Mock types for testing alert processing workflow
+type mockAlertConfig struct {
+	generatorURLTemplate string
+}
+
+func (ac *mockAlertConfig) setGeneratorURLTemplate(configTemplate, cliTemplate string) {
+	if cliTemplate != "" {
+		ac.generatorURLTemplate = cliTemplate
+	} else {
+		ac.generatorURLTemplate = configTemplate
+	}
+}
+
+type mockNotifierManager struct {
+	sentAlerts []*notifier.Alert
+}
+
+func (m *mockNotifierManager) Send(alerts ...*notifier.Alert) {
+	m.sentAlerts = append(m.sentAlerts, alerts...)
+}
+
+func createSendAlertsFunc(nm *mockNotifierManager, externalURL string, alertCfg *mockAlertConfig) rules.NotifyFunc {
+	return func(ctx context.Context, expr string, alerts ...*rules.Alert) {
+		var res []*notifier.Alert
+
+		for _, alert := range alerts {
+			if alert.State == rules.StatePending {
+				continue
+			}
+			
+			var generatorURL string
+			if alertCfg.generatorURLTemplate != "" {
+				templateURL, err := ExecuteGeneratorURLTemplate(alertCfg.generatorURLTemplate, alert, expr, externalURL)
+				if err != nil {
+					generatorURL = externalURL + strutil.TableLinkForExpression(expr)
+				} else {
+					generatorURL = templateURL
+				}
+			} else {
+				generatorURL = externalURL + strutil.TableLinkForExpression(expr)
+			}
+			
+			a := &notifier.Alert{
+				StartsAt:     alert.FiredAt,
+				Labels:       alert.Labels,
+				Annotations:  alert.Annotations,
+				GeneratorURL: generatorURL,
+			}
+			if !alert.ResolvedAt.IsZero() {
+				a.EndsAt = alert.ResolvedAt
+			}
+			res = append(res, a)
+		}
+
+		if len(res) > 0 {
+			nm.Send(res...)
+		}
 	}
 }
 

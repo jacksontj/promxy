@@ -109,8 +109,8 @@ type cliOpts struct {
 	ForGracePeriod            time.Duration `long:"rules.alert.for-grace-period" description:"Minimum duration between alert and restored for state. This is maintained only for alerts with configured for time greater than grace period." default:"10m"`
 	ResendDelay               time.Duration `long:"rules.alert.resend-delay" description:"Minimum amount of time to wait before resending an alert to Alertmanager." default:"1m"`
 	AlertBackfill             bool          `long:"rules.alertbackfill" description:"Enable promxy to recalculate alert state on startup when the downstream datastore doesn't have an ALERTS_FOR_STATE"`
-	GeneratorURLTemplate      string        `long:"rules.alert.generator-url-template" description:"Go template for alert GeneratorURL"`
-	TemplateDirectory         string        `long:"rules.alert.template-dir" description:"Directory containing GeneratorURL templates"`
+	GeneratorURLTemplate      string        `long:"rules.alert.generator-url-template" description:"Go template for alert GeneratorURL. Overrides config file template"`
+	TemplateDirectory         string        `long:"rules.alert.template-dir" description:"Directory containing GeneratorURL template files (.tmpl extension)"`
 
 	ShutdownDelay   time.Duration `long:"http.shutdown-delay" description:"time to wait before shutting down the http server, this allows for a grace period for upstreams (e.g. LoadBalancers) to discover the new stopping status through healthchecks" default:"10s"`
 	ShutdownTimeout time.Duration `long:"http.shutdown-timeout" description:"max time to wait for a graceful shutdown of the HTTP server" default:"60s"`
@@ -623,7 +623,6 @@ func generateAlertURL(alertCfg *alertConfig, alert *rules.Alert, expr, externalU
 	// If CLI template is set, it overrides everything
 	if alertCfg.cliTemplate != "" {
 		effectiveTemplate = alertCfg.cliTemplate
-		logrus.Debugf("Using CLI template for alert %s", alert.Labels.Get("alertname"))
 	} else {
 		// Use rule-based template selection
 		effectiveTemplate = alerttemplate.SelectTemplate(
@@ -636,7 +635,6 @@ func generateAlertURL(alertCfg *alertConfig, alert *rules.Alert, expr, externalU
 	
 	// If no template configured, use default Prometheus URL
 	if effectiveTemplate == "" {
-		logrus.Debugf("No template configured for alert %s, using default Prometheus URL", alert.Labels.Get("alertname"))
 		return externalURL + strutil.TableLinkForExpression(expr)
 	}
 
@@ -649,6 +647,8 @@ func generateAlertURL(alertCfg *alertConfig, alert *rules.Alert, expr, externalU
 
 	return templateURL
 }
+
+
 
 // sendAlerts implements the rules.NotifyFunc for a Notifier.
 // It filters any non-firing alerts from the input.

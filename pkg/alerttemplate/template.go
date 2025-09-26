@@ -337,31 +337,25 @@ func SelectTemplate(rules []TemplateRule, defaultTemplate string, tm *TemplateMa
 	alertLabels := alert.Labels.Map()
 	
 	// Evaluate rules in order (top-to-bottom matching)
-	for i, rule := range rules {
+	for _, rule := range rules {
 		if matchesRule(rule, alertLabels) {
-			
 			// Check if the template is a named template or inline content
 			if tm != nil {
 				if namedTemplate, exists := tm.GetTemplate(rule.Template); exists {
-					logrus.Debugf("Using named template '%s' for alert %s", rule.Template, alert.Labels.Get("alertname"))
 					return namedTemplate
 				}
 			}
 			
 			// Treat as inline template content
-			logrus.Debugf("Using inline template from rule %d for alert %s", i, alert.Labels.Get("alertname"))
 			return rule.Template
 		}
 	}
 	
 	// No rules matched, use default template
 	if defaultTemplate != "" {
-		logrus.Debugf("No template rules matched for alert %s, using default template", alert.Labels.Get("alertname"))
-		
 		// Check if default template is a named template
 		if tm != nil {
 			if namedTemplate, exists := tm.GetTemplate(defaultTemplate); exists {
-				logrus.Debugf("Using named default template '%s' for alert %s", defaultTemplate, alert.Labels.Get("alertname"))
 				return namedTemplate
 			}
 		}
@@ -370,7 +364,6 @@ func SelectTemplate(rules []TemplateRule, defaultTemplate string, tm *TemplateMa
 		return defaultTemplate
 	}
 	
-	logrus.Debugf("No template rules or default template for alert %s", alert.Labels.Get("alertname"))
 	return ""
 }
 
@@ -390,4 +383,6 @@ func matchesRule(rule TemplateRule, alertLabels map[string]string) bool {
 	
 	return true
 }
+
+
 
