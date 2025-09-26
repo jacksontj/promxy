@@ -321,12 +321,14 @@ func main() {
 	} else {
 		ruleQueryable = proxyStorage
 	}
-	
+
 	// Create alert configuration
 	alertCfg := &alertConfig{
 		templateManager: alerttemplate.NewTemplateManager(),
+		cliTemplate:     opts.GeneratorURLTemplate,
+		cliTemplateDir:  opts.TemplateDirectory,
 	}
-	
+
 	ruleManager := rules.NewManager(&rules.ManagerOptions{
 		Context:         ctx,         // base context for all background tasks
 		ExternalURL:     externalUrl, // URL listed as URL for "who fired this alert"
@@ -349,9 +351,7 @@ func main() {
 
 	// Add promxy-specific alert configuration reloadable
 	reloadables = append(reloadables, &alertConfigReloadable{
-		alertCfg:       alertCfg, 
-		cliTemplate:    opts.GeneratorURLTemplate,
-		cliTemplateDir: opts.TemplateDirectory,
+		alertCfg: alertCfg,
 	})
 
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(&proxyconfig.ApplyConfigFunc{func(cfg *config.Config) error {
@@ -556,52 +556,89 @@ func main() {
 
 // alertConfig holds the configuration for alert processing
 type alertConfig struct {
-	generatorURLTemplate string
-	templateManager      *alerttemplate.TemplateManager
+	templateManager    *alerttemplate.TemplateManager
+	cliTemplate        string
+	cliTemplateDir     string
+	currentTemplate    string // Current effective template after config reload
 }
 
-// setGeneratorURLTemplate sets the generator URL template with CLI override support
-func (ac *alertConfig) setGeneratorURLTemplate(configTemplate, cliTemplate string) {
-	if cliTemplate != "" {
-		ac.generatorURLTemplate = cliTemplate
-	} else {
-		ac.generatorURLTemplate = configTemplate
+// getEffectiveTemplate returns the effective template considering CLI overrides
+func (ac *alertConfig) getEffectiveTemplate(configTemplate string) string {
+	if ac.cliTemplate != "" {
+		return ac.cliTemplate
 	}
+	return configTemplate
+}
+
+// getEffectiveTemplateDir returns the effective template directory considering CLI overrides
+func (ac *alertConfig) getEffectiveTemplateDir(configDir string) string {
+	if ac.cliTemplateDir != "" {
+		return ac.cliTemplateDir
+	}
+	return configDir
 }
 
 // alertConfigReloadable implements the Reloadable interface for alert configuration
 type alertConfigReloadable struct {
-	alertCfg         *alertConfig
-	cliTemplate      string
-	cliTemplateDir   string
+	alertCfg *alertConfig
 }
 
 // ApplyConfig applies the new configuration to the alert config
 func (acr *alertConfigReloadable) ApplyConfig(cfg *proxyconfig.Config) error {
-	acr.alertCfg.setGeneratorURLTemplate(cfg.PromxyConfig.GeneratorURLTemplate, acr.cliTemplate)
-	
-	// Load templates from directory (CLI takes precedence over config)
-	templateDir := acr.cliTemplateDir
-	if templateDir == "" {
-		templateDir = cfg.PromxyConfig.TemplateDirectory
-	}
-	
+	alertTemplates := cfg.PromxyConfig.AlertTemplates
+
+	// Update current effective template
+	acr.alertCfg.currentTemplate = acr.alertCfg.getEffectiveTemplate(alertTemplates.Default)
+
+	// Load templates from directory with error resilience
+	templateDir := acr.alertCfg.getEffectiveTemplateDir(alertTemplates.Directory)
 	if templateDir != "" {
 		if err := acr.alertCfg.templateManager.LoadFromDirectory(templateDir); err != nil {
-			logrus.Errorf("Failed to load templates from directory %s: %v", templateDir, err)
-			// Don't return error - continue with existing templates
+			logrus.Warnf("Failed to load templates from directory %s: %v", templateDir, err)
+			// Continue with existing templates - don't fail the entire config reload
 		}
 	}
-	
+
+	// Load inline templates with error resilience
+	if len(alertTemplates.Named) > 0 {
+		if err := acr.alertCfg.templateManager.LoadInlineTemplates(alertTemplates.Named); err != nil {
+			logrus.Warnf("Failed to load inline templates: %v", err)
+			// Continue with existing templates - don't fail the entire config reload
+		}
+	}
+
 	return nil
 }
 
+// generateAlertURL generates the appropriate URL for an alert with fallback handling
+func generateAlertURL(alertCfg *alertConfig, alert *rules.Alert, expr, externalURL string) string {
+	// Use current effective template
+	effectiveTemplate := alertCfg.currentTemplate
+	
+	// If no template configured, use default Prometheus URL
+	if effectiveTemplate == "" {
+		return externalURL + strutil.TableLinkForExpression(expr)
+	}
 
+	// Try to execute the template
+	templateURL, err := alerttemplate.ExecuteGeneratorURLTemplate(effectiveTemplate, alert, expr, externalURL)
+	if err != nil {
+		logrus.Warnf("Failed to execute GeneratorURL template for alert %s: %v, falling back to default URL", 
+			alert.Labels.Get("alertname"), err)
+		return externalURL + strutil.TableLinkForExpression(expr)
+	}
+
+	return templateURL
+}
 
 // sendAlerts implements the rules.NotifyFunc for a Notifier.
 // It filters any non-firing alerts from the input.
 func sendAlerts(n *notifier.Manager, externalURL string, alertCfg *alertConfig) rules.NotifyFunc {
 	return func(ctx context.Context, expr string, alerts ...*rules.Alert) {
+		if len(alerts) == 0 {
+			return
+		}
+
 		var res []*notifier.Alert
 
 		for _, alert := range alerts {
@@ -609,21 +646,10 @@ func sendAlerts(n *notifier.Manager, externalURL string, alertCfg *alertConfig) 
 			if alert.State == rules.StatePending {
 				continue
 			}
-			
-			// Generate the URL using template if configured, otherwise use default
-			var generatorURL string
-			if alertCfg.generatorURLTemplate != "" {
-				templateURL, err := alerttemplate.ExecuteGeneratorURLTemplate(alertCfg.generatorURLTemplate, alert, expr, externalURL)
-				if err != nil {
-					logrus.Errorf("Failed to execute GeneratorURL template for alert %s: %v", alert.Labels.Get("alertname"), err)
-					generatorURL = externalURL + strutil.TableLinkForExpression(expr)
-				} else {
-					generatorURL = templateURL
-				}
-			} else {
-				generatorURL = externalURL + strutil.TableLinkForExpression(expr)
-			}
-			
+
+			// Generate the URL with proper error handling and fallback
+			generatorURL := generateAlertURL(alertCfg, alert, expr, externalURL)
+
 			a := &notifier.Alert{
 				StartsAt:     alert.FiredAt,
 				Labels:       alert.Labels,
@@ -636,7 +662,7 @@ func sendAlerts(n *notifier.Manager, externalURL string, alertCfg *alertConfig) 
 			res = append(res, a)
 		}
 
-		if len(alerts) > 0 {
+		if len(res) > 0 {
 			n.Send(res...)
 		}
 	}

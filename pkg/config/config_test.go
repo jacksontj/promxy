@@ -44,104 +44,143 @@ func TestConfigFromFile(t *testing.T) {
 	}
 }
 
-func TestConfigFromFile_GeneratorURLTemplate(t *testing.T) {
+func TestConfigFromFile_AlertTemplates(t *testing.T) {
 	tests := []struct {
-		name                        string
-		configContent               string
-		expectedGeneratorURLTemplate string
-		expectedTemplateDirectory   string
-		expectedInlineTemplates     map[string]string
-		expectError                 bool
+		name                 string
+		configContent        string
+		expectedDefault      string
+		expectedDirectory    string
+		expectedNamed        map[string]string
+		expectedRules        []TemplateRule
+		expectError          bool
 	}{
 		{
-			name: "config with generator URL template",
+			name: "config with default template",
 			configContent: `
 promxy:
-  generator_url_template: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}"
+  alert_templates:
+    default: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}"
 `,
-			expectedGeneratorURLTemplate: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
-			expectedTemplateDirectory: "",
-			expectedInlineTemplates: nil,
-			expectError:      false,
+			expectedDefault:   "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
+			expectedDirectory: "",
+			expectedNamed:     nil,
+			expectedRules:     nil,
+			expectError:       false,
 		},
 		{
 			name: "config with template directory",
 			configContent: `
 promxy:
-  template_directory: "/etc/promxy/templates"
+  alert_templates:
+    directory: "/etc/promxy/templates"
 `,
-			expectedGeneratorURLTemplate: "",
-			expectedTemplateDirectory: "/etc/promxy/templates",
-			expectedInlineTemplates: nil,
-			expectError:      false,
+			expectedDefault:   "",
+			expectedDirectory: "/etc/promxy/templates",
+			expectedNamed:     nil,
+			expectedRules:     nil,
+			expectError:       false,
 		},
 		{
-			name: "config with both template and directory",
+			name: "config with named templates",
 			configContent: `
 promxy:
-  generator_url_template: "https://grafana.example.com/alert/{{.AlertName}}"
-  template_directory: "/etc/promxy/templates"
+  alert_templates:
+    named:
+      grafana: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}"
+      pagerduty: "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}"
 `,
-			expectedGeneratorURLTemplate: "https://grafana.example.com/alert/{{.AlertName}}",
-			expectedTemplateDirectory: "/etc/promxy/templates",
-			expectedInlineTemplates: nil,
-			expectError:      false,
-		},
-		{
-			name: "config with inline templates",
-			configContent: `
-promxy:
-  templates:
-    grafana: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}"
-    pagerduty: "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}"
-`,
-			expectedGeneratorURLTemplate: "",
-			expectedTemplateDirectory: "",
-			expectedInlineTemplates: map[string]string{
-				"grafana": "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
+			expectedDefault:   "",
+			expectedDirectory: "",
+			expectedNamed: map[string]string{
+				"grafana":   "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
 				"pagerduty": "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}",
 			},
-			expectError:      false,
+			expectedRules: nil,
+			expectError:   false,
 		},
 		{
-			name: "config with all template types",
+			name: "config with template rules",
 			configContent: `
 promxy:
-  generator_url_template: "https://prometheus.example.com/graph?g0.expr={{.Expr|urlquery}}"
-  template_directory: "/etc/promxy/templates"
-  templates:
-    grafana: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}"
-    pagerduty: "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}"
+  alert_templates:
+    default: "https://prometheus.example.com/graph?g0.expr={{.Expr|urlquery}}"
+    rules:
+      - match_labels:
+          severity: "critical"
+        template: "https://pagerduty.example.com/incidents/{{.AlertName}}"
+      - match_labels:
+          team: "frontend"
+        template: "https://grafana.example.com/d/frontend?alertname={{.AlertName|urlquery}}"
 `,
-			expectedGeneratorURLTemplate: "https://prometheus.example.com/graph?g0.expr={{.Expr|urlquery}}",
-			expectedTemplateDirectory: "/etc/promxy/templates",
-			expectedInlineTemplates: map[string]string{
-				"grafana": "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
-				"pagerduty": "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}",
+			expectedDefault:   "https://prometheus.example.com/graph?g0.expr={{.Expr|urlquery}}",
+			expectedDirectory: "",
+			expectedNamed:     nil,
+			expectedRules: []TemplateRule{
+				{
+					MatchLabels: map[string]string{"severity": "critical"},
+					Template:    "https://pagerduty.example.com/incidents/{{.AlertName}}",
+				},
+				{
+					MatchLabels: map[string]string{"team": "frontend"},
+					Template:    "https://grafana.example.com/d/frontend?alertname={{.AlertName|urlquery}}",
+				},
 			},
-			expectError:      false,
+			expectError: false,
 		},
 		{
-			name: "empty promxy config",
+			name: "config with all template features",
 			configContent: `
-promxy: {}
+promxy:
+  alert_templates:
+    default: "https://prometheus.example.com/graph?g0.expr={{.Expr|urlquery}}"
+    directory: "/etc/promxy/templates"
+    named:
+      grafana: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}"
+      pagerduty: "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}"
+    rules:
+      - match_labels:
+          severity: "critical"
+        template: "pagerduty"
 `,
-			expectedGeneratorURLTemplate: "",
-			expectedTemplateDirectory: "",
-			expectedInlineTemplates: nil,
-			expectError:      false,
+			expectedDefault:   "https://prometheus.example.com/graph?g0.expr={{.Expr|urlquery}}",
+			expectedDirectory: "/etc/promxy/templates",
+			expectedNamed: map[string]string{
+				"grafana":   "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
+				"pagerduty": "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}",
+			},
+			expectedRules: []TemplateRule{
+				{
+					MatchLabels: map[string]string{"severity": "critical"},
+					Template:    "pagerduty",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "empty alert templates config",
+			configContent: `
+promxy:
+  alert_templates: {}
+`,
+			expectedDefault:   "",
+			expectedDirectory: "",
+			expectedNamed:     nil,
+			expectedRules:     nil,
+			expectError:       false,
 		},
 		{
 			name: "invalid YAML",
 			configContent: `
 promxy:
-  generator_url_template: "test"
-  invalid_yaml_syntax
+  alert_templates:
+    default: "test"
+    invalid_yaml_syntax
 `,
-			expectedGeneratorURLTemplate: "",
-			expectedTemplateDirectory: "",
-			expectedInlineTemplates: nil,
-			expectError:      true,
+			expectedDefault:   "",
+			expectedDirectory: "",
+			expectedNamed:     nil,
+			expectedRules:     nil,
+			expectError:       true,
 		},
 	}
 
@@ -171,34 +210,77 @@ promxy:
 				return
 			}
 			
-			if cfg.PromxyConfig.GeneratorURLTemplate != tt.expectedGeneratorURLTemplate {
-				t.Errorf("expected generator URL template %q, got %q", tt.expectedGeneratorURLTemplate, cfg.PromxyConfig.GeneratorURLTemplate)
+			alertTemplates := cfg.PromxyConfig.AlertTemplates
+			
+			if alertTemplates.Default != tt.expectedDefault {
+				t.Errorf("expected default template %q, got %q", tt.expectedDefault, alertTemplates.Default)
 			}
 			
-			if cfg.PromxyConfig.TemplateDirectory != tt.expectedTemplateDirectory {
-				t.Errorf("expected template directory %q, got %q", tt.expectedTemplateDirectory, cfg.PromxyConfig.TemplateDirectory)
+			if alertTemplates.Directory != tt.expectedDirectory {
+				t.Errorf("expected template directory %q, got %q", tt.expectedDirectory, alertTemplates.Directory)
 			}
 			
-			// Check inline templates
-			if tt.expectedInlineTemplates == nil {
-				if cfg.PromxyConfig.Templates != nil && len(cfg.PromxyConfig.Templates) > 0 {
-					t.Errorf("expected no inline templates, got %v", cfg.PromxyConfig.Templates)
+			// Check named templates
+			if tt.expectedNamed == nil {
+				if alertTemplates.Named != nil && len(alertTemplates.Named) > 0 {
+					t.Errorf("expected no named templates, got %v", alertTemplates.Named)
 				}
 			} else {
-				if cfg.PromxyConfig.Templates == nil {
-					t.Error("expected inline templates but got nil")
+				if alertTemplates.Named == nil {
+					t.Error("expected named templates but got nil")
 					return
 				}
 				
-				if len(cfg.PromxyConfig.Templates) != len(tt.expectedInlineTemplates) {
-					t.Errorf("expected %d inline templates, got %d", len(tt.expectedInlineTemplates), len(cfg.PromxyConfig.Templates))
+				if len(alertTemplates.Named) != len(tt.expectedNamed) {
+					t.Errorf("expected %d named templates, got %d", len(tt.expectedNamed), len(alertTemplates.Named))
 				}
 				
-				for name, expectedContent := range tt.expectedInlineTemplates {
-					if actualContent, exists := cfg.PromxyConfig.Templates[name]; !exists {
-						t.Errorf("expected inline template %q not found", name)
+				for name, expectedContent := range tt.expectedNamed {
+					if actualContent, exists := alertTemplates.Named[name]; !exists {
+						t.Errorf("expected named template %q not found", name)
 					} else if actualContent != expectedContent {
-						t.Errorf("inline template %q: expected %q, got %q", name, expectedContent, actualContent)
+						t.Errorf("named template %q: expected %q, got %q", name, expectedContent, actualContent)
+					}
+				}
+			}
+			
+			// Check template rules
+			if tt.expectedRules == nil {
+				if alertTemplates.Rules != nil && len(alertTemplates.Rules) > 0 {
+					t.Errorf("expected no template rules, got %v", alertTemplates.Rules)
+				}
+			} else {
+				if alertTemplates.Rules == nil {
+					t.Error("expected template rules but got nil")
+					return
+				}
+				
+				if len(alertTemplates.Rules) != len(tt.expectedRules) {
+					t.Errorf("expected %d template rules, got %d", len(tt.expectedRules), len(alertTemplates.Rules))
+				}
+				
+				for i, expectedRule := range tt.expectedRules {
+					if i >= len(alertTemplates.Rules) {
+						t.Errorf("expected rule %d not found", i)
+						continue
+					}
+					
+					actualRule := alertTemplates.Rules[i]
+					
+					if actualRule.Template != expectedRule.Template {
+						t.Errorf("rule %d template: expected %q, got %q", i, expectedRule.Template, actualRule.Template)
+					}
+					
+					if len(actualRule.MatchLabels) != len(expectedRule.MatchLabels) {
+						t.Errorf("rule %d match labels count: expected %d, got %d", i, len(expectedRule.MatchLabels), len(actualRule.MatchLabels))
+					}
+					
+					for key, expectedValue := range expectedRule.MatchLabels {
+						if actualValue, exists := actualRule.MatchLabels[key]; !exists {
+							t.Errorf("rule %d match label %q not found", i, key)
+						} else if actualValue != expectedValue {
+							t.Errorf("rule %d match label %q: expected %q, got %q", i, key, expectedValue, actualValue)
+						}
 					}
 				}
 			}

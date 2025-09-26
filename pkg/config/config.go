@@ -60,10 +60,30 @@ func (c *Config) String() string {
 type PromxyConfig struct {
 	// Config for each of the server groups promxy is configured to aggregate
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
-	// Template for generating alert GeneratorURLs
-	GeneratorURLTemplate string `yaml:"generator_url_template,omitempty"`
-	// Directory containing template files for alert GeneratorURLs
-	TemplateDirectory string `yaml:"template_directory,omitempty"`
-	// Named inline templates for alert GeneratorURLs
-	Templates map[string]string `yaml:"templates,omitempty"`
+	
+	// Alert template configuration
+	AlertTemplates AlertTemplateConfig `yaml:"alert_templates,omitempty"`
+}
+
+type AlertTemplateConfig struct {
+	// Default template for all alerts
+	Default string `yaml:"default,omitempty"`
+	
+	// Directory containing template files
+	Directory string `yaml:"directory,omitempty"`
+	
+	// Named inline templates
+	Named map[string]string `yaml:"named,omitempty"`
+	
+	// Template selection rules for different alert types
+	Rules []TemplateRule `yaml:"rules,omitempty"`
+}
+
+// TemplateRule defines conditions for selecting specific templates
+type TemplateRule struct {
+	// Label selectors to match alerts
+	MatchLabels map[string]string `yaml:"match_labels"`
+	
+	// Template to use for matching alerts
+	Template string `yaml:"template"`
 }
