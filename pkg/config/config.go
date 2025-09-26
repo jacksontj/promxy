@@ -64,4 +64,6 @@ type PromxyConfig struct {
 	GeneratorURLTemplate string `yaml:"generator_url_template,omitempty"`
 	// Directory containing template files for alert GeneratorURLs
 	TemplateDirectory string `yaml:"template_directory,omitempty"`
+	// Named inline templates for alert GeneratorURLs
+	Templates map[string]string `yaml:"templates,omitempty"`
 }

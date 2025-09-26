@@ -30,37 +30,75 @@ var templateFuncs = template.FuncMap{
 	"urlpath":  url.PathEscape,
 }
 
-// TemplateManager manages template loading and caching from directories
+// TemplateManager manages template loading and caching from directories and inline templates
 type TemplateManager struct {
-	mu        sync.RWMutex
-	templates map[string]string // template name -> template content
-	directory string            // template directory path
+	mu              sync.RWMutex
+	templates       map[string]string // template name -> template content (merged from inline and directory)
+	inlineTemplates map[string]string // inline templates from configuration
+	directory       string            // template directory path
 }
 
 // NewTemplateManager creates a new template manager
 func NewTemplateManager() *TemplateManager {
 	return &TemplateManager{
-		templates: make(map[string]string),
+		templates:       make(map[string]string),
+		inlineTemplates: make(map[string]string),
 	}
+}
+
+// LoadInlineTemplates loads inline templates from configuration
+func (tm *TemplateManager) LoadInlineTemplates(inlineTemplates map[string]string) error {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	// Clear existing inline templates
+	tm.inlineTemplates = make(map[string]string)
+
+	// Validate and load inline templates
+	for name, content := range inlineTemplates {
+		if err := tm.validateTemplateName(name); err != nil {
+			logrus.Errorf("Invalid inline template name '%s': %v", name, err)
+			continue
+		}
+
+		if err := tm.validateInlineTemplateContent(name, content); err != nil {
+			logrus.Errorf("Invalid inline template content for '%s': %v", name, err)
+			continue
+		}
+
+		tm.inlineTemplates[name] = content
+		logrus.Infof("Loaded inline template '%s'", name)
+	}
+
+	// Rebuild merged templates
+	tm.rebuildTemplates()
+
+	logrus.Infof("Loaded %d inline templates", len(tm.inlineTemplates))
+	return nil
 }
 
 // LoadFromDirectory loads templates from the specified directory
 func (tm *TemplateManager) LoadFromDirectory(directory string) error {
-	if directory == "" {
-		return nil
-	}
-
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
 	tm.directory = directory
-	tm.templates = make(map[string]string)
+
+	// If no directory specified, just rebuild with inline templates
+	if directory == "" {
+		tm.rebuildTemplates()
+		return nil
+	}
 
 	// Check if directory exists
 	if _, err := os.Stat(directory); os.IsNotExist(err) {
 		logrus.Warnf("Template directory does not exist: %s", directory)
+		tm.rebuildTemplates()
 		return nil
 	}
+
+	// Load directory templates
+	directoryTemplates := make(map[string]string)
 
 	// Walk through the directory and load template files
 	err := filepath.WalkDir(directory, func(path string, d fs.DirEntry, err error) error {
@@ -98,12 +136,12 @@ func (tm *TemplateManager) LoadFromDirectory(directory string) error {
 		templateName = strings.ReplaceAll(templateName, string(filepath.Separator), ".")
 
 		// Validate template content
-		if _, err := template.New(templateName).Funcs(templateFuncs).Parse(string(content)); err != nil {
+		if err := tm.validateTemplateContent(templateName, string(content)); err != nil {
 			logrus.Errorf("Invalid template in file %s: %v", path, err)
 			return nil // Continue processing other files
 		}
 
-		tm.templates[templateName] = string(content)
+		directoryTemplates[templateName] = string(content)
 		logrus.Infof("Loaded template '%s' from %s", templateName, path)
 
 		return nil
@@ -113,8 +151,75 @@ func (tm *TemplateManager) LoadFromDirectory(directory string) error {
 		return fmt.Errorf("failed to walk template directory %s: %w", directory, err)
 	}
 
-	logrus.Infof("Loaded %d templates from directory %s", len(tm.templates), directory)
+	// Rebuild merged templates with directory templates taking precedence
+	tm.rebuildTemplatesWithDirectory(directoryTemplates)
+
+	logrus.Infof("Loaded %d templates from directory %s", len(directoryTemplates), directory)
 	return nil
+}
+
+// rebuildTemplates rebuilds the merged template map from inline templates only
+func (tm *TemplateManager) rebuildTemplates() {
+	tm.templates = make(map[string]string)
+	
+	// Start with inline templates
+	for name, content := range tm.inlineTemplates {
+		tm.templates[name] = content
+	}
+}
+
+// rebuildTemplatesWithDirectory rebuilds the merged template map with directory templates taking precedence
+func (tm *TemplateManager) rebuildTemplatesWithDirectory(directoryTemplates map[string]string) {
+	tm.templates = make(map[string]string)
+	
+	// Start with inline templates
+	for name, content := range tm.inlineTemplates {
+		tm.templates[name] = content
+	}
+	
+	// Directory templates override inline templates
+	for name, content := range directoryTemplates {
+		if _, exists := tm.inlineTemplates[name]; exists {
+			logrus.Infof("Directory template '%s' overrides inline template", name)
+		}
+		tm.templates[name] = content
+	}
+}
+
+// validateTemplateName validates a template name
+func (tm *TemplateManager) validateTemplateName(name string) error {
+	if name == "" {
+		return fmt.Errorf("template name cannot be empty")
+	}
+	
+	if strings.ContainsAny(name, "/\\") {
+		return fmt.Errorf("template name cannot contain path separators")
+	}
+	
+	if strings.HasPrefix(name, ".") {
+		return fmt.Errorf("template name cannot start with a dot")
+	}
+	
+	return nil
+}
+
+// validateTemplateContent validates template content by attempting to parse it
+func (tm *TemplateManager) validateTemplateContent(name, content string) error {
+	_, err := template.New(name).Funcs(templateFuncs).Parse(content)
+	if err != nil {
+		return fmt.Errorf("template parsing failed: %w", err)
+	}
+	
+	return nil
+}
+
+// validateInlineTemplateContent validates inline template content (stricter validation)
+func (tm *TemplateManager) validateInlineTemplateContent(name, content string) error {
+	if content == "" {
+		return fmt.Errorf("template content cannot be empty")
+	}
+	
+	return tm.validateTemplateContent(name, content)
 }
 
 // GetTemplate returns the template content by name
@@ -143,6 +248,27 @@ func (tm *TemplateManager) GetDirectory() string {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 	return tm.directory
+}
+
+// GetInlineTemplates returns a copy of the inline templates map
+func (tm *TemplateManager) GetInlineTemplates() map[string]string {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	
+	result := make(map[string]string)
+	for name, content := range tm.inlineTemplates {
+		result[name] = content
+	}
+	return result
+}
+
+// HasInlineTemplate checks if an inline template exists
+func (tm *TemplateManager) HasInlineTemplate(name string) bool {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	
+	_, exists := tm.inlineTemplates[name]
+	return exists
 }
 
 // ExecuteGeneratorURLTemplate executes a Go template for generating alert URLs

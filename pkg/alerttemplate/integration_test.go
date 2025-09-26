@@ -2,6 +2,8 @@ package alerttemplate
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -9,6 +11,8 @@ import (
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/util/strutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestIntegrationScenarios tests real-world template scenarios
@@ -488,6 +492,98 @@ func TestBackwardCompatibility(t *testing.T) {
 	if sentAlert.StartsAt.IsZero() {
 		t.Errorf("expected StartsAt to be set")
 	}
+}
+
+// TestTemplateDirectoryIntegration tests directory-based template loading
+func TestTemplateDirectoryIntegration(t *testing.T) {
+	// Create temporary directory structure
+	tempDir, err := os.MkdirTemp("", "template_integration_*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Create template files with nested structure
+	templates := map[string]string{
+		"grafana.tmpl": `https://grafana.example.com/d/alerts?var-alertname={{.AlertName|urlquery}}`,
+		"alerts/critical.tmpl": `https://oncall.example.com/critical/{{.AlertName}}?instance={{.Labels.instance}}`,
+	}
+
+	// Create template files
+	for filePath, content := range templates {
+		fullPath := filepath.Join(tempDir, filePath)
+		
+		// Create subdirectories
+		dir := filepath.Dir(fullPath)
+		err := os.MkdirAll(dir, 0755)
+		require.NoError(t, err)
+		
+		err = os.WriteFile(fullPath, []byte(content), 0644)
+		require.NoError(t, err)
+	}
+
+	// Initialize template manager and load templates
+	tm := NewTemplateManager()
+	err = tm.LoadFromDirectory(tempDir)
+	require.NoError(t, err)
+
+	// Verify templates were loaded with correct names
+	expectedTemplates := []string{"grafana", "alerts.critical"}
+	loadedTemplates := tm.ListTemplates()
+	assert.Len(t, loadedTemplates, len(expectedTemplates))
+
+	// Test template execution
+	alert := &rules.Alert{
+		Labels: labels.FromMap(map[string]string{
+			"alertname": "HighCPU",
+			"instance":  "server1:9100",
+		}),
+	}
+
+	result, err := ExecuteTemplateByName(tm, "grafana", alert, "up", "http://prometheus.example.com:9090")
+	assert.NoError(t, err)
+	assert.Equal(t, "https://grafana.example.com/d/alerts?var-alertname=HighCPU", result)
+
+	result, err = ExecuteTemplateByName(tm, "alerts.critical", alert, "up", "http://prometheus.example.com:9090")
+	assert.NoError(t, err)
+	assert.Equal(t, "https://oncall.example.com/critical/HighCPU?instance=server1:9100", result)
+}
+
+// TestTemplateDirectoryErrorHandling tests error handling for directory templates
+func TestTemplateDirectoryErrorHandling(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "template_error_*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Create mix of valid and invalid templates
+	templates := map[string]string{
+		"valid.tmpl":   "https://grafana.example.com/alert/{{.AlertName}}",
+		"invalid.tmpl": "https://example.com/{{.InvalidSyntax",
+		"readme.txt":   "This is not a template file",
+	}
+
+	for filename, content := range templates {
+		err = os.WriteFile(filepath.Join(tempDir, filename), []byte(content), 0644)
+		require.NoError(t, err)
+	}
+
+	// Load templates - should not fail even with invalid templates
+	tm := NewTemplateManager()
+	err = tm.LoadFromDirectory(tempDir)
+	require.NoError(t, err)
+
+	// Should only load valid templates
+	loadedTemplates := tm.ListTemplates()
+	assert.Len(t, loadedTemplates, 1) // only valid.tmpl
+
+	// Verify valid template works
+	content, exists := tm.GetTemplate("valid")
+	assert.True(t, exists)
+	assert.Equal(t, "https://grafana.example.com/alert/{{.AlertName}}", content)
+
+	// Verify invalid templates don't exist
+	_, exists = tm.GetTemplate("invalid")
+	assert.False(t, exists)
+	_, exists = tm.GetTemplate("readme")
+	assert.False(t, exists)
 }
 
 // TestComplexTemplateScenarios tests complex real-world template scenarios

@@ -46,11 +46,12 @@ func TestConfigFromFile(t *testing.T) {
 
 func TestConfigFromFile_GeneratorURLTemplate(t *testing.T) {
 	tests := []struct {
-		name           string
-		configContent  string
-		expectedTemplate string
-		expectedTemplateDir string
-		expectError    bool
+		name                        string
+		configContent               string
+		expectedGeneratorURLTemplate string
+		expectedTemplateDirectory   string
+		expectedInlineTemplates     map[string]string
+		expectError                 bool
 	}{
 		{
 			name: "config with generator URL template",
@@ -58,8 +59,9 @@ func TestConfigFromFile_GeneratorURLTemplate(t *testing.T) {
 promxy:
   generator_url_template: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}"
 `,
-			expectedTemplate: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
-			expectedTemplateDir: "",
+			expectedGeneratorURLTemplate: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
+			expectedTemplateDirectory: "",
+			expectedInlineTemplates: nil,
 			expectError:      false,
 		},
 		{
@@ -68,8 +70,9 @@ promxy:
 promxy:
   template_directory: "/etc/promxy/templates"
 `,
-			expectedTemplate: "",
-			expectedTemplateDir: "/etc/promxy/templates",
+			expectedGeneratorURLTemplate: "",
+			expectedTemplateDirectory: "/etc/promxy/templates",
+			expectedInlineTemplates: nil,
 			expectError:      false,
 		},
 		{
@@ -79,8 +82,43 @@ promxy:
   generator_url_template: "https://grafana.example.com/alert/{{.AlertName}}"
   template_directory: "/etc/promxy/templates"
 `,
-			expectedTemplate: "https://grafana.example.com/alert/{{.AlertName}}",
-			expectedTemplateDir: "/etc/promxy/templates",
+			expectedGeneratorURLTemplate: "https://grafana.example.com/alert/{{.AlertName}}",
+			expectedTemplateDirectory: "/etc/promxy/templates",
+			expectedInlineTemplates: nil,
+			expectError:      false,
+		},
+		{
+			name: "config with inline templates",
+			configContent: `
+promxy:
+  templates:
+    grafana: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}"
+    pagerduty: "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}"
+`,
+			expectedGeneratorURLTemplate: "",
+			expectedTemplateDirectory: "",
+			expectedInlineTemplates: map[string]string{
+				"grafana": "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
+				"pagerduty": "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}",
+			},
+			expectError:      false,
+		},
+		{
+			name: "config with all template types",
+			configContent: `
+promxy:
+  generator_url_template: "https://prometheus.example.com/graph?g0.expr={{.Expr|urlquery}}"
+  template_directory: "/etc/promxy/templates"
+  templates:
+    grafana: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}"
+    pagerduty: "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}"
+`,
+			expectedGeneratorURLTemplate: "https://prometheus.example.com/graph?g0.expr={{.Expr|urlquery}}",
+			expectedTemplateDirectory: "/etc/promxy/templates",
+			expectedInlineTemplates: map[string]string{
+				"grafana": "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
+				"pagerduty": "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}",
+			},
 			expectError:      false,
 		},
 		{
@@ -88,8 +126,9 @@ promxy:
 			configContent: `
 promxy: {}
 `,
-			expectedTemplate: "",
-			expectedTemplateDir: "",
+			expectedGeneratorURLTemplate: "",
+			expectedTemplateDirectory: "",
+			expectedInlineTemplates: nil,
 			expectError:      false,
 		},
 		{
@@ -99,8 +138,9 @@ promxy:
   generator_url_template: "test"
   invalid_yaml_syntax
 `,
-			expectedTemplate: "",
-			expectedTemplateDir: "",
+			expectedGeneratorURLTemplate: "",
+			expectedTemplateDirectory: "",
+			expectedInlineTemplates: nil,
 			expectError:      true,
 		},
 	}
@@ -131,12 +171,36 @@ promxy:
 				return
 			}
 			
-			if cfg.PromxyConfig.GeneratorURLTemplate != tt.expectedTemplate {
-				t.Errorf("expected template %q, got %q", tt.expectedTemplate, cfg.PromxyConfig.GeneratorURLTemplate)
+			if cfg.PromxyConfig.GeneratorURLTemplate != tt.expectedGeneratorURLTemplate {
+				t.Errorf("expected generator URL template %q, got %q", tt.expectedGeneratorURLTemplate, cfg.PromxyConfig.GeneratorURLTemplate)
 			}
 			
-			if cfg.PromxyConfig.TemplateDirectory != tt.expectedTemplateDir {
-				t.Errorf("expected template directory %q, got %q", tt.expectedTemplateDir, cfg.PromxyConfig.TemplateDirectory)
+			if cfg.PromxyConfig.TemplateDirectory != tt.expectedTemplateDirectory {
+				t.Errorf("expected template directory %q, got %q", tt.expectedTemplateDirectory, cfg.PromxyConfig.TemplateDirectory)
+			}
+			
+			// Check inline templates
+			if tt.expectedInlineTemplates == nil {
+				if cfg.PromxyConfig.Templates != nil && len(cfg.PromxyConfig.Templates) > 0 {
+					t.Errorf("expected no inline templates, got %v", cfg.PromxyConfig.Templates)
+				}
+			} else {
+				if cfg.PromxyConfig.Templates == nil {
+					t.Error("expected inline templates but got nil")
+					return
+				}
+				
+				if len(cfg.PromxyConfig.Templates) != len(tt.expectedInlineTemplates) {
+					t.Errorf("expected %d inline templates, got %d", len(tt.expectedInlineTemplates), len(cfg.PromxyConfig.Templates))
+				}
+				
+				for name, expectedContent := range tt.expectedInlineTemplates {
+					if actualContent, exists := cfg.PromxyConfig.Templates[name]; !exists {
+						t.Errorf("expected inline template %q not found", name)
+					} else if actualContent != expectedContent {
+						t.Errorf("inline template %q: expected %q, got %q", name, expectedContent, actualContent)
+					}
+				}
 			}
 		})
 	}
