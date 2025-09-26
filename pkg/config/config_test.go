@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	
+	"github.com/jacksontj/promxy/pkg/alerttemplate"
 )
 
 func TestConfigFromFile(t *testing.T) {
@@ -51,7 +53,7 @@ func TestConfigFromFile_AlertTemplates(t *testing.T) {
 		expectedDefault      string
 		expectedDirectory    string
 		expectedNamed        map[string]string
-		expectedRules        []TemplateRule
+		expectedRules        []alerttemplate.TemplateRule
 		expectError          bool
 	}{
 		{
@@ -115,7 +117,7 @@ promxy:
 			expectedDefault:   "https://prometheus.example.com/graph?g0.expr={{.Expr|urlquery}}",
 			expectedDirectory: "",
 			expectedNamed:     nil,
-			expectedRules: []TemplateRule{
+			expectedRules: []alerttemplate.TemplateRule{
 				{
 					MatchLabels: map[string]string{"severity": "critical"},
 					Template:    "https://pagerduty.example.com/incidents/{{.AlertName}}",
@@ -148,7 +150,7 @@ promxy:
 				"grafana":   "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}",
 				"pagerduty": "https://pagerduty.example.com/incidents/{{.Labels.incident_id}}",
 			},
-			expectedRules: []TemplateRule{
+			expectedRules: []alerttemplate.TemplateRule{
 				{
 					MatchLabels: map[string]string{"severity": "critical"},
 					Template:    "pagerduty",

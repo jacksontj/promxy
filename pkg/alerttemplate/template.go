@@ -318,3 +318,76 @@ func ExecuteTemplateByName(tm *TemplateManager, templateName string, alert *rule
 	return ExecuteGeneratorURLTemplate(templateStr, alert, expr, externalURL)
 }
 
+// TemplateRule defines conditions for selecting specific templates
+type TemplateRule struct {
+	// Label selectors to match alerts
+	MatchLabels map[string]string `yaml:"match_labels"`
+	
+	// Template to use for matching alerts (can be template content or template name)
+	Template string `yaml:"template"`
+}
+
+// SelectTemplate selects the appropriate template for an alert based on rules
+// Returns the template content to use, or empty string if no template should be used
+func SelectTemplate(rules []TemplateRule, defaultTemplate string, tm *TemplateManager, alert *rules.Alert) string {
+	if alert == nil {
+		return defaultTemplate
+	}
+	
+	alertLabels := alert.Labels.Map()
+	
+	// Evaluate rules in order (top-to-bottom matching)
+	for i, rule := range rules {
+		if matchesRule(rule, alertLabels) {
+			
+			// Check if the template is a named template or inline content
+			if tm != nil {
+				if namedTemplate, exists := tm.GetTemplate(rule.Template); exists {
+					logrus.Debugf("Using named template '%s' for alert %s", rule.Template, alert.Labels.Get("alertname"))
+					return namedTemplate
+				}
+			}
+			
+			// Treat as inline template content
+			logrus.Debugf("Using inline template from rule %d for alert %s", i, alert.Labels.Get("alertname"))
+			return rule.Template
+		}
+	}
+	
+	// No rules matched, use default template
+	if defaultTemplate != "" {
+		logrus.Debugf("No template rules matched for alert %s, using default template", alert.Labels.Get("alertname"))
+		
+		// Check if default template is a named template
+		if tm != nil {
+			if namedTemplate, exists := tm.GetTemplate(defaultTemplate); exists {
+				logrus.Debugf("Using named default template '%s' for alert %s", defaultTemplate, alert.Labels.Get("alertname"))
+				return namedTemplate
+			}
+		}
+		
+		// Treat as inline template content
+		return defaultTemplate
+	}
+	
+	logrus.Debugf("No template rules or default template for alert %s", alert.Labels.Get("alertname"))
+	return ""
+}
+
+// matchesRule checks if an alert's labels match a template rule's match criteria
+func matchesRule(rule TemplateRule, alertLabels map[string]string) bool {
+	if len(rule.MatchLabels) == 0 {
+		return false
+	}
+	
+	// All match labels must be present and have matching values
+	for key, expectedValue := range rule.MatchLabels {
+		actualValue, exists := alertLabels[key]
+		if !exists || actualValue != expectedValue {
+			return false
+		}
+	}
+	
+	return true
+}
+

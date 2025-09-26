@@ -560,6 +560,8 @@ type alertConfig struct {
 	cliTemplate        string
 	cliTemplateDir     string
 	currentTemplate    string // Current effective template after config reload
+	templateRules      []alerttemplate.TemplateRule // Template selection rules
+	defaultTemplate    string
 }
 
 // getEffectiveTemplate returns the effective template considering CLI overrides
@@ -589,6 +591,10 @@ func (acr *alertConfigReloadable) ApplyConfig(cfg *proxyconfig.Config) error {
 
 	// Update current effective template
 	acr.alertCfg.currentTemplate = acr.alertCfg.getEffectiveTemplate(alertTemplates.Default)
+	
+	// Update template rules and default template
+	acr.alertCfg.templateRules = alertTemplates.Rules
+	acr.alertCfg.defaultTemplate = acr.alertCfg.getEffectiveTemplate(alertTemplates.Default)
 
 	// Load templates from directory with error resilience
 	templateDir := acr.alertCfg.getEffectiveTemplateDir(alertTemplates.Directory)
@@ -612,15 +618,28 @@ func (acr *alertConfigReloadable) ApplyConfig(cfg *proxyconfig.Config) error {
 
 // generateAlertURL generates the appropriate URL for an alert with fallback handling
 func generateAlertURL(alertCfg *alertConfig, alert *rules.Alert, expr, externalURL string) string {
-	// Use current effective template
-	effectiveTemplate := alertCfg.currentTemplate
+	var effectiveTemplate string
+	
+	// If CLI template is set, it overrides everything
+	if alertCfg.cliTemplate != "" {
+		effectiveTemplate = alertCfg.cliTemplate
+		logrus.Debugf("Using CLI template for alert %s", alert.Labels.Get("alertname"))
+	} else {
+		// Use rule-based template selection
+		effectiveTemplate = alerttemplate.SelectTemplate(
+			alertCfg.templateRules,
+			alertCfg.defaultTemplate,
+			alertCfg.templateManager,
+			alert,
+		)
+	}
 	
 	// If no template configured, use default Prometheus URL
 	if effectiveTemplate == "" {
+		logrus.Debugf("No template configured for alert %s, using default Prometheus URL", alert.Labels.Get("alertname"))
 		return externalURL + strutil.TableLinkForExpression(expr)
 	}
 
-	// Try to execute the template
 	templateURL, err := alerttemplate.ExecuteGeneratorURLTemplate(effectiveTemplate, alert, expr, externalURL)
 	if err != nil {
 		logrus.Warnf("Failed to execute GeneratorURL template for alert %s: %v, falling back to default URL", 

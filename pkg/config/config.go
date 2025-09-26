@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/prometheus/config"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/jacksontj/promxy/pkg/alerttemplate"
 	"github.com/jacksontj/promxy/pkg/servergroup"
 )
 
@@ -76,14 +77,5 @@ type AlertTemplateConfig struct {
 	Named map[string]string `yaml:"named,omitempty"`
 	
 	// Template selection rules for different alert types
-	Rules []TemplateRule `yaml:"rules,omitempty"`
-}
-
-// TemplateRule defines conditions for selecting specific templates
-type TemplateRule struct {
-	// Label selectors to match alerts
-	MatchLabels map[string]string `yaml:"match_labels"`
-	
-	// Template to use for matching alerts
-	Template string `yaml:"template"`
+	Rules []alerttemplate.TemplateRule `yaml:"rules,omitempty"`
 }
