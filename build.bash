@@ -19,7 +19,7 @@ fi
 package_split=(${package//\// })
 package_name=${package_split[-1]}
 
-platforms=("linux/amd64" "linux/386" "darwin/amd64" "darwin/arm64" "linux/arm" "linux/arm64")
+platforms=("linux/amd64" "linux/386" "darwin/amd64" "darwin/arm64" "linux/arm" "linux/arm64" "linux/loong64")
 
 for platform in "${platforms[@]}"
 do
