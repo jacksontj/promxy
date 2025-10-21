@@ -1,0 +1,4 @@
+http_server_config:
+  headers:
+    Content-Security-Policy: "default-src 'self';"
+    X-Frame-Options: "sameorigin"

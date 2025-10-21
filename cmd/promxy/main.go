@@ -83,9 +83,10 @@ type cliOpts struct {
 	LogFormat        string `long:"log-format" description:"Log format(text|json)" default:"text"`
 	LogMaxFormPrefix int    `long:"log-max-form-prefix" description:"Max prefix for form values in log entries" default:"256"`
 
-	WebConfigFile      string        `long:"web.config.file" description:"[EXPERIMENTAL] Path to configuration file that can enable TLS or authentication."`
-	WebCORSOriginRegex string        `long:"web.cors.origin" description:"Regex for CORS origin. It is fully anchored." default:".*"`
-	WebReadTimeout     time.Duration `long:"web.read-timeout" description:"Maximum duration before timing out read of the request, and closing idle connections." default:"5m"`
+	WebConfigFile           string        `long:"web.config.file" description:"[EXPERIMENTAL] Path to configuration file that can enable TLS or authentication. This flag will be ignored if prometheus.web.config.file is used."`
+	PrometheusWebConfigFile string        `long:"prometheus.web.config.file" description:"[EXPERIMENTAL] Path to prometheus web configuration file that can enable TLS or authentication."`
+	WebCORSOriginRegex      string        `long:"web.cors.origin" description:"Regex for CORS origin. It is fully anchored." default:".*"`
+	WebReadTimeout          time.Duration `long:"web.read-timeout" description:"Maximum duration before timing out read of the request, and closing idle connections." default:"5m"`
 
 	MetricsPath  string   `long:"metrics-path" description:"URL path for the prometheus metrics endpoint." default:"/metrics"`
 	ProxyHeaders []string `long:"proxy-headers" env:"PROXY_HEADERS" description:"a list of headers to proxy to downstream servergroups."`
@@ -487,7 +488,7 @@ func main() {
 		logrus.Fatalf("Invalid AccessLogDestination: %s", opts.AccessLogDestination)
 	}
 
-	srv, err := server.CreateAndStart(opts.BindAddr, opts.LogFormat, opts.WebReadTimeout, accessLogOut, middleware.NewProxyHeaders(r, opts.ProxyHeaders), opts.WebConfigFile)
+	srv, err := server.CreateAndStart(opts.BindAddr, opts.LogFormat, opts.WebReadTimeout, accessLogOut, middleware.NewProxyHeaders(r, opts.ProxyHeaders), server.WebConfigFile{TlsConfigFile: opts.WebConfigFile, WebConfigFile: opts.PrometheusWebConfigFile})
 	if err != nil {
 		logrus.Fatalf("Error creating server: %v", err)
 	}
