@@ -46,6 +46,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/jacksontj/promxy/pkg/alertbackfill"
+	"github.com/jacksontj/promxy/pkg/alerttemplate"
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/logging"
 	"github.com/jacksontj/promxy/pkg/middleware"
@@ -108,6 +109,8 @@ type cliOpts struct {
 	ForGracePeriod            time.Duration `long:"rules.alert.for-grace-period" description:"Minimum duration between alert and restored for state. This is maintained only for alerts with configured for time greater than grace period." default:"10m"`
 	ResendDelay               time.Duration `long:"rules.alert.resend-delay" description:"Minimum amount of time to wait before resending an alert to Alertmanager." default:"1m"`
 	AlertBackfill             bool          `long:"rules.alertbackfill" description:"Enable promxy to recalculate alert state on startup when the downstream datastore doesn't have an ALERTS_FOR_STATE"`
+	GeneratorURLTemplate      string        `long:"rules.alert.generator-url-template" description:"Go template for alert GeneratorURL. Overrides config file template"`
+	TemplateDirectory         string        `long:"rules.alert.template-dir" description:"Directory containing GeneratorURL template files (.tmpl extension)"`
 
 	ShutdownDelay   time.Duration `long:"http.shutdown-delay" description:"time to wait before shutting down the http server, this allows for a grace period for upstreams (e.g. LoadBalancers) to discover the new stopping status through healthchecks" default:"10s"`
 	ShutdownTimeout time.Duration `long:"http.shutdown-timeout" description:"max time to wait for a graceful shutdown of the HTTP server" default:"60s"`
@@ -318,11 +321,19 @@ func main() {
 	} else {
 		ruleQueryable = proxyStorage
 	}
+
+	// Create alert configuration
+	alertCfg := &alertConfig{
+		templateManager: alerttemplate.NewTemplateManager(),
+		cliTemplate:     opts.GeneratorURLTemplate,
+		cliTemplateDir:  opts.TemplateDirectory,
+	}
+
 	ruleManager := rules.NewManager(&rules.ManagerOptions{
 		Context:         ctx,         // base context for all background tasks
 		ExternalURL:     externalUrl, // URL listed as URL for "who fired this alert"
 		QueryFunc:       rules.EngineQueryFunc(engine, proxyStorage),
-		NotifyFunc:      sendAlerts(notifierManager, externalUrl.String()),
+		NotifyFunc:      sendAlerts(notifierManager, externalUrl.String(), alertCfg),
 		Appendable:      proxyStorage,
 		Queryable:       ruleQueryable,
 		Logger:          logger,
@@ -337,6 +348,11 @@ func main() {
 	}
 
 	go ruleManager.Run()
+
+	// Add promxy-specific alert configuration reloadable
+	reloadables = append(reloadables, &alertConfigReloadable{
+		alertCfg: alertCfg,
+	})
 
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(&proxyconfig.ApplyConfigFunc{func(cfg *config.Config) error {
 		// Get all rule files matching the configuration oaths.
@@ -538,10 +554,110 @@ func main() {
 	}
 }
 
+// alertConfig holds the configuration for alert processing
+type alertConfig struct {
+	templateManager    *alerttemplate.TemplateManager
+	cliTemplate        string
+	cliTemplateDir     string
+	currentTemplate    string // Current effective template after config reload
+	templateRules      []alerttemplate.TemplateRule // Template selection rules
+	defaultTemplate    string
+}
+
+// getEffectiveTemplate returns the effective template considering CLI overrides
+func (ac *alertConfig) getEffectiveTemplate(configTemplate string) string {
+	if ac.cliTemplate != "" {
+		return ac.cliTemplate
+	}
+	return configTemplate
+}
+
+// getEffectiveTemplateDir returns the effective template directory considering CLI overrides
+func (ac *alertConfig) getEffectiveTemplateDir(configDir string) string {
+	if ac.cliTemplateDir != "" {
+		return ac.cliTemplateDir
+	}
+	return configDir
+}
+
+// alertConfigReloadable implements the Reloadable interface for alert configuration
+type alertConfigReloadable struct {
+	alertCfg *alertConfig
+}
+
+// ApplyConfig applies the new configuration to the alert config
+func (acr *alertConfigReloadable) ApplyConfig(cfg *proxyconfig.Config) error {
+	alertTemplates := cfg.PromxyConfig.AlertTemplates
+
+	// Update current effective template
+	acr.alertCfg.currentTemplate = acr.alertCfg.getEffectiveTemplate(alertTemplates.Default)
+	
+	// Update template rules and default template
+	acr.alertCfg.templateRules = alertTemplates.Rules
+	acr.alertCfg.defaultTemplate = acr.alertCfg.getEffectiveTemplate(alertTemplates.Default)
+
+	// Load templates from directory with error resilience
+	templateDir := acr.alertCfg.getEffectiveTemplateDir(alertTemplates.Directory)
+	if templateDir != "" {
+		if err := acr.alertCfg.templateManager.LoadFromDirectory(templateDir); err != nil {
+			logrus.Warnf("Failed to load templates from directory %s: %v", templateDir, err)
+			// Continue with existing templates - don't fail the entire config reload
+		}
+	}
+
+	// Load inline templates with error resilience
+	if len(alertTemplates.Named) > 0 {
+		if err := acr.alertCfg.templateManager.LoadInlineTemplates(alertTemplates.Named); err != nil {
+			logrus.Warnf("Failed to load inline templates: %v", err)
+			// Continue with existing templates - don't fail the entire config reload
+		}
+	}
+
+	return nil
+}
+
+// generateAlertURL generates the appropriate URL for an alert with fallback handling
+func generateAlertURL(alertCfg *alertConfig, alert *rules.Alert, expr, externalURL string) string {
+	var effectiveTemplate string
+	
+	// If CLI template is set, it overrides everything
+	if alertCfg.cliTemplate != "" {
+		effectiveTemplate = alertCfg.cliTemplate
+	} else {
+		// Use rule-based template selection
+		effectiveTemplate = alerttemplate.SelectTemplate(
+			alertCfg.templateRules,
+			alertCfg.defaultTemplate,
+			alertCfg.templateManager,
+			alert,
+		)
+	}
+	
+	// If no template configured, use default Prometheus URL
+	if effectiveTemplate == "" {
+		return externalURL + strutil.TableLinkForExpression(expr)
+	}
+
+	templateURL, err := alerttemplate.ExecuteGeneratorURLTemplate(effectiveTemplate, alert, expr, externalURL)
+	if err != nil {
+		logrus.Warnf("Failed to execute GeneratorURL template for alert %s: %v, falling back to default URL", 
+			alert.Labels.Get("alertname"), err)
+		return externalURL + strutil.TableLinkForExpression(expr)
+	}
+
+	return templateURL
+}
+
+
+
 // sendAlerts implements the rules.NotifyFunc for a Notifier.
 // It filters any non-firing alerts from the input.
-func sendAlerts(n *notifier.Manager, externalURL string) rules.NotifyFunc {
+func sendAlerts(n *notifier.Manager, externalURL string, alertCfg *alertConfig) rules.NotifyFunc {
 	return func(ctx context.Context, expr string, alerts ...*rules.Alert) {
+		if len(alerts) == 0 {
+			return
+		}
+
 		var res []*notifier.Alert
 
 		for _, alert := range alerts {
@@ -549,11 +665,15 @@ func sendAlerts(n *notifier.Manager, externalURL string) rules.NotifyFunc {
 			if alert.State == rules.StatePending {
 				continue
 			}
+
+			// Generate the URL with proper error handling and fallback
+			generatorURL := generateAlertURL(alertCfg, alert, expr, externalURL)
+
 			a := &notifier.Alert{
 				StartsAt:     alert.FiredAt,
 				Labels:       alert.Labels,
 				Annotations:  alert.Annotations,
-				GeneratorURL: externalURL + strutil.TableLinkForExpression(expr),
+				GeneratorURL: generatorURL,
 			}
 			if !alert.ResolvedAt.IsZero() {
 				a.EndsAt = alert.ResolvedAt
@@ -561,7 +681,7 @@ func sendAlerts(n *notifier.Manager, externalURL string) rules.NotifyFunc {
 			res = append(res, a)
 		}
 
-		if len(alerts) > 0 {
+		if len(res) > 0 {
 			n.Send(res...)
 		}
 	}
