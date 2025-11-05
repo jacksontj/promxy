@@ -67,7 +67,9 @@ type Config struct {
 	Scheme string `yaml:"scheme"`
 	// Labels is a set of labels that will be added to all metrics retrieved
 	// from this server group
-	Labels model.LabelSet `json:"labels"`
+	Labels model.LabelSet `yaml:"labels"`
+	// ExternalLabels are the labels that will be added to all metrics retrieved same as Prometheus does. (does not overwrite existing labels)
+	ExternalLabels model.LabelSet `yaml:"external_labels"`
 	// RelabelConfigs are similar in function and identical in configuration as prometheus'
 	// relabel config for scrape jobs. The difference here being that the source labels
 	// you can pull from are from the downstream servergroup target and the labels you are

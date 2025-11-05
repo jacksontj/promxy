@@ -8,9 +8,10 @@ import (
 	"github.com/prometheus/prometheus/promql/parser"
 )
 
-func NewFilterMatcherVisitor(ls model.LabelSet) *FilterMatcherVisitor {
+func NewFilterMatcherVisitor(ls, extLs model.LabelSet) *FilterMatcherVisitor {
 	return &FilterMatcherVisitor{
 		ls:          ls,
+		extLs:       extLs,
 		filterMatch: true,
 	}
 }
@@ -19,6 +20,7 @@ func NewFilterMatcherVisitor(ls model.LabelSet) *FilterMatcherVisitor {
 type FilterMatcherVisitor struct {
 	l           sync.Mutex
 	ls          model.LabelSet
+	extLs       model.LabelSet
 	filterMatch bool
 }
 
@@ -26,7 +28,7 @@ type FilterMatcherVisitor struct {
 func (l *FilterMatcherVisitor) Visit(node parser.Node, path []parser.Node) (w parser.Visitor, err error) {
 	switch nodeTyped := node.(type) {
 	case *parser.VectorSelector:
-		filteredMatchers, ok := FilterMatchers(l.ls, nodeTyped.LabelMatchers)
+		filteredMatchers, ok := FilterMatchers(l.ls, l.extLs, nodeTyped.LabelMatchers)
 		l.l.Lock()
 		l.filterMatch = l.filterMatch && ok
 		l.l.Unlock()
@@ -37,7 +39,7 @@ func (l *FilterMatcherVisitor) Visit(node parser.Node, path []parser.Node) (w pa
 			return nil, nil
 		}
 	case *parser.MatrixSelector:
-		filteredMatchers, ok := FilterMatchers(l.ls, nodeTyped.VectorSelector.(*parser.VectorSelector).LabelMatchers)
+		filteredMatchers, ok := FilterMatchers(l.ls, l.extLs, nodeTyped.VectorSelector.(*parser.VectorSelector).LabelMatchers)
 		l.l.Lock()
 		l.filterMatch = l.filterMatch && ok
 		l.l.Unlock()
@@ -54,7 +56,7 @@ func (l *FilterMatcherVisitor) Visit(node parser.Node, path []parser.Node) (w pa
 
 // FilterMatchers applies the matchers to the given labelset to determine if there is a match
 // and to return all remaining matchers to be matched
-func FilterMatchers(ls model.LabelSet, matchers []*labels.Matcher) ([]*labels.Matcher, bool) {
+func FilterMatchers(ls, extLs model.LabelSet, matchers []*labels.Matcher) ([]*labels.Matcher, bool) {
 	filteredMatchers := make([]*labels.Matcher, 0, len(matchers))
 
 	// Look over the matchers passed in, if any exist in our labels, we'll do the matcher, and then strip
@@ -64,6 +66,8 @@ func FilterMatchers(ls model.LabelSet, matchers []*labels.Matcher) ([]*labels.Ma
 			if !matcher.Matches(string(localValue)) {
 				return nil, false
 			}
+		} else if v, ok := extLs[model.LabelName(matcher.Name)]; ok && matcher.Matches(string(v)) {
+			continue // If the selector matches the external labels, we skip it
 		} else {
 			filteredMatchers = append(filteredMatchers, matcher)
 		}
