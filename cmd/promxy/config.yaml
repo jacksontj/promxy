@@ -33,7 +33,10 @@ promxy:
   server_groups:
     # All upstream prometheus service discovery mechanisms are supported with the same
     # markup, all defined in https://github.com/prometheus/prometheus/blob/master/discovery/config/config.go#L33
-    - static_configs:
+    - # Optional human-readable name for this server group
+      name: primary-cluster
+      
+      static_configs:
         - targets:
           - localhost:9090
 
@@ -186,7 +189,9 @@ promxy:
         X-Promxy-Source: promxy-1
 
     # as many additional server groups as you have
-    - static_configs:
+    - name: secondary-cluster
+      
+      static_configs:
         - targets:
           - localhost:9091
       labels:
