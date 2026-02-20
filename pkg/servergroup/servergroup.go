@@ -18,6 +18,7 @@ import (
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/sigv4"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/model/labels"
@@ -216,6 +217,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 					cfg := &remote.ClientConfig{
 						URL:              &config_util.URL{u},
 						HTTPClientConfig: s.Cfg.HTTPConfig.HTTPConfig,
+						SigV4Config:      s.Cfg.HTTPConfig.SigV4Config,
 						Timeout:          model.Duration(time.Minute * 2),
 					}
 					remoteStorageClient, err := remote.NewReadClient("foo", cfg)
@@ -343,6 +345,14 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 		IdleConnTimeout:       cfg.IdleConnTimeout,
 		DialContext:           (&net.Dialer{Timeout: cfg.HTTPConfig.DialTimeout}).DialContext,
 		ResponseHeaderTimeout: cfg.Timeout,
+	}
+
+	// If SigV4 is configured, wrap the transport with SigV4 round tripper
+	if cfg.HTTPConfig.SigV4Config != nil {
+		rt, err = sigv4.NewSigV4RoundTripper(cfg.HTTPConfig.SigV4Config, rt)
+		if err != nil {
+			return errors.Wrap(err, "error creating SigV4 round tripper")
+		}
 	}
 
 	// If a bearer token is provided, create a round tripper that will set the

@@ -6,6 +6,7 @@ import (
 
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/common/sigv4"
 
 	"github.com/jacksontj/promxy/pkg/promclient"
 
@@ -238,6 +239,41 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
+	if err := c.validateAuthConfig(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateAuthConfig ensures that at most one authentication method is configured
+func (c *Config) validateAuthConfig() error {
+	authMethods := []string{}
+
+	if c.HTTPConfig.HTTPConfig.BasicAuth != nil {
+		authMethods = append(authMethods, "basic_auth")
+	}
+
+	if c.HTTPConfig.HTTPConfig.Authorization != nil {
+		authMethods = append(authMethods, "authorization")
+	}
+
+	if len(c.HTTPConfig.HTTPConfig.BearerToken) > 0 {
+		authMethods = append(authMethods, "bearer_token")
+	}
+
+	if len(c.HTTPConfig.HTTPConfig.BearerTokenFile) > 0 {
+		authMethods = append(authMethods, "bearer_token_file")
+	}
+
+	if c.HTTPConfig.SigV4Config != nil {
+		authMethods = append(authMethods, "sigv4")
+	}
+
+	if len(authMethods) > 1 {
+		return fmt.Errorf("at most one of basic_auth, authorization, bearer_token, bearer_token_file, sigv4 must be configured")
+	}
+
 	return nil
 }
 
@@ -250,6 +286,7 @@ func (c *Config) MarshalYAML() (interface{}, error) {
 type HTTPClientConfig struct {
 	DialTimeout time.Duration                `yaml:"dial_timeout"`
 	HTTPConfig  config_util.HTTPClientConfig `yaml:",inline"`
+	SigV4Config *sigv4.SigV4Config           `yaml:"sigv4,omitempty"`
 }
 
 // RelativeTimeRangeConfig configures durations relative from "now" to define
