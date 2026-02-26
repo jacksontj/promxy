@@ -3,6 +3,8 @@ package linodego
 import (
 	"context"
 	"fmt"
+
+	"github.com/go-resty/resty/v2"
 )
 
 // LinodeType represents a linode type object
@@ -52,39 +54,59 @@ type LinodeTypesPagedResponse struct {
 	Data []LinodeType `json:"data"`
 }
 
-func (LinodeTypesPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Types.Endpoint()
+func (*LinodeTypesPagedResponse) endpoint(_ ...any) string {
+	return "linode/types"
+}
+
+func (resp *LinodeTypesPagedResponse) castResult(r *resty.Request, e string) (int, int, error) {
+	res, err := coupleAPIErrors(r.SetResult(LinodeTypesPagedResponse{}).Get(e))
 	if err != nil {
-		panic(err)
+		return 0, 0, err
 	}
-	return endpoint
+	castedRes := res.Result().(*LinodeTypesPagedResponse)
+	resp.Data = append(resp.Data, castedRes.Data...)
+	return castedRes.Pages, castedRes.Results, nil
 }
 
-func (resp *LinodeTypesPagedResponse) appendData(r *LinodeTypesPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
-// ListTypes lists linode types
+// ListTypes lists linode types. This endpoint is cached by default.
 func (c *Client) ListTypes(ctx context.Context, opts *ListOptions) ([]LinodeType, error) {
 	response := LinodeTypesPagedResponse{}
-	err := c.listHelper(ctx, &response, opts)
+
+	endpoint, err := generateListCacheURL(response.endpoint(), opts)
 	if err != nil {
 		return nil, err
 	}
+
+	if result := c.getCachedResponse(endpoint); result != nil {
+		return result.([]LinodeType), nil
+	}
+
+	err = c.listHelper(ctx, &response, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	c.addCachedResponse(endpoint, response.Data, &cacheExpiryTime)
+
 	return response.Data, nil
 }
 
-// GetType gets the type with the provided ID
+// GetType gets the type with the provided ID. This endpoint is cached by default.
 func (c *Client) GetType(ctx context.Context, typeID string) (*LinodeType, error) {
-	e, err := c.Types.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-	e = fmt.Sprintf("%s/%s", e, typeID)
+	e := fmt.Sprintf("linode/types/%s", typeID)
 
-	r, err := coupleAPIErrors(c.Types.R(ctx).Get(e))
+	if result := c.getCachedResponse(e); result != nil {
+		result := result.(LinodeType)
+		return &result, nil
+	}
+
+	req := c.R(ctx).SetResult(LinodeType{})
+	r, err := coupleAPIErrors(req.Get(e))
 	if err != nil {
 		return nil, err
 	}
+
+	c.addCachedResponse(e, r.Result(), &cacheExpiryTime)
+
 	return r.Result().(*LinodeType), nil
 }

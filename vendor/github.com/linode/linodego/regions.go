@@ -3,7 +3,14 @@ package linodego
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/go-resty/resty/v2"
 )
+
+// Region-related endpoints have a custom expiry time as the
+// `status` field may update for database outages.
+var cacheExpiryTime = time.Minute
 
 // Region represents a linode region object
 type Region struct {
@@ -27,39 +34,59 @@ type RegionsPagedResponse struct {
 }
 
 // endpoint gets the endpoint URL for Region
-func (RegionsPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Regions.Endpoint()
+func (RegionsPagedResponse) endpoint(_ ...any) string {
+	return "regions"
+}
+
+func (resp *RegionsPagedResponse) castResult(r *resty.Request, e string) (int, int, error) {
+	res, err := coupleAPIErrors(r.SetResult(RegionsPagedResponse{}).Get(e))
 	if err != nil {
-		panic(err)
+		return 0, 0, err
 	}
-	return endpoint
+	castedRes := res.Result().(*RegionsPagedResponse)
+	resp.Data = append(resp.Data, castedRes.Data...)
+	return castedRes.Pages, castedRes.Results, nil
 }
 
-// appendData appends Regions when processing paginated Region responses
-func (resp *RegionsPagedResponse) appendData(r *RegionsPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
-// ListRegions lists Regions
+// ListRegions lists Regions. This endpoint is cached by default.
 func (c *Client) ListRegions(ctx context.Context, opts *ListOptions) ([]Region, error) {
 	response := RegionsPagedResponse{}
-	err := c.listHelper(ctx, &response, opts)
+
+	endpoint, err := generateListCacheURL(response.endpoint(), opts)
 	if err != nil {
 		return nil, err
 	}
+
+	if result := c.getCachedResponse(endpoint); result != nil {
+		return result.([]Region), nil
+	}
+
+	err = c.listHelper(ctx, &response, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	c.addCachedResponse(endpoint, response.Data, &cacheExpiryTime)
+
 	return response.Data, nil
 }
 
-// GetRegion gets the template with the provided ID
-func (c *Client) GetRegion(ctx context.Context, id string) (*Region, error) {
-	e, err := c.Regions.Endpoint()
+// GetRegion gets the template with the provided ID. This endpoint is cached by default.
+func (c *Client) GetRegion(ctx context.Context, regionID string) (*Region, error) {
+	e := fmt.Sprintf("regions/%s", regionID)
+
+	if result := c.getCachedResponse(e); result != nil {
+		result := result.(Region)
+		return &result, nil
+	}
+
+	req := c.R(ctx).SetResult(&Region{})
+	r, err := coupleAPIErrors(req.Get(e))
 	if err != nil {
 		return nil, err
 	}
-	e = fmt.Sprintf("%s/%s", e, id)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&Region{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
+
+	c.addCachedResponse(e, r.Result(), &cacheExpiryTime)
+
 	return r.Result().(*Region), nil
 }

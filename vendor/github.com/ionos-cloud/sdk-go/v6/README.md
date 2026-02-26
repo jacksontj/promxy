@@ -53,6 +53,8 @@ go get github.com/ionos-cloud/sdk-go/v6@latest
 | `IONOS_PASSWORD`     | Specify the password used to login, to authenticate against the IONOS Cloud API                                                                                                                                                |
 | `IONOS_TOKEN`        | Specify the token used to login, if a token is being used instead of username and password                                                                                                                                     |
 | `IONOS_API_URL`      | Specify the API URL. It will overwrite the API endpoint default value `api.ionos.com`. Note: the host URL does not contain the `/cloudapi/v6` path, so it should _not_ be included in the `IONOS_API_URL` environment variable |
+| `IONOS_LOGLEVEL`     | Specify the Log Level used to log messages. Possible values: Off, Debug, Trace |
+| `IONOS_PINNED_CERT`  | Specify the SHA-256 public fingerprint here, enables certificate pinning                                                                                                                                                       |
 
 ⚠️ **_Note: To overwrite the api endpoint - `api.ionos.com`, the environment variable `$IONOS_API_URL` can be set, and used with `NewConfigurationFromEnv()` function._**
 
@@ -157,6 +159,15 @@ export IONOS_TOKEN="insert_here_token_saved_from_generate_command"
     }
 ```
 
+## Certificate pinning:
+
+You can enable certificate pinning if you want to bypass the normal certificate checking procedure,
+by doing the following:
+
+Set env variable IONOS_PINNED_CERT=<insert_sha256_public_fingerprint_here>
+
+You can get the sha256 fingerprint most easily from the browser by inspecting the certificate.
+
 ### Depth
 
 Many of the _List_ or _Get_ operations will accept an optional _depth_ argument. Setting this to a value between 0 and 5 affects the amount of data that is returned. The details returned vary depending on the resource being queried, but it generally follows this pattern. By default, the SDK sets the _depth_ argument to the maximum value.
@@ -208,7 +219,35 @@ requestProperties.SetURL("https://api.ionos.com/cloudapi/v6")
 
 ## Debugging
 
+You can now inject any logger that implements Printf as a logger
+instead of using the default sdk logger.
+There are now Loglevels that you can set: `Off`, `Debug` and `Trace`.
+`Off` - does not show any logs
+`Debug` - regular logs, no sensitive information
+`Trace` - we recommend you only set this field for debugging purposes. Disable it in your production environments because it can log sensitive data.
+          It logs the full request and response without encryption, even for an HTTPS call. Verbose request and response logging can also significantly impact your application's performance.
+
+
+```golang
+package main
+import "github.com/ionos-cloud/sdk-go/v6"
+import "github.com/sirupsen/logrus"
+func main() {
+    // create your configuration. replace username, password, token and url with correct values, or use NewConfigurationFromEnv()
+    // if you have set your env variables as explained above
+    cfg := ionoscloud.NewConfiguration("username", "password", "token", "hostUrl")
+    // enable request and response logging. this is the most verbose loglevel
+    cfg.LogLevel = Trace
+    // inject your own logger that implements Printf
+    cfg.Logger = logrus.New()
+    // create you api client with the configuration
+    apiClient := ionoscloud.NewAPIClient(cfg)
+}
+```
+
 If you want to see the API call request and response messages, you need to set the Debug field in the Configuration struct:
+
+⚠️ **_Note: the field `Debug` is now deprecated and will be replaced with `LogLevel` in the future.
 
 ```golang
 package main

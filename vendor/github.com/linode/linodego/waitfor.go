@@ -10,6 +10,15 @@ import (
 	"time"
 )
 
+type EventPoller struct {
+	EntityID   any
+	EntityType EntityType
+	Action     EventAction
+
+	client         Client
+	previousEvents map[int]bool
+}
+
 // WaitForInstanceStatus waits for the Linode instance to reach the desired state
 // before returning. It will timeout with an error after timeoutSeconds.
 func (client Client) WaitForInstanceStatus(ctx context.Context, instanceID int, status InstanceStatus, timeoutSeconds int) (*Instance, error) {
@@ -262,7 +271,7 @@ func (client Client) WaitForLKEClusterConditions(
 // before returning. It will timeout with an error after timeoutSeconds.
 // If the event indicates a failure both the failed event and the error will be returned.
 // nolint
-func (client Client) WaitForEventFinished(ctx context.Context, id interface{}, entityType EntityType, action EventAction, minStart time.Time, timeoutSeconds int) (*Event, error) {
+func (client Client) WaitForEventFinished(ctx context.Context, id any, entityType EntityType, action EventAction, minStart time.Time, timeoutSeconds int) (*Event, error) {
 	titledEntityType := strings.Title(string(entityType))
 	filter := Filter{
 		Order:   Descending,
@@ -558,6 +567,162 @@ func (client Client) WaitForDatabaseStatus(
 			}
 		case <-ctx.Done():
 			return fmt.Errorf("failed to wait for database %d status: %s", dbID, ctx.Err())
+		}
+	}
+}
+
+// NewEventPoller initializes a new Linode event poller. This should be run before the event is triggered as it stores
+// the previous state of the entity's events.
+func (client Client) NewEventPoller(
+	ctx context.Context, id any, entityType EntityType, action EventAction,
+) (*EventPoller, error) {
+	result := EventPoller{
+		EntityID:   id,
+		EntityType: entityType,
+		Action:     action,
+
+		client: client,
+	}
+
+	if err := result.PreTask(ctx); err != nil {
+		return nil, fmt.Errorf("failed to run pretask: %s", err)
+	}
+
+	return &result, nil
+}
+
+// NewEventPollerWithoutEntity initializes a new Linode event poller without a target entity ID.
+// This is useful for create events where the ID of the entity is not yet known.
+// For example:
+// p, _ := client.NewEventPollerWithoutEntity(...)
+// inst, _ := client.CreateInstance(...)
+// p.EntityID = inst.ID
+// ...
+func (client Client) NewEventPollerWithoutEntity(entityType EntityType, action EventAction) (*EventPoller, error) {
+	result := EventPoller{
+		EntityType:     entityType,
+		Action:         action,
+		EntityID:       0,
+		previousEvents: make(map[int]bool, 0),
+
+		client: client,
+	}
+
+	return &result, nil
+}
+
+// PreTask stores all current events for the given entity to prevent them from being
+// processed on subsequent runs.
+func (p *EventPoller) PreTask(ctx context.Context) error {
+	f := Filter{
+		OrderBy: "created",
+		Order:   Descending,
+	}
+	f.AddField(Eq, "entity.type", p.EntityType)
+	f.AddField(Eq, "entity.id", p.EntityID)
+	f.AddField(Eq, "action", p.Action)
+
+	fBytes, err := f.MarshalJSON()
+	if err != nil {
+		return err
+	}
+
+	events, err := p.client.ListEvents(ctx, &ListOptions{
+		Filter:      string(fBytes),
+		PageOptions: &PageOptions{Page: 1},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list events: %s", err)
+	}
+
+	eventIDs := make(map[int]bool, len(events))
+	for _, event := range events {
+		eventIDs[event.ID] = true
+	}
+
+	p.previousEvents = eventIDs
+
+	return nil
+}
+
+func (p *EventPoller) WaitForLatestUnknownEvent(ctx context.Context) (*Event, error) {
+	ticker := time.NewTicker(p.client.millisecondsPerPoll * time.Millisecond)
+	defer ticker.Stop()
+
+	f := Filter{
+		OrderBy: "created",
+		Order:   Descending,
+	}
+	f.AddField(Eq, "entity.type", p.EntityType)
+	f.AddField(Eq, "entity.id", p.EntityID)
+	f.AddField(Eq, "action", p.Action)
+
+	fBytes, err := f.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	listOpts := ListOptions{
+		Filter:      string(fBytes),
+		PageOptions: &PageOptions{Page: 1},
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			events, err := p.client.ListEvents(ctx, &listOpts)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list events: %s", err)
+			}
+
+			for _, event := range events {
+				if _, ok := p.previousEvents[event.ID]; !ok {
+					// Store this event so it is no longer picked up
+					// on subsequent jobs
+					p.previousEvents[event.ID] = true
+
+					return &event, nil
+				}
+			}
+		case <-ctx.Done():
+			return nil, fmt.Errorf("failed to wait for event: %s", ctx.Err())
+		}
+	}
+}
+
+// WaitForFinished waits for a new event to be finished.
+func (p *EventPoller) WaitForFinished(
+	ctx context.Context, timeoutSeconds int,
+) (*Event, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(p.client.millisecondsPerPoll * time.Millisecond)
+	defer ticker.Stop()
+
+	event, err := p.WaitForLatestUnknownEvent(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to wait for event: %s", err)
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			event, err := p.client.GetEvent(ctx, event.ID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get event: %s", err)
+			}
+
+			switch event.Status {
+			case EventFinished:
+				return event, nil
+			case EventFailed:
+				return nil, fmt.Errorf("event %d has failed", event.ID)
+			case EventScheduled, EventStarted, EventNotification:
+				continue
+			}
+		case <-ctx.Done():
+			return nil, fmt.Errorf("failed to wait for event: %s", ctx.Err())
 		}
 	}
 }

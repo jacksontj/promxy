@@ -27,6 +27,7 @@ const (
 	IonosTokenEnvVar      = "IONOS_TOKEN"
 	IonosApiUrlEnvVar     = "IONOS_API_URL"
 	IonosPinnedCertEnvVar = "IONOS_PINNED_CERT"
+	IonosLogLevelEnvVar   = "IONOS_LOG_LEVEL"
 	DefaultIonosServerUrl = "https://api.ionos.com/cloudapi/v6"
 	DefaultIonosBasePath  = "/cloudapi/v6"
 	defaultMaxRetries     = 3
@@ -109,16 +110,19 @@ type Configuration struct {
 	DefaultHeader      map[string]string `json:"defaultHeader,omitempty"`
 	DefaultQueryParams url.Values        `json:"defaultQueryParams,omitempty"`
 	UserAgent          string            `json:"userAgent,omitempty"`
-	Debug              bool              `json:"debug,omitempty"`
-	Servers            ServerConfigurations
-	OperationServers   map[string]ServerConfigurations
-	HTTPClient         *http.Client
-	Username           string        `json:"username,omitempty"`
-	Password           string        `json:"password,omitempty"`
-	Token              string        `json:"token,omitempty"`
-	MaxRetries         int           `json:"maxRetries,omitempty"`
-	WaitTime           time.Duration `json:"waitTime,omitempty"`
-	MaxWaitTime        time.Duration `json:"maxWaitTime,omitempty"`
+	// Debug is deprecated, will be replaced by LogLevel
+	Debug            bool `json:"debug,omitempty"`
+	Servers          ServerConfigurations
+	OperationServers map[string]ServerConfigurations
+	HTTPClient       *http.Client
+	Username         string        `json:"username,omitempty"`
+	Password         string        `json:"password,omitempty"`
+	Token            string        `json:"token,omitempty"`
+	MaxRetries       int           `json:"maxRetries,omitempty"`
+	WaitTime         time.Duration `json:"waitTime,omitempty"`
+	MaxWaitTime      time.Duration `json:"maxWaitTime,omitempty"`
+	LogLevel         LogLevel
+	Logger           Logger
 }
 
 // NewConfiguration returns a new Configuration object
@@ -126,7 +130,7 @@ func NewConfiguration(username, password, token, hostUrl string) *Configuration 
 	cfg := &Configuration{
 		DefaultHeader:      make(map[string]string),
 		DefaultQueryParams: url.Values{},
-		UserAgent:          "ionos-cloud-sdk-go/v6.1.0",
+		UserAgent:          "ionos-cloud-sdk-go/v6.1.3",
 		Debug:              false,
 		Username:           username,
 		Password:           password,
@@ -134,6 +138,8 @@ func NewConfiguration(username, password, token, hostUrl string) *Configuration 
 		MaxRetries:         defaultMaxRetries,
 		MaxWaitTime:        defaultMaxWaitTime,
 		WaitTime:           defaultWaitTime,
+		Logger:             NewDefaultLogger(),
+		LogLevel:           getLogLevelFromEnv(),
 		Servers: ServerConfigurations{
 			{
 				URL:         getServerUrl(hostUrl),

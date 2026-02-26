@@ -101,7 +101,7 @@ func (g Error) Error() string {
 // - ErrorFromError    (2) for an error
 // - ErrorFromStringer (3) for a Stringer
 // - HTTP Status Codes (100-600) for a resty.Response object
-func NewError(err interface{}) *Error {
+func NewError(err any) *Error {
 	if err == nil {
 		return nil
 	}

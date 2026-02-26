@@ -1,12 +1,14 @@
 package linodego
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"golang.org/x/net/http2"
 )
 
 const (
@@ -72,6 +74,16 @@ func serviceUnavailableRetryCondition(r *resty.Response, _ error) bool {
 
 func requestTimeoutRetryCondition(r *resty.Response, _ error) bool {
 	return r.StatusCode() == http.StatusRequestTimeout
+}
+
+func requestGOAWAYRetryCondition(_ *resty.Response, e error) bool {
+	return errors.As(e, &http2.GoAwayError{})
+}
+
+func requestNGINXRetryCondition(r *resty.Response, _ error) bool {
+	return r.StatusCode() == http.StatusBadRequest &&
+		r.Header().Get("Server") == "nginx" &&
+		r.Header().Get("Content-Type") == "text/html"
 }
 
 func respectRetryAfter(client *resty.Client, resp *resty.Response) (time.Duration, error) {

@@ -34,7 +34,7 @@ func findPathRange(path []parser.Node, eRanges []evalRange) time.Duration {
 	return evalRange
 }
 
-// evalRange summarizes a defined evalRange (from a MatrixSelector) within the ast
+// evalRange summarizes a defined evalRange (from a MatrixSelector) within the asg
 type evalRange struct {
 	Prefix []parser.PositionRange
 	Range  time.Duration

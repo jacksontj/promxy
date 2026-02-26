@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/linode/linodego/internal/parseabletime"
 )
 
@@ -57,16 +58,18 @@ type DatabasesPagedResponse struct {
 	Data []Database `json:"data"`
 }
 
-func (DatabasesPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Databases.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return fmt.Sprintf("%s/instances", endpoint)
+func (DatabasesPagedResponse) endpoint(_ ...any) string {
+	return "databases/instances"
 }
 
-func (resp *DatabasesPagedResponse) appendData(r *DatabasesPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
+func (resp *DatabasesPagedResponse) castResult(r *resty.Request, e string) (int, int, error) {
+	res, err := coupleAPIErrors(r.SetResult(DatabasesPagedResponse{}).Get(e))
+	if err != nil {
+		return 0, 0, err
+	}
+	castedRes := res.Result().(*DatabasesPagedResponse)
+	resp.Data = append(resp.Data, castedRes.Data...)
+	return castedRes.Pages, castedRes.Results, nil
 }
 
 type DatabaseEnginesPagedResponse struct {
@@ -74,16 +77,18 @@ type DatabaseEnginesPagedResponse struct {
 	Data []DatabaseEngine `json:"data"`
 }
 
-func (DatabaseEnginesPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Databases.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return fmt.Sprintf("%s/engines", endpoint)
+func (DatabaseEnginesPagedResponse) endpoint(_ ...any) string {
+	return "databases/engines"
 }
 
-func (resp *DatabaseEnginesPagedResponse) appendData(r *DatabaseEnginesPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
+func (resp *DatabaseEnginesPagedResponse) castResult(r *resty.Request, e string) (int, int, error) {
+	res, err := coupleAPIErrors(r.SetResult(DatabaseEnginesPagedResponse{}).Get(e))
+	if err != nil {
+		return 0, 0, err
+	}
+	castedRes := res.Result().(*DatabaseEnginesPagedResponse)
+	resp.Data = append(resp.Data, castedRes.Data...)
+	return castedRes.Pages, castedRes.Results, nil
 }
 
 type DatabaseTypesPagedResponse struct {
@@ -91,16 +96,18 @@ type DatabaseTypesPagedResponse struct {
 	Data []DatabaseType `json:"data"`
 }
 
-func (DatabaseTypesPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Databases.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return fmt.Sprintf("%s/types", endpoint)
+func (DatabaseTypesPagedResponse) endpoint(_ ...any) string {
+	return "databases/types"
 }
 
-func (resp *DatabaseTypesPagedResponse) appendData(r *DatabaseTypesPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
+func (resp *DatabaseTypesPagedResponse) castResult(r *resty.Request, e string) (int, int, error) {
+	res, err := coupleAPIErrors(r.SetResult(DatabaseTypesPagedResponse{}).Get(e))
+	if err != nil {
+		return 0, 0, err
+	}
+	castedRes := res.Result().(*DatabaseTypesPagedResponse)
+	resp.Data = append(resp.Data, castedRes.Data...)
+	return castedRes.Pages, castedRes.Results, nil
 }
 
 // A Database is a instance of Linode Managed Databases
@@ -205,62 +212,88 @@ func (c *Client) ListDatabases(ctx context.Context, opts *ListOptions) ([]Databa
 	return response.Data, nil
 }
 
-// ListDatabaseEngines lists all Database Engines
+// ListDatabaseEngines lists all Database Engines. This endpoint is cached by default.
 func (c *Client) ListDatabaseEngines(ctx context.Context, opts *ListOptions) ([]DatabaseEngine, error) {
 	response := DatabaseEnginesPagedResponse{}
 
-	err := c.listHelper(ctx, &response, opts)
+	endpoint, err := generateListCacheURL(response.endpoint(), opts)
 	if err != nil {
 		return nil, err
 	}
+
+	if result := c.getCachedResponse(endpoint); result != nil {
+		return result.([]DatabaseEngine), nil
+	}
+
+	err = c.listHelper(ctx, &response, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	c.addCachedResponse(endpoint, response.Data, &cacheExpiryTime)
 
 	return response.Data, nil
 }
 
-// GetDatabaseEngine returns a specific Database Engine
-func (c *Client) GetDatabaseEngine(ctx context.Context, opts *ListOptions, id string) (*DatabaseEngine, error) {
-	e, err := c.Databases.Endpoint()
+// GetDatabaseEngine returns a specific Database Engine. This endpoint is cached by default.
+func (c *Client) GetDatabaseEngine(ctx context.Context, opts *ListOptions, engineID string) (*DatabaseEngine, error) {
+	e := fmt.Sprintf("databases/engines/%s", engineID)
+
+	if result := c.getCachedResponse(e); result != nil {
+		result := result.(DatabaseEngine)
+		return &result, nil
+	}
+
+	req := c.R(ctx).SetResult(&DatabaseEngine{})
+	r, err := coupleAPIErrors(req.Get(e))
 	if err != nil {
 		return nil, err
 	}
 
-	req := c.R(ctx)
-
-	e = fmt.Sprintf("%s/engines/%s", e, id)
-	r, err := coupleAPIErrors(req.SetResult(&DatabaseEngine{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
+	c.addCachedResponse(e, r.Result(), &cacheExpiryTime)
 
 	return r.Result().(*DatabaseEngine), nil
 }
 
-// ListDatabaseTypes lists all Types of Database provided in Linode Managed Databases
+// ListDatabaseTypes lists all Types of Database provided in Linode Managed Databases. This endpoint is cached by default.
 func (c *Client) ListDatabaseTypes(ctx context.Context, opts *ListOptions) ([]DatabaseType, error) {
 	response := DatabaseTypesPagedResponse{}
 
-	err := c.listHelper(ctx, &response, opts)
+	endpoint, err := generateListCacheURL(response.endpoint(), opts)
 	if err != nil {
 		return nil, err
 	}
+
+	if result := c.getCachedResponse(endpoint); result != nil {
+		return result.([]DatabaseType), nil
+	}
+
+	err = c.listHelper(ctx, &response, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	c.addCachedResponse(endpoint, response.Data, &cacheExpiryTime)
 
 	return response.Data, nil
 }
 
-// GetDatabaseType returns a specific Database Type
-func (c *Client) GetDatabaseType(ctx context.Context, opts *ListOptions, id string) (*DatabaseType, error) {
-	e, err := c.Databases.Endpoint()
+// GetDatabaseType returns a specific Database Type. This endpoint is cached by default.
+func (c *Client) GetDatabaseType(ctx context.Context, opts *ListOptions, typeID string) (*DatabaseType, error) {
+	e := fmt.Sprintf("databases/types/%s", typeID)
+
+	if result := c.getCachedResponse(e); result != nil {
+		result := result.(DatabaseType)
+		return &result, nil
+	}
+
+	req := c.R(ctx).SetResult(&DatabaseType{})
+	r, err := coupleAPIErrors(req.Get(e))
 	if err != nil {
 		return nil, err
 	}
 
-	req := c.R(ctx)
-
-	e = fmt.Sprintf("%s/types/%s", e, id)
-	r, err := coupleAPIErrors(req.SetResult(&DatabaseType{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
+	c.addCachedResponse(e, r.Result(), &cacheExpiryTime)
 
 	return r.Result().(*DatabaseType), nil
 }

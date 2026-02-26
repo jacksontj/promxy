@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/linode/linodego/internal/parseabletime"
 )
 
@@ -167,24 +168,26 @@ func (i InstanceConfig) GetUpdateOptions() InstanceConfigUpdateOptions {
 	}
 }
 
-// endpointWithID gets the endpoint URL for InstanceConfigs of a given Instance
-func (InstanceConfigsPagedResponse) endpointWithID(c *Client, id int) string {
-	endpoint, err := c.InstanceConfigs.endpointWithParams(id)
-	if err != nil {
-		panic(err)
-	}
-	return endpoint
+// endpoint gets the endpoint URL for InstanceConfigs of a given Instance
+func (InstanceConfigsPagedResponse) endpoint(ids ...any) string {
+	id := ids[0].(int)
+	return fmt.Sprintf("linode/instances/%d/configs", id)
 }
 
-// appendData appends InstanceConfigs when processing paginated InstanceConfig responses
-func (resp *InstanceConfigsPagedResponse) appendData(r *InstanceConfigsPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
+func (resp *InstanceConfigsPagedResponse) castResult(r *resty.Request, e string) (int, int, error) {
+	res, err := coupleAPIErrors(r.SetResult(InstanceConfigsPagedResponse{}).Get(e))
+	if err != nil {
+		return 0, 0, err
+	}
+	castedRes := res.Result().(*InstanceConfigsPagedResponse)
+	resp.Data = append(resp.Data, castedRes.Data...)
+	return castedRes.Pages, castedRes.Results, nil
 }
 
 // ListInstanceConfigs lists InstanceConfigs
 func (c *Client) ListInstanceConfigs(ctx context.Context, linodeID int, opts *ListOptions) ([]InstanceConfig, error) {
 	response := InstanceConfigsPagedResponse{}
-	err := c.listHelperWithID(ctx, &response, linodeID, opts)
+	err := c.listHelper(ctx, &response, opts, linodeID)
 	if err != nil {
 		return nil, err
 	}
@@ -193,12 +196,9 @@ func (c *Client) ListInstanceConfigs(ctx context.Context, linodeID int, opts *Li
 
 // GetInstanceConfig gets the template with the provided ID
 func (c *Client) GetInstanceConfig(ctx context.Context, linodeID int, configID int) (*InstanceConfig, error) {
-	e, err := c.InstanceConfigs.endpointWithParams(linodeID)
-	if err != nil {
-		return nil, err
-	}
-	e = fmt.Sprintf("%s/%d", e, configID)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&InstanceConfig{}).Get(e))
+	e := fmt.Sprintf("linode/instances/%d/configs/%d", linodeID, configID)
+	req := c.R(ctx).SetResult(&InstanceConfig{})
+	r, err := coupleAPIErrors(req.Get(e))
 	if err != nil {
 		return nil, err
 	}
@@ -206,24 +206,15 @@ func (c *Client) GetInstanceConfig(ctx context.Context, linodeID int, configID i
 }
 
 // CreateInstanceConfig creates a new InstanceConfig for the given Instance
-func (c *Client) CreateInstanceConfig(ctx context.Context, linodeID int, createOpts InstanceConfigCreateOptions) (*InstanceConfig, error) {
-	var body string
-	e, err := c.InstanceConfigs.endpointWithParams(linodeID)
+func (c *Client) CreateInstanceConfig(ctx context.Context, linodeID int, opts InstanceConfigCreateOptions) (*InstanceConfig, error) {
+	body, err := json.Marshal(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	req := c.R(ctx).SetResult(&InstanceConfig{})
-
-	if bodyData, err := json.Marshal(createOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, err
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Post(e))
+	e := fmt.Sprintf("linode/instances/%d/configs", linodeID)
+	req := c.R(ctx).SetResult(&InstanceConfig{}).SetBody(string(body))
+	r, err := coupleAPIErrors(req.Post(e))
 	if err != nil {
 		return nil, err
 	}
@@ -232,24 +223,15 @@ func (c *Client) CreateInstanceConfig(ctx context.Context, linodeID int, createO
 }
 
 // UpdateInstanceConfig update an InstanceConfig for the given Instance
-func (c *Client) UpdateInstanceConfig(ctx context.Context, linodeID int, configID int, updateOpts InstanceConfigUpdateOptions) (*InstanceConfig, error) {
-	var body string
-	e, err := c.InstanceConfigs.endpointWithParams(linodeID)
+func (c *Client) UpdateInstanceConfig(ctx context.Context, linodeID int, configID int, opts InstanceConfigUpdateOptions) (*InstanceConfig, error) {
+	body, err := json.Marshal(opts)
 	if err != nil {
 		return nil, err
 	}
-	e = fmt.Sprintf("%s/%d", e, configID)
-	req := c.R(ctx).SetResult(&InstanceConfig{})
 
-	if bodyData, err := json.Marshal(updateOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, err
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
+	e := fmt.Sprintf("linode/instances/%d/configs/%d", linodeID, configID)
+	req := c.R(ctx).SetResult(&InstanceConfig{}).SetBody(body)
+	r, err := coupleAPIErrors(req.Put(e))
 	if err != nil {
 		return nil, err
 	}
@@ -264,12 +246,7 @@ func (c *Client) RenameInstanceConfig(ctx context.Context, linodeID int, configI
 
 // DeleteInstanceConfig deletes a Linode InstanceConfig
 func (c *Client) DeleteInstanceConfig(ctx context.Context, linodeID int, configID int) error {
-	e, err := c.InstanceConfigs.endpointWithParams(linodeID)
-	if err != nil {
-		return err
-	}
-	e = fmt.Sprintf("%s/%d", e, configID)
-
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
+	e := fmt.Sprintf("linode/instances/%d/configs/%d", linodeID, configID)
+	_, err := coupleAPIErrors(c.R(ctx).Delete(e))
 	return err
 }

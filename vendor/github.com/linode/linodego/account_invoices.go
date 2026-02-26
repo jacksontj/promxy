@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/linode/linodego/internal/parseabletime"
 )
 
@@ -35,18 +36,18 @@ type InvoicesPagedResponse struct {
 }
 
 // endpoint gets the endpoint URL for Invoice
-func (InvoicesPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Invoices.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-
-	return endpoint
+func (InvoicesPagedResponse) endpoint(_ ...any) string {
+	return "account/invoices"
 }
 
-// appendData appends Invoices when processing paginated Invoice responses
-func (resp *InvoicesPagedResponse) appendData(r *InvoicesPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
+func (resp *InvoicesPagedResponse) castResult(r *resty.Request, e string) (int, int, error) {
+	res, err := coupleAPIErrors(r.SetResult(InvoicesPagedResponse{}).Get(e))
+	if err != nil {
+		return 0, 0, err
+	}
+	castedRes := res.Result().(*InvoicesPagedResponse)
+	resp.Data = append(resp.Data, castedRes.Data...)
+	return castedRes.Pages, castedRes.Results, nil
 }
 
 // ListInvoices gets a paginated list of Invoices against the Account
@@ -103,14 +104,10 @@ func (i *InvoiceItem) UnmarshalJSON(b []byte) error {
 }
 
 // GetInvoice gets the a single Invoice matching the provided ID
-func (c *Client) GetInvoice(ctx context.Context, id int) (*Invoice, error) {
-	e, err := c.Invoices.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-
-	e = fmt.Sprintf("%s/%d", e, id)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&Invoice{}).Get(e))
+func (c *Client) GetInvoice(ctx context.Context, invoiceID int) (*Invoice, error) {
+	req := c.R(ctx).SetResult(&Invoice{})
+	e := fmt.Sprintf("account/invoices/%d", invoiceID)
+	r, err := coupleAPIErrors(req.Get(e))
 	if err != nil {
 		return nil, err
 	}
@@ -124,25 +121,26 @@ type InvoiceItemsPagedResponse struct {
 	Data []InvoiceItem `json:"data"`
 }
 
-// endpointWithID gets the endpoint URL for InvoiceItems associated with a specific Invoice
-func (InvoiceItemsPagedResponse) endpointWithID(c *Client, id int) string {
-	endpoint, err := c.InvoiceItems.endpointWithParams(id)
-	if err != nil {
-		panic(err)
-	}
-
-	return endpoint
+// endpoint gets the endpoint URL for InvoiceItems associated with a specific Invoice
+func (InvoiceItemsPagedResponse) endpoint(ids ...any) string {
+	id := ids[0].(int)
+	return fmt.Sprintf("account/invoices/%d/items", id)
 }
 
-// appendData appends InvoiceItems when processing paginated Invoice Item responses
-func (resp *InvoiceItemsPagedResponse) appendData(r *InvoiceItemsPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
+func (resp *InvoiceItemsPagedResponse) castResult(r *resty.Request, e string) (int, int, error) {
+	res, err := coupleAPIErrors(r.SetResult(InvoiceItemsPagedResponse{}).Get(e))
+	if err != nil {
+		return 0, 0, err
+	}
+	castedRes := res.Result().(*InvoiceItemsPagedResponse)
+	resp.Data = append(resp.Data, castedRes.Data...)
+	return castedRes.Pages, castedRes.Results, nil
 }
 
 // ListInvoiceItems gets the invoice items associated with a specific Invoice
-func (c *Client) ListInvoiceItems(ctx context.Context, id int, opts *ListOptions) ([]InvoiceItem, error) {
+func (c *Client) ListInvoiceItems(ctx context.Context, invoiceID int, opts *ListOptions) ([]InvoiceItem, error) {
 	response := InvoiceItemsPagedResponse{}
-	err := c.listHelperWithID(ctx, &response, id, opts)
+	err := c.listHelper(ctx, &response, opts, invoiceID)
 	if err != nil {
 		return nil, err
 	}

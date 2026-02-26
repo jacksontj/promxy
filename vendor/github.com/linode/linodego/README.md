@@ -14,12 +14,6 @@ Go client for [Linode REST v4 API](https://developers.linode.com/api/v4)
 go get -u github.com/linode/linodego
 ```
 
-## API Support
-
-Check [API_SUPPORT.md](API_SUPPORT.md) for current support of the Linode `v4` API endpoints.
-
-** Note: This project will change and break until we release a v1.0.0 tagged version. Breaking changes in v0.x.x will be denoted with a minor version bump (v0.2.4 -> v0.3.0) **
-
 ## Documentation
 
 See [godoc](https://godoc.org/github.com/linode/linodego) for a complete reference.
@@ -148,6 +142,18 @@ linodes, err := linodego.ListInstances(context.Background(), linodego.NewListOpt
 // linodes == []
 // err = nil
 ```
+
+### Response Caching
+
+By default, certain endpoints with static responses will be cached into memory. 
+Endpoints with cached responses are identified in their [accompanying documentation](https://pkg.go.dev/github.com/linode/linodego?utm_source=godoc).
+
+The default cache entry expiry time is `15` minutes. Certain endpoints may override this value to allow for more frequent refreshes (e.g. `client.GetRegion(...)`).
+The global cache expiry time can be customized using the `client.SetGlobalCacheExpiration(...)` method.
+
+Response caching can be globally disabled or enabled for a client using the `client.UseCache(...)` method.
+
+The global cache can be cleared and refreshed using the `client.InvalidateCache()` method.
 
 ### Writes
 

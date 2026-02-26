@@ -57,6 +57,8 @@ type VolumeProperties struct {
 	UserData *string `json:"userData,omitempty"`
 	// The UUID of the attached server.
 	BootServer *string `json:"bootServer,omitempty"`
+	// Determines whether the volume will be used as a boot volume. Set to `NONE`, the volume will not be used as boot volume. Set to `PRIMARY`, the volume will be used as boot volume and all other volumes must be set to `NONE`. Set to `AUTO` or `null` requires all volumes to be set to `AUTO` or `null`; this will use the legacy behavior, which is to use the volume as a boot volume only if there are no other volumes or cdrom devices.
+	BootOrder *string `json:"bootOrder,omitempty"`
 }
 
 // NewVolumeProperties instantiates a new VolumeProperties object
@@ -67,6 +69,8 @@ func NewVolumeProperties(size float32) *VolumeProperties {
 	this := VolumeProperties{}
 
 	this.Size = &size
+	var bootOrder string = "AUTO"
+	this.BootOrder = &bootOrder
 
 	return &this
 }
@@ -76,6 +80,8 @@ func NewVolumeProperties(size float32) *VolumeProperties {
 // but it doesn't guarantee that properties required by API are set
 func NewVolumePropertiesWithDefaults() *VolumeProperties {
 	this := VolumeProperties{}
+	var bootOrder string = "AUTO"
+	this.BootOrder = &bootOrder
 	return &this
 }
 
@@ -877,6 +883,44 @@ func (o *VolumeProperties) HasBootServer() bool {
 	return false
 }
 
+// GetBootOrder returns the BootOrder field value
+// If the value is explicit nil, the zero value for string will be returned
+func (o *VolumeProperties) GetBootOrder() *string {
+	if o == nil {
+		return nil
+	}
+
+	return o.BootOrder
+
+}
+
+// GetBootOrderOk returns a tuple with the BootOrder field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *VolumeProperties) GetBootOrderOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.BootOrder, true
+}
+
+// SetBootOrder sets field value
+func (o *VolumeProperties) SetBootOrder(v string) {
+
+	o.BootOrder = &v
+
+}
+
+// HasBootOrder returns a boolean if a field has been set.
+func (o *VolumeProperties) HasBootOrder() bool {
+	if o != nil && o.BootOrder != nil {
+		return true
+	}
+
+	return false
+}
+
 func (o VolumeProperties) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Name != nil {
@@ -941,6 +985,9 @@ func (o VolumeProperties) MarshalJSON() ([]byte, error) {
 	}
 	if o.BootServer != nil {
 		toSerialize["bootServer"] = o.BootServer
+	}
+	if o.BootOrder != nil {
+		toSerialize["bootOrder"] = o.BootOrder
 	}
 	return json.Marshal(toSerialize)
 }

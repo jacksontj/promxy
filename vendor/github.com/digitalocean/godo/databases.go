@@ -9,26 +9,28 @@ import (
 )
 
 const (
-	databaseBasePath           = "/v2/databases"
-	databaseSinglePath         = databaseBasePath + "/%s"
-	databaseCAPath             = databaseBasePath + "/%s/ca"
-	databaseConfigPath         = databaseBasePath + "/%s/config"
-	databaseResizePath         = databaseBasePath + "/%s/resize"
-	databaseMigratePath        = databaseBasePath + "/%s/migrate"
-	databaseMaintenancePath    = databaseBasePath + "/%s/maintenance"
-	databaseBackupsPath        = databaseBasePath + "/%s/backups"
-	databaseUsersPath          = databaseBasePath + "/%s/users"
-	databaseUserPath           = databaseBasePath + "/%s/users/%s"
-	databaseResetUserAuthPath  = databaseUserPath + "/reset_auth"
-	databaseDBPath             = databaseBasePath + "/%s/dbs/%s"
-	databaseDBsPath            = databaseBasePath + "/%s/dbs"
-	databasePoolPath           = databaseBasePath + "/%s/pools/%s"
-	databasePoolsPath          = databaseBasePath + "/%s/pools"
-	databaseReplicaPath        = databaseBasePath + "/%s/replicas/%s"
-	databaseReplicasPath       = databaseBasePath + "/%s/replicas"
-	databaseEvictionPolicyPath = databaseBasePath + "/%s/eviction_policy"
-	databaseSQLModePath        = databaseBasePath + "/%s/sql_mode"
-	databaseFirewallRulesPath  = databaseBasePath + "/%s/firewall"
+	databaseBasePath                = "/v2/databases"
+	databaseSinglePath              = databaseBasePath + "/%s"
+	databaseCAPath                  = databaseBasePath + "/%s/ca"
+	databaseConfigPath              = databaseBasePath + "/%s/config"
+	databaseResizePath              = databaseBasePath + "/%s/resize"
+	databaseMigratePath             = databaseBasePath + "/%s/migrate"
+	databaseMaintenancePath         = databaseBasePath + "/%s/maintenance"
+	databaseBackupsPath             = databaseBasePath + "/%s/backups"
+	databaseUsersPath               = databaseBasePath + "/%s/users"
+	databaseUserPath                = databaseBasePath + "/%s/users/%s"
+	databaseResetUserAuthPath       = databaseUserPath + "/reset_auth"
+	databaseDBPath                  = databaseBasePath + "/%s/dbs/%s"
+	databaseDBsPath                 = databaseBasePath + "/%s/dbs"
+	databasePoolPath                = databaseBasePath + "/%s/pools/%s"
+	databasePoolsPath               = databaseBasePath + "/%s/pools"
+	databaseReplicaPath             = databaseBasePath + "/%s/replicas/%s"
+	databaseReplicasPath            = databaseBasePath + "/%s/replicas"
+	databaseEvictionPolicyPath      = databaseBasePath + "/%s/eviction_policy"
+	databaseSQLModePath             = databaseBasePath + "/%s/sql_mode"
+	databaseFirewallRulesPath       = databaseBasePath + "/%s/firewall"
+	databaseOptionsPath             = databaseBasePath + "/options"
+	databaseUpgradeMajorVersionPath = databaseBasePath + "/%s/upgrade"
 )
 
 // SQL Mode constants allow for MySQL-specific SQL flavor configuration.
@@ -123,6 +125,7 @@ type DatabasesService interface {
 	CreatePool(context.Context, string, *DatabaseCreatePoolRequest) (*DatabasePool, *Response, error)
 	GetPool(context.Context, string, string) (*DatabasePool, *Response, error)
 	DeletePool(context.Context, string, string) (*Response, error)
+	UpdatePool(context.Context, string, string, *DatabaseUpdatePoolRequest) (*Response, error)
 	GetReplica(context.Context, string, string) (*DatabaseReplica, *Response, error)
 	ListReplicas(context.Context, string, *ListOptions) ([]DatabaseReplica, *Response, error)
 	CreateReplica(context.Context, string, *DatabaseCreateReplicaRequest) (*DatabaseReplica, *Response, error)
@@ -139,6 +142,8 @@ type DatabasesService interface {
 	UpdatePostgreSQLConfig(context.Context, string, *PostgreSQLConfig) (*Response, error)
 	UpdateRedisConfig(context.Context, string, *RedisConfig) (*Response, error)
 	UpdateMySQLConfig(context.Context, string, *MySQLConfig) (*Response, error)
+	ListOptions(todo context.Context) (*DatabaseOptions, *Response, error)
+	UpgradeMajorVersion(context.Context, string, *UpgradeVersionRequest) (*Response, error)
 }
 
 // DatabasesServiceOp handles communication with the Databases related methods
@@ -266,6 +271,7 @@ type DatabaseDB struct {
 
 // DatabaseReplica represents a read-only replica of a particular database
 type DatabaseReplica struct {
+	ID                 string              `json:"id"`
 	Name               string              `json:"name"`
 	Connection         *DatabaseConnection `json:"connection"`
 	PrivateConnection  *DatabaseConnection `json:"private_connection,omitempty"`
@@ -291,6 +297,14 @@ type DatabasePool struct {
 type DatabaseCreatePoolRequest struct {
 	User     string `json:"user"`
 	Name     string `json:"name"`
+	Size     int    `json:"size"`
+	Database string `json:"db"`
+	Mode     string `json:"mode"`
+}
+
+// DatabaseUpdatePoolRequest is used to update a database connection pool
+type DatabaseUpdatePoolRequest struct {
+	User     string `json:"user,omitempty"`
 	Size     int    `json:"size"`
 	Database string `json:"db"`
 	Mode     string `json:"mode"`
@@ -518,12 +532,42 @@ type evictionPolicyRoot struct {
 	EvictionPolicy string `json:"eviction_policy"`
 }
 
+type UpgradeVersionRequest struct {
+	Version string `json:"version"`
+}
+
 type sqlModeRoot struct {
 	SQLMode string `json:"sql_mode"`
 }
 
 type databaseFirewallRuleRoot struct {
 	Rules []DatabaseFirewallRule `json:"rules"`
+}
+
+// databaseOptionsRoot represents the root of all available database options (i.e. engines, regions, version, etc.)
+type databaseOptionsRoot struct {
+	Options *DatabaseOptions `json:"options"`
+}
+
+// DatabaseOptions represents the available database engines
+type DatabaseOptions struct {
+	MongoDBOptions     DatabaseEngineOptions `json:"mongodb"`
+	MySQLOptions       DatabaseEngineOptions `json:"mysql"`
+	PostgresSQLOptions DatabaseEngineOptions `json:"pg"`
+	RedisOptions       DatabaseEngineOptions `json:"redis"`
+}
+
+// DatabaseEngineOptions represents the configuration options that are available for a given database engine
+type DatabaseEngineOptions struct {
+	Regions  []string         `json:"regions"`
+	Versions []string         `json:"versions"`
+	Layouts  []DatabaseLayout `json:"layouts"`
+}
+
+// DatabaseLayout represents the slugs available for a given database engine at various node counts
+type DatabaseLayout struct {
+	NodeNum int      `json:"num_nodes"`
+	Sizes   []string `json:"sizes"`
 }
 
 // URN returns a URN identifier for the database
@@ -875,6 +919,37 @@ func (svc *DatabasesServiceOp) DeletePool(ctx context.Context, databaseID, name 
 	return resp, nil
 }
 
+// UpdatePool will update an existing database connection pool
+func (svc *DatabasesServiceOp) UpdatePool(ctx context.Context, databaseID, name string, updatePool *DatabaseUpdatePoolRequest) (*Response, error) {
+	path := fmt.Sprintf(databasePoolPath, databaseID, name)
+
+	if updatePool == nil {
+		return nil, NewArgError("updatePool", "cannot be nil")
+	}
+
+	if updatePool.Mode == "" {
+		return nil, NewArgError("mode", "cannot be empty")
+	}
+
+	if updatePool.Database == "" {
+		return nil, NewArgError("database", "cannot be empty")
+	}
+
+	if updatePool.Size < 1 {
+		return nil, NewArgError("size", "cannot be less than 1")
+	}
+
+	req, err := svc.client.NewRequest(ctx, http.MethodPut, path, updatePool)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
 // GetReplica returns a single database replica
 func (svc *DatabasesServiceOp) GetReplica(ctx context.Context, databaseID, name string) (*DatabaseReplica, *Response, error) {
 	path := fmt.Sprintf(databaseReplicaPath, databaseID, name)
@@ -1132,5 +1207,37 @@ func (svc *DatabasesServiceOp) UpdateMySQLConfig(ctx context.Context, databaseID
 	if err != nil {
 		return resp, err
 	}
+	return resp, nil
+}
+
+// ListOptions gets the database options available.
+func (svc *DatabasesServiceOp) ListOptions(ctx context.Context) (*DatabaseOptions, *Response, error) {
+	root := new(databaseOptionsRoot)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, databaseOptionsPath, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return root.Options, resp, nil
+}
+
+// UpgradeMajorVersion upgrades the major version of a cluster.
+func (svc *DatabasesServiceOp) UpgradeMajorVersion(ctx context.Context, databaseID string, upgradeReq *UpgradeVersionRequest) (*Response, error) {
+	path := fmt.Sprintf(databaseUpgradeMajorVersionPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodPut, path, upgradeReq)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+
 	return resp, nil
 }

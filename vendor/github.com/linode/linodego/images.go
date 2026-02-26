@@ -106,16 +106,18 @@ type ImagesPagedResponse struct {
 	Data []Image `json:"data"`
 }
 
-func (ImagesPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Images.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return endpoint
+func (ImagesPagedResponse) endpoint(_ ...any) string {
+	return "images"
 }
 
-func (resp *ImagesPagedResponse) appendData(r *ImagesPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
+func (resp *ImagesPagedResponse) castResult(r *resty.Request, e string) (int, int, error) {
+	res, err := coupleAPIErrors(r.SetResult(ImagesPagedResponse{}).Get(e))
+	if err != nil {
+		return 0, 0, err
+	}
+	castedRes := res.Result().(*ImagesPagedResponse)
+	resp.Data = append(resp.Data, castedRes.Data...)
+	return castedRes.Pages, castedRes.Results, nil
 }
 
 // ListImages lists Images
@@ -129,14 +131,10 @@ func (c *Client) ListImages(ctx context.Context, opts *ListOptions) ([]Image, er
 }
 
 // GetImage gets the Image with the provided ID
-func (c *Client) GetImage(ctx context.Context, id string) (*Image, error) {
-	e, err := c.Images.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-
-	e = fmt.Sprintf("%s/%s", e, id)
-	r, err := coupleAPIErrors(c.Images.R(ctx).Get(e))
+func (c *Client) GetImage(ctx context.Context, imageID string) (*Image, error) {
+	e := fmt.Sprintf("images/%s", imageID)
+	req := c.R(ctx).SetResult(&Image{})
+	r, err := coupleAPIErrors(req.Get(e))
 	if err != nil {
 		return nil, err
 	}
@@ -144,25 +142,15 @@ func (c *Client) GetImage(ctx context.Context, id string) (*Image, error) {
 }
 
 // CreateImage creates a Image
-func (c *Client) CreateImage(ctx context.Context, createOpts ImageCreateOptions) (*Image, error) {
-	var body string
-
-	e, err := c.Images.Endpoint()
+func (c *Client) CreateImage(ctx context.Context, opts ImageCreateOptions) (*Image, error) {
+	body, err := json.Marshal(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	req := c.R(ctx).SetResult(&Image{})
-
-	if bodyData, err := json.Marshal(createOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Post(e))
+	e := "images"
+	req := c.R(ctx).SetResult(&Image{}).SetBody(string(body))
+	r, err := coupleAPIErrors(req.Post(e))
 	if err != nil {
 		return nil, err
 	}
@@ -170,27 +158,15 @@ func (c *Client) CreateImage(ctx context.Context, createOpts ImageCreateOptions)
 }
 
 // UpdateImage updates the Image with the specified id
-func (c *Client) UpdateImage(ctx context.Context, id string, updateOpts ImageUpdateOptions) (*Image, error) {
-	var body string
-
-	e, err := c.Images.Endpoint()
+func (c *Client) UpdateImage(ctx context.Context, imageID string, opts ImageUpdateOptions) (*Image, error) {
+	body, err := json.Marshal(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	e = fmt.Sprintf("%s/%s", e, id)
-
-	req := c.R(ctx).SetResult(&Image{})
-
-	if bodyData, err := json.Marshal(updateOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
+	e := fmt.Sprintf("images/%s", imageID)
+	req := c.R(ctx).SetResult(&Image{}).SetBody(string(body))
+	r, err := coupleAPIErrors(req.Put(e))
 	if err != nil {
 		return nil, err
 	}
@@ -198,40 +174,22 @@ func (c *Client) UpdateImage(ctx context.Context, id string, updateOpts ImageUpd
 }
 
 // DeleteImage deletes the Image with the specified id
-func (c *Client) DeleteImage(ctx context.Context, id string) error {
-	e, err := c.Images.Endpoint()
-	if err != nil {
-		return err
-	}
-
-	e = fmt.Sprintf("%s/%s", e, id)
-
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
+func (c *Client) DeleteImage(ctx context.Context, imageID string) error {
+	e := fmt.Sprintf("images/%s", imageID)
+	_, err := coupleAPIErrors(c.R(ctx).Delete(e))
 	return err
 }
 
 // CreateImageUpload creates an Image and an upload URL
-func (c *Client) CreateImageUpload(ctx context.Context, createOpts ImageCreateUploadOptions) (image *Image, uploadURL string, err error) {
-	var body string
-
-	e, err := c.Images.Endpoint()
+func (c *Client) CreateImageUpload(ctx context.Context, opts ImageCreateUploadOptions) (*Image, string, error) {
+	body, err := json.Marshal(opts)
 	if err != nil {
 		return nil, "", err
 	}
 
-	e = fmt.Sprintf("%s/upload", e)
-
-	req := c.R(ctx).SetResult(&ImageCreateUploadResponse{})
-
-	if bodyData, err := json.Marshal(createOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, "", NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Post(e))
+	e := "images/upload"
+	req := c.R(ctx).SetResult(&ImageCreateUploadResponse{}).SetBody(string(body))
+	r, err := coupleAPIErrors(req.Post(e))
 	if err != nil {
 		return nil, "", err
 	}
@@ -260,15 +218,15 @@ func (c *Client) UploadImageToURL(ctx context.Context, uploadURL string, image i
 }
 
 // UploadImage creates and uploads an image
-func (c *Client) UploadImage(ctx context.Context, options ImageUploadOptions) (*Image, error) {
+func (c *Client) UploadImage(ctx context.Context, opts ImageUploadOptions) (*Image, error) {
 	image, uploadURL, err := c.CreateImageUpload(ctx, ImageCreateUploadOptions{
-		Label:       options.Label,
-		Region:      options.Region,
-		Description: options.Description,
+		Label:       opts.Label,
+		Region:      opts.Region,
+		Description: opts.Description,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return image, c.UploadImageToURL(ctx, uploadURL, options.Image)
+	return image, c.UploadImageToURL(ctx, uploadURL, opts.Image)
 }

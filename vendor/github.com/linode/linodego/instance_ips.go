@@ -66,12 +66,9 @@ const (
 
 // GetInstanceIPAddresses gets the IPAddresses for a Linode instance
 func (c *Client) GetInstanceIPAddresses(ctx context.Context, linodeID int) (*InstanceIPAddressResponse, error) {
-	e, err := c.InstanceIPs.endpointWithParams(linodeID)
-	if err != nil {
-		return nil, err
-	}
-
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&InstanceIPAddressResponse{}).Get(e))
+	e := fmt.Sprintf("linode/instances/%d/ips", linodeID)
+	req := c.R(ctx).SetResult(&InstanceIPAddressResponse{})
+	r, err := coupleAPIErrors(req.Get(e))
 	if err != nil {
 		return nil, err
 	}
@@ -80,43 +77,31 @@ func (c *Client) GetInstanceIPAddresses(ctx context.Context, linodeID int) (*Ins
 
 // GetInstanceIPAddress gets the IPAddress for a Linode instance matching a supplied IP address
 func (c *Client) GetInstanceIPAddress(ctx context.Context, linodeID int, ipaddress string) (*InstanceIP, error) {
-	e, err := c.InstanceIPs.endpointWithParams(linodeID)
+	e := fmt.Sprintf("linode/instances/%d/ips/%s", linodeID, ipaddress)
+	req := c.R(ctx).SetResult(&InstanceIP{})
+	r, err := coupleAPIErrors(req.Get(e))
 	if err != nil {
 		return nil, err
 	}
-	e = fmt.Sprintf("%s/%s", e, ipaddress)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&InstanceIP{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
+
 	return r.Result().(*InstanceIP), nil
 }
 
 // AddInstanceIPAddress adds a public or private IP to a Linode instance
 func (c *Client) AddInstanceIPAddress(ctx context.Context, linodeID int, public bool) (*InstanceIP, error) {
-	var body string
-	e, err := c.InstanceIPs.endpointWithParams(linodeID)
-	if err != nil {
-		return nil, err
-	}
-
-	req := c.R(ctx).SetResult(&InstanceIP{})
-
 	instanceipRequest := struct {
 		Type   string `json:"type"`
 		Public bool   `json:"public"`
 	}{"ipv4", public}
 
-	if bodyData, err := json.Marshal(instanceipRequest); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
+	body, err := json.Marshal(instanceipRequest)
+	if err != nil {
+		return nil, err
 	}
 
-	r, err := coupleAPIErrors(req.
-		SetHeader("Content-Type", "application/json").
-		SetBody(body).
-		Post(e))
+	e := fmt.Sprintf("linode/instances/%d/ips", linodeID)
+	req := c.R(ctx).SetResult(&InstanceIP{}).SetBody(string(body))
+	r, err := coupleAPIErrors(req.Post(e))
 	if err != nil {
 		return nil, err
 	}
@@ -125,25 +110,15 @@ func (c *Client) AddInstanceIPAddress(ctx context.Context, linodeID int, public 
 }
 
 // UpdateInstanceIPAddress updates the IPAddress with the specified instance id and IP address
-func (c *Client) UpdateInstanceIPAddress(ctx context.Context, linodeID int, ipAddress string, updateOpts IPAddressUpdateOptions) (*InstanceIP, error) {
-	var body string
-	e, err := c.InstanceIPs.endpointWithParams(linodeID)
+func (c *Client) UpdateInstanceIPAddress(ctx context.Context, linodeID int, ipAddress string, opts IPAddressUpdateOptions) (*InstanceIP, error) {
+	body, err := json.Marshal(opts)
 	if err != nil {
 		return nil, err
 	}
-	e = fmt.Sprintf("%s/%s", e, ipAddress)
 
-	req := c.R(ctx).SetResult(&InstanceIP{})
-
-	if bodyData, err := json.Marshal(updateOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
+	e := fmt.Sprintf("linode/instances/%d/ips/%s", linodeID, ipAddress)
+	req := c.R(ctx).SetResult(&InstanceIP{}).SetBody(string(body))
+	r, err := coupleAPIErrors(req.Put(e))
 	if err != nil {
 		return nil, err
 	}
@@ -151,12 +126,7 @@ func (c *Client) UpdateInstanceIPAddress(ctx context.Context, linodeID int, ipAd
 }
 
 func (c *Client) DeleteInstanceIPAddress(ctx context.Context, linodeID int, ipAddress string) error {
-	e, err := c.InstanceIPs.endpointWithParams(linodeID)
-	if err != nil {
-		return err
-	}
-
-	e = fmt.Sprintf("%s/%s", e, ipAddress)
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
+	e := fmt.Sprintf("linode/instances/%d/ips/%s", linodeID, ipAddress)
+	_, err := coupleAPIErrors(c.R(ctx).Delete(e))
 	return err
 }

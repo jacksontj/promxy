@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/linode/linodego/internal/duration"
 	"github.com/linode/linodego/internal/parseabletime"
 )
@@ -180,11 +181,11 @@ const (
 // can be used to access it.
 type EventEntity struct {
 	// ID may be a string or int, it depends on the EntityType
-	ID     interface{} `json:"id"`
-	Label  string      `json:"label"`
-	Type   EntityType  `json:"type"`
-	Status string      `json:"status"`
-	URL    string      `json:"url"`
+	ID     any        `json:"id"`
+	Label  string     `json:"label"`
+	Type   EntityType `json:"type"`
+	Status string     `json:"status"`
+	URL    string     `json:"url"`
 }
 
 // EventsPagedResponse represents a paginated Events API response
@@ -194,13 +195,8 @@ type EventsPagedResponse struct {
 }
 
 // endpoint gets the endpoint URL for Event
-func (EventsPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.Events.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-
-	return endpoint
+func (EventsPagedResponse) endpoint(_ ...any) string {
+	return "account/events"
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface
@@ -225,21 +221,14 @@ func (i *Event) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// endpointWithID gets the endpoint URL for a specific Event
-func (i Event) endpointWithID(c *Client) string {
-	endpoint, err := c.Events.Endpoint()
+func (resp *EventsPagedResponse) castResult(r *resty.Request, e string) (int, int, error) {
+	res, err := coupleAPIErrors(r.SetResult(EventsPagedResponse{}).Get(e))
 	if err != nil {
-		panic(err)
+		return 0, 0, err
 	}
-
-	endpoint = fmt.Sprintf("%s/%d", endpoint, i.ID)
-
-	return endpoint
-}
-
-// appendData appends Events when processing paginated Event responses
-func (resp *EventsPagedResponse) appendData(r *EventsPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
+	castedRes := res.Result().(*EventsPagedResponse)
+	resp.Data = append(resp.Data, castedRes.Data...)
+	return castedRes.Pages, castedRes.Results, nil
 }
 
 // ListEvents gets a collection of Event objects representing actions taken
@@ -256,14 +245,10 @@ func (c *Client) ListEvents(ctx context.Context, opts *ListOptions) ([]Event, er
 }
 
 // GetEvent gets the Event with the Event ID
-func (c *Client) GetEvent(ctx context.Context, id int) (*Event, error) {
-	e, err := c.Events.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-
-	e = fmt.Sprintf("%s/%d", e, id)
-	r, err := c.R(ctx).SetResult(&Event{}).Get(e)
+func (c *Client) GetEvent(ctx context.Context, eventID int) (*Event, error) {
+	req := c.R(ctx).SetResult(&Event{})
+	e := fmt.Sprintf("account/events/%d", eventID)
+	r, err := coupleAPIErrors(req.Get(e))
 	if err != nil {
 		return nil, err
 	}
@@ -273,20 +258,14 @@ func (c *Client) GetEvent(ctx context.Context, id int) (*Event, error) {
 
 // MarkEventRead marks a single Event as read.
 func (c *Client) MarkEventRead(ctx context.Context, event *Event) error {
-	e := event.endpointWithID(c)
-	e = fmt.Sprintf("%s/read", e)
-
+	e := fmt.Sprintf("account/events/%d/read", event.ID)
 	_, err := coupleAPIErrors(c.R(ctx).Post(e))
-
 	return err
 }
 
 // MarkEventsSeen marks all Events up to and including this Event by ID as seen.
 func (c *Client) MarkEventsSeen(ctx context.Context, event *Event) error {
-	e := event.endpointWithID(c)
-	e = fmt.Sprintf("%s/seen", e)
-
+	e := fmt.Sprintf("account/events/%d/seen", event.ID)
 	_, err := coupleAPIErrors(c.R(ctx).Post(e))
-
 	return err
 }
