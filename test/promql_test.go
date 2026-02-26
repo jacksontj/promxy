@@ -121,14 +121,15 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 			MaxSamples:               50000000,
 			NoStepSubqueryIntervalFn: func(int64) int64 { return (1 * time.Minute).Milliseconds() },
 			EnableAtModifier:         true,
-		}), // Query Engine
+		}), // QueryEngine
 		s.(storage.SampleAndChunkQueryable), // SampleAndChunkQueryable
-		nil,                                 //appendable
-		nil,                                 // exemplarQueryable
-		nil,                                 //factoryTr
-		nil,                                 //factoryAr
+		nil, // appendable
+		nil, // exemplarQueryable
+		nil, // scrapePoolsRetriever
+		nil, // targetRetriever
+		nil, // alertmanagerRetriever
 		cfgFunc,
-		nil, // flags
+		nil, // flagsMap
 		v1.GlobalURLOptions{
 			ListenAddress: listen,
 			Host:          "localhost",
@@ -139,7 +140,7 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 		"",        // tsdb dir
 		false,     // enable admin API
 		nil,       // logger
-		nil,       // FactoryRr
+		nil,       // rulesRetriever
 		50000000,  // RemoteReadSampleLimit
 		1000,      // RemoteReadConcurrencyLimit
 		1048576,   // RemoteReadBytesInFrame

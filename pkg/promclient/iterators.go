@@ -6,7 +6,9 @@ import (
 	"sort"
 
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
 // IteratorsForValue returns SeriesIterators for the value passed in
@@ -50,24 +52,30 @@ type SeriesIterator struct {
 
 // Seek advances the iterator forward to the value at or after
 // the given timestamp.
-func (s *SeriesIterator) Seek(t int64) bool {
+func (s *SeriesIterator) Seek(t int64) chunkenc.ValueType {
 	switch valueTyped := s.V.(type) {
 	case *model.Scalar: // From a vector
-		return int64(valueTyped.Timestamp) >= t
+		if int64(valueTyped.Timestamp) >= t {
+			return chunkenc.ValFloat
+		}
+		return chunkenc.ValNone
 	case *model.Sample: // From a vector
-		return int64(valueTyped.Timestamp) >= t
+		if int64(valueTyped.Timestamp) >= t {
+			return chunkenc.ValFloat
+		}
+		return chunkenc.ValNone
 	case *model.SampleStream: // from a Matrix
 		// If someone calls Seek() on an empty SampleStream, just return false
 		if len(valueTyped.Values) == 0 {
-			return false
+			return chunkenc.ValNone
 		}
 		for i := s.offset; i < len(valueTyped.Values); i++ {
 			s.offset = i
 			if int64(valueTyped.Values[s.offset].Timestamp) >= t {
-				return true
+				return chunkenc.ValFloat
 			}
 		}
-		return false
+		return chunkenc.ValNone
 	default:
 		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
 		panic(msg)
@@ -90,27 +98,43 @@ func (s *SeriesIterator) At() (t int64, v float64) {
 	}
 }
 
+// AtHistogram implements chunkenc.Iterator.
+func (s *SeriesIterator) AtHistogram() (int64, *histogram.Histogram) {
+	return 0, nil
+}
+
+// AtFloatHistogram implements chunkenc.Iterator.
+func (s *SeriesIterator) AtFloatHistogram() (int64, *histogram.FloatHistogram) {
+	return 0, nil
+}
+
+// AtT implements chunkenc.Iterator.
+func (s *SeriesIterator) AtT() int64 {
+	t, _ := s.At()
+	return t
+}
+
 // Next advances the iterator by one.
-func (s *SeriesIterator) Next() bool {
+func (s *SeriesIterator) Next() chunkenc.ValueType {
 	switch valueTyped := s.V.(type) {
 	case *model.Scalar:
 		if s.offset < 0 {
 			s.offset = 0
-			return true
+			return chunkenc.ValFloat
 		}
-		return false
+		return chunkenc.ValNone
 	case *model.Sample: // From a vector
 		if s.offset < 0 {
 			s.offset = 0
-			return true
+			return chunkenc.ValFloat
 		}
-		return false
+		return chunkenc.ValNone
 	case *model.SampleStream: // from a Matrix
 		if s.offset < (len(valueTyped.Values) - 1) {
 			s.offset++
-			return true
+			return chunkenc.ValFloat
 		}
-		return false
+		return chunkenc.ValNone
 	default:
 		msg := fmt.Sprintf("Unknown data type %v", reflect.TypeOf(s.V))
 		panic(msg)

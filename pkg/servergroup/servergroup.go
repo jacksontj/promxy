@@ -172,10 +172,10 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				lset := labels.New(lbls...)
 
 				logrus.Tracef("Potential target pre-relabel: %v", lset)
-				lset = relabel.Process(lset, s.Cfg.RelabelConfigs...)
+				lset, keep := relabel.Process(lset, s.Cfg.RelabelConfigs...)
 				logrus.Tracef("Potential target post-relabel: %v", lset)
 				// Check if the target was dropped, if so we skip it
-				if len(lset) == 0 {
+				if !keep || len(lset) == 0 {
 					continue
 				}
 

@@ -18,7 +18,9 @@ import (
 
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/exemplar"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -45,6 +47,16 @@ func (s *Storage) Append(ref storage.SeriesRef, l labels.Labels, t int64, v floa
 
 func (s *Storage) AppendExemplar(ref storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
 	return 0, fmt.Errorf("not supported")
+}
+
+// AppendHistogram implements storage.Appender.
+func (s *Storage) AppendHistogram(ref storage.SeriesRef, l labels.Labels, t int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, fmt.Errorf("histograms not supported")
+}
+
+// UpdateMetadata implements storage.Appender.
+func (s *Storage) UpdateMetadata(ref storage.SeriesRef, l labels.Labels, m metadata.Metadata) (storage.SeriesRef, error) {
+	return 0, nil
 }
 
 // Commit implements storage.Appender.

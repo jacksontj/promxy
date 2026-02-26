@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/prometheus/prometheus/model/exemplar"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 )
@@ -32,6 +34,16 @@ func (a *appenderStub) Append(ref storage.SeriesRef, l labels.Labels, t int64, v
 
 func (a *appenderStub) AppendExemplar(ref storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
 	return 0, fmt.Errorf("not Implemented")
+}
+
+// AppendHistogram implements storage.Appender.
+func (a *appenderStub) AppendHistogram(ref storage.SeriesRef, l labels.Labels, t int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, fmt.Errorf("not Implemented")
+}
+
+// UpdateMetadata implements storage.Appender.
+func (a *appenderStub) UpdateMetadata(ref storage.SeriesRef, l labels.Labels, m metadata.Metadata) (storage.SeriesRef, error) {
+	return 0, nil
 }
 
 // Commit submits the collected samples and purges the batch.

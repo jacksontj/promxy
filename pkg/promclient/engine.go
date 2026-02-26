@@ -86,7 +86,7 @@ func (a *EngineAPI) Query(ctx context.Context, query string, ts time.Time) (mode
 
 // QueryRange performs a query for the given range.
 func (a *EngineAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
-	engineQuery, err := a.e.NewRangeQuery(a.q, &promql.QueryOpts{false}, query, r.Start, r.End, r.Step)
+	engineQuery, err := a.e.NewRangeQuery(a.q, &promql.QueryOpts{EnablePerStepStats: false}, query, r.Start, r.End, r.Step)
 	if err != nil {
 		return nil, nil, err
 	}

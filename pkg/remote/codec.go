@@ -23,6 +23,7 @@ import (
 	"github.com/golang/snappy"
 	"github.com/prometheus/common/model"
 
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/storage"
@@ -152,10 +153,10 @@ func ToQueryResult(ss storage.SeriesSet, sampleLimit int) (*prompb.QueryResult, 
 	resp := &prompb.QueryResult{}
 	for ss.Next() {
 		series := ss.At()
-		iter := series.Iterator()
+		iter := series.Iterator(nil)
 		samples := []prompb.Sample{}
 
-		for iter.Next() {
+		for iter.Next() != chunkenc.ValNone {
 			numSamples++
 			if sampleLimit > 0 && numSamples > sampleLimit {
 				return nil, HTTPError{
@@ -262,7 +263,7 @@ func (c *concreteSeries) Labels() labels.Labels {
 	return labels.New(c.labels...)
 }
 
-func (c *concreteSeries) Iterator() chunkenc.Iterator {
+func (c *concreteSeries) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
 	return newConcreteSeriersIterator(c)
 }
 
@@ -280,11 +281,14 @@ func newConcreteSeriersIterator(series *concreteSeries) chunkenc.Iterator {
 }
 
 // Seek implements storage.SeriesIterator.
-func (c *concreteSeriesIterator) Seek(t int64) bool {
+func (c *concreteSeriesIterator) Seek(t int64) chunkenc.ValueType {
 	c.cur = sort.Search(len(c.series.samples), func(n int) bool {
 		return c.series.samples[n].Timestamp >= t
 	})
-	return c.cur < len(c.series.samples)
+	if c.cur < len(c.series.samples) {
+		return chunkenc.ValFloat
+	}
+	return chunkenc.ValNone
 }
 
 // At implements storage.SeriesIterator.
@@ -293,10 +297,29 @@ func (c *concreteSeriesIterator) At() (t int64, v float64) {
 	return s.Timestamp, s.Value
 }
 
+// AtHistogram implements chunkenc.Iterator.
+func (c *concreteSeriesIterator) AtHistogram() (int64, *histogram.Histogram) {
+	return 0, nil
+}
+
+// AtFloatHistogram implements chunkenc.Iterator.
+func (c *concreteSeriesIterator) AtFloatHistogram() (int64, *histogram.FloatHistogram) {
+	return 0, nil
+}
+
+// AtT implements chunkenc.Iterator.
+func (c *concreteSeriesIterator) AtT() int64 {
+	s := c.series.samples[c.cur]
+	return s.Timestamp
+}
+
 // Next implements storage.SeriesIterator.
-func (c *concreteSeriesIterator) Next() bool {
+func (c *concreteSeriesIterator) Next() chunkenc.ValueType {
 	c.cur++
-	return c.cur < len(c.series.samples)
+	if c.cur < len(c.series.samples) {
+		return chunkenc.ValFloat
+	}
+	return chunkenc.ValNone
 }
 
 // Err implements storage.SeriesIterator.

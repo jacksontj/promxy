@@ -21,6 +21,7 @@ func TestFindGroupAndAlert(t *testing.T) {
 					"testalert", // name
 					nil,         // expression
 					time.Hour,   // hold
+					0,           // keepFiringFor
 					labels.Labels{
 						labels.Label{"labelkey", "labelvalue"},
 					}, // labels
@@ -34,6 +35,7 @@ func TestFindGroupAndAlert(t *testing.T) {
 					"alertWithLabels", // name
 					nil,               // expression
 					time.Hour,         // hold
+					0,                 // keepFiringFor
 					labels.Labels{
 						labels.Label{"labelkey", "labelvalue"},
 					}, // labels
@@ -47,6 +49,7 @@ func TestFindGroupAndAlert(t *testing.T) {
 					"alertWithLabels", // name
 					nil,               // expression
 					time.Hour,         // hold
+					0,                 // keepFiringFor
 					labels.Labels{
 						labels.Label{"labelkey", "labelvalue2"},
 					}, // labels

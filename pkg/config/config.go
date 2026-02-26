@@ -45,7 +45,7 @@ type Config struct {
 	// Promxy specific configuration -- under its own namespace
 	PromxyConfig `yaml:"promxy"`
 
-	WebConfig web.TLSStruct `yaml:"tls_server_config"`
+	WebConfig web.TLSConfig `yaml:"tls_server_config"`
 }
 
 func (c *Config) String() string {

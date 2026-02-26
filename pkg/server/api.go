@@ -91,11 +91,7 @@ func parseConfigFile(tlsConfigFile string) (*tls.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	tlsStruct := &web.TLSStruct{
-		MinVersion:               tls.VersionTLS12,
-		MaxVersion:               tls.VersionTLS13,
-		PreferServerCipherSuites: true,
-	}
+	tlsStruct := &web.TLSConfig{}
 	err = yaml.UnmarshalStrict(content, tlsStruct)
 	if err != nil {
 		return nil, err
