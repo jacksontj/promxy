@@ -3,8 +3,8 @@ package instance
 import (
 	"time"
 
+	"github.com/scaleway/scaleway-sdk-go/errors"
 	"github.com/scaleway/scaleway-sdk-go/internal/async"
-	"github.com/scaleway/scaleway-sdk-go/internal/errors"
 	"github.com/scaleway/scaleway-sdk-go/scw"
 )
 
@@ -38,7 +38,6 @@ func (s *API) WaitForImage(req *WaitForImageRequest, opts ...scw.RequestOption) 
 				ImageID: req.ImageID,
 				Zone:    req.Zone,
 			}, opts...)
-
 			if err != nil {
 				return nil, false, err
 			}

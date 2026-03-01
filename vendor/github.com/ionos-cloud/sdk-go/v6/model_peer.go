@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,11 +16,16 @@ import (
 
 // Peer struct for Peer
 type Peer struct {
-	Id             *string `json:"id,omitempty"`
-	Name           *string `json:"name,omitempty"`
-	DatacenterId   *string `json:"datacenterId,omitempty"`
+	// Identifier of the LAN connected to the Cross Connect.
+	Id *string `json:"id,omitempty"`
+	// Name of the LAN connected to the Cross Connect.
+	Name *string `json:"name,omitempty"`
+	// Identifier of the virtual data center connected to the Cross Connect.
+	DatacenterId *string `json:"datacenterId,omitempty"`
+	// Name of the virtual data center connected to the Cross Connect.
 	DatacenterName *string `json:"datacenterName,omitempty"`
-	Location       *string `json:"location,omitempty"`
+	// Location of the virtual data center connected to the Cross Connect.
+	Location *string `json:"location,omitempty"`
 }
 
 // NewPeer instantiates a new Peer object
@@ -42,7 +47,7 @@ func NewPeerWithDefaults() *Peer {
 }
 
 // GetId returns the Id field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *Peer) GetId() *string {
 	if o == nil {
 		return nil
@@ -80,7 +85,7 @@ func (o *Peer) HasId() bool {
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *Peer) GetName() *string {
 	if o == nil {
 		return nil
@@ -118,7 +123,7 @@ func (o *Peer) HasName() bool {
 }
 
 // GetDatacenterId returns the DatacenterId field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *Peer) GetDatacenterId() *string {
 	if o == nil {
 		return nil
@@ -156,7 +161,7 @@ func (o *Peer) HasDatacenterId() bool {
 }
 
 // GetDatacenterName returns the DatacenterName field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *Peer) GetDatacenterName() *string {
 	if o == nil {
 		return nil
@@ -194,7 +199,7 @@ func (o *Peer) HasDatacenterName() bool {
 }
 
 // GetLocation returns the Location field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *Peer) GetLocation() *string {
 	if o == nil {
 		return nil
@@ -236,18 +241,23 @@ func (o Peer) MarshalJSON() ([]byte, error) {
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
+
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.DatacenterId != nil {
 		toSerialize["datacenterId"] = o.DatacenterId
 	}
+
 	if o.DatacenterName != nil {
 		toSerialize["datacenterName"] = o.DatacenterName
 	}
+
 	if o.Location != nil {
 		toSerialize["location"] = o.Location
 	}
+
 	return json.Marshal(toSerialize)
 }
 

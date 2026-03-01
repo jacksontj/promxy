@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -19,6 +19,7 @@ type LoadbalancerProperties struct {
 	// The name of the  resource.
 	Name *string `json:"name,omitempty"`
 	// IPv4 address of the loadbalancer. All attached NICs will inherit this IP. Leaving value null will assign IP automatically.
+	// to set this field to `nil` in order to be marshalled, the explicit nil address `Nilstring` can be used, or the setter `SetIpNil`
 	Ip *string `json:"ip,omitempty"`
 	// Indicates if the loadbalancer will reserve an IP using DHCP.
 	Dhcp *bool `json:"dhcp,omitempty"`
@@ -43,7 +44,7 @@ func NewLoadbalancerPropertiesWithDefaults() *LoadbalancerProperties {
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *LoadbalancerProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -81,7 +82,7 @@ func (o *LoadbalancerProperties) HasName() bool {
 }
 
 // GetIp returns the Ip field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *LoadbalancerProperties) GetIp() *string {
 	if o == nil {
 		return nil
@@ -109,6 +110,11 @@ func (o *LoadbalancerProperties) SetIp(v string) {
 
 }
 
+// sets Ip to the explicit address that will be encoded as nil when marshaled
+func (o *LoadbalancerProperties) SetIpNil() {
+	o.Ip = &Nilstring
+}
+
 // HasIp returns a boolean if a field has been set.
 func (o *LoadbalancerProperties) HasIp() bool {
 	if o != nil && o.Ip != nil {
@@ -119,7 +125,7 @@ func (o *LoadbalancerProperties) HasIp() bool {
 }
 
 // GetDhcp returns the Dhcp field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *LoadbalancerProperties) GetDhcp() *bool {
 	if o == nil {
 		return nil
@@ -161,10 +167,16 @@ func (o LoadbalancerProperties) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
-	toSerialize["ip"] = o.Ip
+
+	if o.Ip == &Nilstring {
+		toSerialize["ip"] = nil
+	} else if o.Ip != nil {
+		toSerialize["ip"] = o.Ip
+	}
 	if o.Dhcp != nil {
 		toSerialize["dhcp"] = o.Dhcp
 	}
+
 	return json.Marshal(toSerialize)
 }
 

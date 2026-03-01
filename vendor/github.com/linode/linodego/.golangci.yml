@@ -1,65 +1,85 @@
+version: "2"
 run:
   tests: false
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-
-  govet:
-    check-shadowing: true
-
-    enable:
-      - atomicalign
-    enable-all: false
-    disable:
-      - shadow
-    disable-all: false
-  golint:
-    min-confidence: 0.8
-  gocyclo:
-    min-complexity: 30
-  gocognit:
-    min-complexity: 30
-  maligned:
-    suggest-new: true
-  dupl:
-    threshold: 100
-
 linters:
-  enable-all: true
+  default: all
   disable:
-    - vetshadow
-    - errname
-    - forcetypeassert
-    - gocyclo
-    - unparam
-    - nakedret
-    - lll
-    - golint
-    - maligned
-    - scopelint
-    - dupl
-    - gosec
-    - gochecknoinits
-    - gochecknoglobals
-    - exhaustruct
-    - nonamedreturns
-    - errcheck
-    - staticcheck
-    - stylecheck
-    - wsl
-    - interfacer
-    - varnamelen
-    - tagliatelle
-    - gomnd
-    - nlreturn
-    - wrapcheck
-    - wastedassign
-    - goerr113
-    - exhaustivestruct
-    - durationcheck
-    - errorlint
+    - bodyclose
+    - contextcheck
     - cyclop
+    - depguard
+    - dupl
+    - durationcheck
+    - err113
+    - errcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - exhaustruct
+    - forcetypeassert
+    - gochecknoglobals
+    - gochecknoinits
+    - gocyclo
     - godot
-  fast: false
+    - gosec
+    - inamedparam
+    - lll
+    - musttag
+    - nakedret
+    - nilerr
+    - nlreturn
+    - noctx
+    - nolintlint
+    - nonamedreturns
+    - perfsprint
+    - recvcheck
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - tagalign
+    - tagliatelle
+    - tparallel
+    - unparam
+    - varnamelen
+    - wastedassign
+    - wrapcheck
+    - wsl
+  settings:
+    dupl:
+      threshold: 100
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    gocognit:
+      min-complexity: 30
+    gocyclo:
+      min-complexity: 30
+    govet:
+      enable:
+        - atomicalign
+        - shadow
+      enable-all: false
+      disable-all: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

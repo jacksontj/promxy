@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -21,20 +21,23 @@ type VolumeProperties struct {
 	// Hardware type of the volume. DAS (Direct Attached Storage) could be used only in a composite call with a Cube server.
 	Type *string `json:"type,omitempty"`
 	// The size of the volume in GB.
-	Size *float32 `json:"size"`
+	Size *float32 `json:"size,omitempty"`
 	// The availability zone in which the volume should be provisioned. The storage volume will be provisioned on as few physical storage devices as possible, but this cannot be guaranteed upfront. This is uavailable for DAS (Direct Attached Storage), and subject to availability for SSD.
 	AvailabilityZone *string `json:"availabilityZone,omitempty"`
-	// Image or snapshot ID to be used as template for this volume.
+	// Image or snapshot ID to be used as template for this volume. MSSQL Enterprise Images can be used only if the feature toggle for MSSQL Enterprise is enabled on the contract.
 	Image *string `json:"image,omitempty"`
 	// Initial password to be set for installed OS. Works with public images only. Not modifiable, forbidden in update requests. Password rules allows all characters from a-z, A-Z, 0-9.
 	ImagePassword *string `json:"imagePassword,omitempty"`
-	ImageAlias    *string `json:"imageAlias,omitempty"`
+	// Image alias of an image to be used as template for this volume. MSSQL Enterprise Images can be used only if the feature toggle for MSSQL Enterprise is enabled on the contract.
+	ImageAlias *string `json:"imageAlias,omitempty"`
 	// Public SSH keys are set on the image as authorized keys for appropriate SSH login to the instance using the corresponding private key. This field may only be set in creation requests. When reading, it always returns null. SSH keys are only supported if a public Linux image is used for the volume creation.
 	SshKeys *[]string `json:"sshKeys,omitempty"`
 	// The bus type for this volume; default is VIRTIO.
 	Bus *string `json:"bus,omitempty"`
 	// OS type for this volume.
 	LicenceType *string `json:"licenceType,omitempty"`
+	// The type of application that is hosted on this resource.  Only public images can have an Application type different than UNKNOWN.
+	ApplicationType *string `json:"applicationType,omitempty"`
 	// Hot-plug capable CPU (no reboot required).
 	CpuHotPlug *bool `json:"cpuHotPlug,omitempty"`
 	// Hot-plug capable RAM (no reboot required).
@@ -47,6 +50,10 @@ type VolumeProperties struct {
 	DiscVirtioHotPlug *bool `json:"discVirtioHotPlug,omitempty"`
 	// Hot-unplug capable Virt-IO drive (no reboot required). Not supported with Windows VMs.
 	DiscVirtioHotUnplug *bool `json:"discVirtioHotUnplug,omitempty"`
+	// If set to `true` will expose the serial id of the disk attached to the server. If set to `false` will not expose the serial id. Some operating systems or software solutions require the serial id to be exposed to work properly. Exposing the serial  can influence licensed software (e.g. Windows) behavior
+	ExposeSerial *bool `json:"exposeSerial,omitempty"`
+	// Indicates if the image requires the legacy BIOS for compatibility or specific needs.
+	RequireLegacyBios *bool `json:"requireLegacyBios,omitempty"`
 	// The Logical Unit Number of the storage volume. Null for volumes, not mounted to a VM.
 	DeviceNumber *int64 `json:"deviceNumber,omitempty"`
 	// The PCI slot number of the storage volume. Null for volumes, not mounted to a VM.
@@ -57,16 +64,26 @@ type VolumeProperties struct {
 	UserData *string `json:"userData,omitempty"`
 	// The UUID of the attached server.
 	BootServer *string `json:"bootServer,omitempty"`
+	// Determines whether the volume will be used as a boot volume. Set to `NONE`, the volume will not be used as boot volume. Set to `PRIMARY`, the volume will be used as boot volume and all other volumes must be set to `NONE`. Set to `AUTO` or `null` requires all volumes to be set to `AUTO` or `null`; this will use the legacy behavior, which is to use the volume as a boot volume only if there are no other volumes or cdrom devices.
+	// to set this field to `nil` in order to be marshalled, the explicit nil address `Nilstring` can be used, or the setter `SetBootOrderNil`
+	BootOrder *string `json:"bootOrder,omitempty"`
 }
 
 // NewVolumeProperties instantiates a new VolumeProperties object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewVolumeProperties(size float32) *VolumeProperties {
+func NewVolumeProperties() *VolumeProperties {
 	this := VolumeProperties{}
 
-	this.Size = &size
+	var applicationType string = "UNKNOWN"
+	this.ApplicationType = &applicationType
+	var exposeSerial bool = false
+	this.ExposeSerial = &exposeSerial
+	var requireLegacyBios bool = true
+	this.RequireLegacyBios = &requireLegacyBios
+	var bootOrder = "AUTO"
+	this.BootOrder = &bootOrder
 
 	return &this
 }
@@ -76,11 +93,19 @@ func NewVolumeProperties(size float32) *VolumeProperties {
 // but it doesn't guarantee that properties required by API are set
 func NewVolumePropertiesWithDefaults() *VolumeProperties {
 	this := VolumeProperties{}
+	var applicationType string = "UNKNOWN"
+	this.ApplicationType = &applicationType
+	var exposeSerial bool = false
+	this.ExposeSerial = &exposeSerial
+	var requireLegacyBios bool = true
+	this.RequireLegacyBios = &requireLegacyBios
+	var bootOrder = "AUTO"
+	this.BootOrder = &bootOrder
 	return &this
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -118,7 +143,7 @@ func (o *VolumeProperties) HasName() bool {
 }
 
 // GetType returns the Type field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetType() *string {
 	if o == nil {
 		return nil
@@ -156,7 +181,7 @@ func (o *VolumeProperties) HasType() bool {
 }
 
 // GetSize returns the Size field value
-// If the value is explicit nil, the zero value for float32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetSize() *float32 {
 	if o == nil {
 		return nil
@@ -194,7 +219,7 @@ func (o *VolumeProperties) HasSize() bool {
 }
 
 // GetAvailabilityZone returns the AvailabilityZone field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetAvailabilityZone() *string {
 	if o == nil {
 		return nil
@@ -232,7 +257,7 @@ func (o *VolumeProperties) HasAvailabilityZone() bool {
 }
 
 // GetImage returns the Image field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetImage() *string {
 	if o == nil {
 		return nil
@@ -270,7 +295,7 @@ func (o *VolumeProperties) HasImage() bool {
 }
 
 // GetImagePassword returns the ImagePassword field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetImagePassword() *string {
 	if o == nil {
 		return nil
@@ -308,7 +333,7 @@ func (o *VolumeProperties) HasImagePassword() bool {
 }
 
 // GetImageAlias returns the ImageAlias field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetImageAlias() *string {
 	if o == nil {
 		return nil
@@ -346,7 +371,7 @@ func (o *VolumeProperties) HasImageAlias() bool {
 }
 
 // GetSshKeys returns the SshKeys field value
-// If the value is explicit nil, the zero value for []string will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetSshKeys() *[]string {
 	if o == nil {
 		return nil
@@ -384,7 +409,7 @@ func (o *VolumeProperties) HasSshKeys() bool {
 }
 
 // GetBus returns the Bus field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetBus() *string {
 	if o == nil {
 		return nil
@@ -422,7 +447,7 @@ func (o *VolumeProperties) HasBus() bool {
 }
 
 // GetLicenceType returns the LicenceType field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetLicenceType() *string {
 	if o == nil {
 		return nil
@@ -459,8 +484,46 @@ func (o *VolumeProperties) HasLicenceType() bool {
 	return false
 }
 
+// GetApplicationType returns the ApplicationType field value
+// If the value is explicit nil, nil is returned
+func (o *VolumeProperties) GetApplicationType() *string {
+	if o == nil {
+		return nil
+	}
+
+	return o.ApplicationType
+
+}
+
+// GetApplicationTypeOk returns a tuple with the ApplicationType field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *VolumeProperties) GetApplicationTypeOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.ApplicationType, true
+}
+
+// SetApplicationType sets field value
+func (o *VolumeProperties) SetApplicationType(v string) {
+
+	o.ApplicationType = &v
+
+}
+
+// HasApplicationType returns a boolean if a field has been set.
+func (o *VolumeProperties) HasApplicationType() bool {
+	if o != nil && o.ApplicationType != nil {
+		return true
+	}
+
+	return false
+}
+
 // GetCpuHotPlug returns the CpuHotPlug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetCpuHotPlug() *bool {
 	if o == nil {
 		return nil
@@ -498,7 +561,7 @@ func (o *VolumeProperties) HasCpuHotPlug() bool {
 }
 
 // GetRamHotPlug returns the RamHotPlug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetRamHotPlug() *bool {
 	if o == nil {
 		return nil
@@ -536,7 +599,7 @@ func (o *VolumeProperties) HasRamHotPlug() bool {
 }
 
 // GetNicHotPlug returns the NicHotPlug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetNicHotPlug() *bool {
 	if o == nil {
 		return nil
@@ -574,7 +637,7 @@ func (o *VolumeProperties) HasNicHotPlug() bool {
 }
 
 // GetNicHotUnplug returns the NicHotUnplug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetNicHotUnplug() *bool {
 	if o == nil {
 		return nil
@@ -612,7 +675,7 @@ func (o *VolumeProperties) HasNicHotUnplug() bool {
 }
 
 // GetDiscVirtioHotPlug returns the DiscVirtioHotPlug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetDiscVirtioHotPlug() *bool {
 	if o == nil {
 		return nil
@@ -650,7 +713,7 @@ func (o *VolumeProperties) HasDiscVirtioHotPlug() bool {
 }
 
 // GetDiscVirtioHotUnplug returns the DiscVirtioHotUnplug field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetDiscVirtioHotUnplug() *bool {
 	if o == nil {
 		return nil
@@ -687,8 +750,84 @@ func (o *VolumeProperties) HasDiscVirtioHotUnplug() bool {
 	return false
 }
 
+// GetExposeSerial returns the ExposeSerial field value
+// If the value is explicit nil, nil is returned
+func (o *VolumeProperties) GetExposeSerial() *bool {
+	if o == nil {
+		return nil
+	}
+
+	return o.ExposeSerial
+
+}
+
+// GetExposeSerialOk returns a tuple with the ExposeSerial field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *VolumeProperties) GetExposeSerialOk() (*bool, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.ExposeSerial, true
+}
+
+// SetExposeSerial sets field value
+func (o *VolumeProperties) SetExposeSerial(v bool) {
+
+	o.ExposeSerial = &v
+
+}
+
+// HasExposeSerial returns a boolean if a field has been set.
+func (o *VolumeProperties) HasExposeSerial() bool {
+	if o != nil && o.ExposeSerial != nil {
+		return true
+	}
+
+	return false
+}
+
+// GetRequireLegacyBios returns the RequireLegacyBios field value
+// If the value is explicit nil, nil is returned
+func (o *VolumeProperties) GetRequireLegacyBios() *bool {
+	if o == nil {
+		return nil
+	}
+
+	return o.RequireLegacyBios
+
+}
+
+// GetRequireLegacyBiosOk returns a tuple with the RequireLegacyBios field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *VolumeProperties) GetRequireLegacyBiosOk() (*bool, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.RequireLegacyBios, true
+}
+
+// SetRequireLegacyBios sets field value
+func (o *VolumeProperties) SetRequireLegacyBios(v bool) {
+
+	o.RequireLegacyBios = &v
+
+}
+
+// HasRequireLegacyBios returns a boolean if a field has been set.
+func (o *VolumeProperties) HasRequireLegacyBios() bool {
+	if o != nil && o.RequireLegacyBios != nil {
+		return true
+	}
+
+	return false
+}
+
 // GetDeviceNumber returns the DeviceNumber field value
-// If the value is explicit nil, the zero value for int64 will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetDeviceNumber() *int64 {
 	if o == nil {
 		return nil
@@ -726,7 +865,7 @@ func (o *VolumeProperties) HasDeviceNumber() bool {
 }
 
 // GetPciSlot returns the PciSlot field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetPciSlot() *int32 {
 	if o == nil {
 		return nil
@@ -764,7 +903,7 @@ func (o *VolumeProperties) HasPciSlot() bool {
 }
 
 // GetBackupunitId returns the BackupunitId field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetBackupunitId() *string {
 	if o == nil {
 		return nil
@@ -802,7 +941,7 @@ func (o *VolumeProperties) HasBackupunitId() bool {
 }
 
 // GetUserData returns the UserData field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetUserData() *string {
 	if o == nil {
 		return nil
@@ -840,7 +979,7 @@ func (o *VolumeProperties) HasUserData() bool {
 }
 
 // GetBootServer returns the BootServer field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *VolumeProperties) GetBootServer() *string {
 	if o == nil {
 		return nil
@@ -877,70 +1016,151 @@ func (o *VolumeProperties) HasBootServer() bool {
 	return false
 }
 
+// GetBootOrder returns the BootOrder field value
+// If the value is explicit nil, nil is returned
+func (o *VolumeProperties) GetBootOrder() *string {
+	if o == nil {
+		return nil
+	}
+
+	return o.BootOrder
+
+}
+
+// GetBootOrderOk returns a tuple with the BootOrder field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *VolumeProperties) GetBootOrderOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.BootOrder, true
+}
+
+// SetBootOrder sets field value
+func (o *VolumeProperties) SetBootOrder(v string) {
+
+	o.BootOrder = &v
+
+}
+
+// sets BootOrder to the explicit address that will be encoded as nil when marshaled
+func (o *VolumeProperties) SetBootOrderNil() {
+	o.BootOrder = &Nilstring
+}
+
+// HasBootOrder returns a boolean if a field has been set.
+func (o *VolumeProperties) HasBootOrder() bool {
+	if o != nil && o.BootOrder != nil {
+		return true
+	}
+
+	return false
+}
+
 func (o VolumeProperties) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.Type != nil {
 		toSerialize["type"] = o.Type
 	}
+
 	if o.Size != nil {
 		toSerialize["size"] = o.Size
 	}
+
 	if o.AvailabilityZone != nil {
 		toSerialize["availabilityZone"] = o.AvailabilityZone
 	}
+
 	if o.Image != nil {
 		toSerialize["image"] = o.Image
 	}
+
 	if o.ImagePassword != nil {
 		toSerialize["imagePassword"] = o.ImagePassword
 	}
+
 	if o.ImageAlias != nil {
 		toSerialize["imageAlias"] = o.ImageAlias
 	}
+
 	if o.SshKeys != nil {
 		toSerialize["sshKeys"] = o.SshKeys
 	}
+
 	if o.Bus != nil {
 		toSerialize["bus"] = o.Bus
 	}
+
 	if o.LicenceType != nil {
 		toSerialize["licenceType"] = o.LicenceType
 	}
+
+	if o.ApplicationType != nil {
+		toSerialize["applicationType"] = o.ApplicationType
+	}
+
 	if o.CpuHotPlug != nil {
 		toSerialize["cpuHotPlug"] = o.CpuHotPlug
 	}
+
 	if o.RamHotPlug != nil {
 		toSerialize["ramHotPlug"] = o.RamHotPlug
 	}
+
 	if o.NicHotPlug != nil {
 		toSerialize["nicHotPlug"] = o.NicHotPlug
 	}
+
 	if o.NicHotUnplug != nil {
 		toSerialize["nicHotUnplug"] = o.NicHotUnplug
 	}
+
 	if o.DiscVirtioHotPlug != nil {
 		toSerialize["discVirtioHotPlug"] = o.DiscVirtioHotPlug
 	}
+
 	if o.DiscVirtioHotUnplug != nil {
 		toSerialize["discVirtioHotUnplug"] = o.DiscVirtioHotUnplug
 	}
+
+	if o.ExposeSerial != nil {
+		toSerialize["exposeSerial"] = o.ExposeSerial
+	}
+
+	if o.RequireLegacyBios != nil {
+		toSerialize["requireLegacyBios"] = o.RequireLegacyBios
+	}
+
 	if o.DeviceNumber != nil {
 		toSerialize["deviceNumber"] = o.DeviceNumber
 	}
+
 	if o.PciSlot != nil {
 		toSerialize["pciSlot"] = o.PciSlot
 	}
+
 	if o.BackupunitId != nil {
 		toSerialize["backupunitId"] = o.BackupunitId
 	}
+
 	if o.UserData != nil {
 		toSerialize["userData"] = o.UserData
 	}
+
 	if o.BootServer != nil {
 		toSerialize["bootServer"] = o.BootServer
+	}
+
+	if o.BootOrder == &Nilstring {
+		toSerialize["bootOrder"] = nil
+	} else if o.BootOrder != nil {
+		toSerialize["bootOrder"] = o.BootOrder
 	}
 	return json.Marshal(toSerialize)
 }

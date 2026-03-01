@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -47,7 +47,7 @@ func NewLabelPropertiesWithDefaults() *LabelProperties {
 }
 
 // GetKey returns the Key field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *LabelProperties) GetKey() *string {
 	if o == nil {
 		return nil
@@ -85,7 +85,7 @@ func (o *LabelProperties) HasKey() bool {
 }
 
 // GetValue returns the Value field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *LabelProperties) GetValue() *string {
 	if o == nil {
 		return nil
@@ -123,7 +123,7 @@ func (o *LabelProperties) HasValue() bool {
 }
 
 // GetResourceId returns the ResourceId field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *LabelProperties) GetResourceId() *string {
 	if o == nil {
 		return nil
@@ -161,7 +161,7 @@ func (o *LabelProperties) HasResourceId() bool {
 }
 
 // GetResourceType returns the ResourceType field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *LabelProperties) GetResourceType() *string {
 	if o == nil {
 		return nil
@@ -199,7 +199,7 @@ func (o *LabelProperties) HasResourceType() bool {
 }
 
 // GetResourceHref returns the ResourceHref field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *LabelProperties) GetResourceHref() *string {
 	if o == nil {
 		return nil
@@ -241,18 +241,23 @@ func (o LabelProperties) MarshalJSON() ([]byte, error) {
 	if o.Key != nil {
 		toSerialize["key"] = o.Key
 	}
+
 	if o.Value != nil {
 		toSerialize["value"] = o.Value
 	}
+
 	if o.ResourceId != nil {
 		toSerialize["resourceId"] = o.ResourceId
 	}
+
 	if o.ResourceType != nil {
 		toSerialize["resourceType"] = o.ResourceType
 	}
+
 	if o.ResourceHref != nil {
 		toSerialize["resourceHref"] = o.ResourceHref
 	}
+
 	return json.Marshal(toSerialize)
 }
 

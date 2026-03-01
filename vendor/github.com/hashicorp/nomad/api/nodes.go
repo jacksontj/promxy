@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 import (
@@ -35,7 +38,7 @@ func (c *Client) Nodes() *Nodes {
 	return &Nodes{client: c}
 }
 
-// List is used to list out all of the nodes
+// List is used to list out all the nodes
 func (n *Nodes) List(q *QueryOptions) ([]*NodeListStub, *QueryMeta, error) {
 	var resp NodeIndexSort
 	qm, err := n.client.query("/v1/nodes", &resp, q)
@@ -550,6 +553,7 @@ type Node struct {
 	Links                 map[string]string
 	Meta                  map[string]string
 	NodeClass             string
+	NodePool              string
 	CgroupParent          string
 	Drain                 bool
 	DrainStrategy         *DrainStrategy
@@ -779,6 +783,7 @@ type HostStats struct {
 	Memory           *HostMemoryStats
 	CPU              []*HostCPUStats
 	DiskStats        []*HostDiskStats
+	AllocDirStats    *HostDiskStats
 	DeviceStats      []*DeviceGroupStats
 	Uptime           uint64
 	CPUTicksConsumed float64
@@ -911,6 +916,7 @@ type NodeListStub struct {
 	Datacenter            string
 	Name                  string
 	NodeClass             string
+	NodePool              string
 	Version               string
 	Drain                 bool
 	SchedulingEligibility string

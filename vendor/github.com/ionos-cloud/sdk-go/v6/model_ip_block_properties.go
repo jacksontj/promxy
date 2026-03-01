@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -50,7 +50,7 @@ func NewIpBlockPropertiesWithDefaults() *IpBlockProperties {
 }
 
 // GetIps returns the Ips field value
-// If the value is explicit nil, the zero value for []string will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpBlockProperties) GetIps() *[]string {
 	if o == nil {
 		return nil
@@ -88,7 +88,7 @@ func (o *IpBlockProperties) HasIps() bool {
 }
 
 // GetLocation returns the Location field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpBlockProperties) GetLocation() *string {
 	if o == nil {
 		return nil
@@ -126,7 +126,7 @@ func (o *IpBlockProperties) HasLocation() bool {
 }
 
 // GetSize returns the Size field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpBlockProperties) GetSize() *int32 {
 	if o == nil {
 		return nil
@@ -164,7 +164,7 @@ func (o *IpBlockProperties) HasSize() bool {
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpBlockProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -202,7 +202,7 @@ func (o *IpBlockProperties) HasName() bool {
 }
 
 // GetIpConsumers returns the IpConsumers field value
-// If the value is explicit nil, the zero value for []IpConsumer will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpBlockProperties) GetIpConsumers() *[]IpConsumer {
 	if o == nil {
 		return nil
@@ -244,18 +244,23 @@ func (o IpBlockProperties) MarshalJSON() ([]byte, error) {
 	if o.Ips != nil {
 		toSerialize["ips"] = o.Ips
 	}
+
 	if o.Location != nil {
 		toSerialize["location"] = o.Location
 	}
+
 	if o.Size != nil {
 		toSerialize["size"] = o.Size
 	}
+
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.IpConsumers != nil {
 		toSerialize["ipConsumers"] = o.IpConsumers
 	}
+
 	return json.Marshal(toSerialize)
 }
 

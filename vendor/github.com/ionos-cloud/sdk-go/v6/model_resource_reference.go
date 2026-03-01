@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -45,7 +45,7 @@ func NewResourceReferenceWithDefaults() *ResourceReference {
 }
 
 // GetId returns the Id field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceReference) GetId() *string {
 	if o == nil {
 		return nil
@@ -83,7 +83,7 @@ func (o *ResourceReference) HasId() bool {
 }
 
 // GetType returns the Type field value
-// If the value is explicit nil, the zero value for Type will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceReference) GetType() *Type {
 	if o == nil {
 		return nil
@@ -121,7 +121,7 @@ func (o *ResourceReference) HasType() bool {
 }
 
 // GetHref returns the Href field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *ResourceReference) GetHref() *string {
 	if o == nil {
 		return nil
@@ -163,12 +163,15 @@ func (o ResourceReference) MarshalJSON() ([]byte, error) {
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
+
 	if o.Type != nil {
 		toSerialize["type"] = o.Type
 	}
+
 	if o.Href != nil {
 		toSerialize["href"] = o.Href
 	}
+
 	return json.Marshal(toSerialize)
 }
 

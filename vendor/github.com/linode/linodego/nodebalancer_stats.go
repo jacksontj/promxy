@@ -23,14 +23,7 @@ type StatsTraffic struct {
 }
 
 // GetNodeBalancerStats gets the template with the provided ID
-func (c *Client) GetNodeBalancerStats(ctx context.Context, linodeID int) (*NodeBalancerStats, error) {
-	e, err := c.NodeBalancerStats.endpointWithParams(linodeID)
-	if err != nil {
-		return nil, err
-	}
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&NodeBalancerStats{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*NodeBalancerStats), nil
+func (c *Client) GetNodeBalancerStats(ctx context.Context, nodebalancerID int) (*NodeBalancerStats, error) {
+	e := formatAPIPath("nodebalancers/%d/stats", nodebalancerID)
+	return doGETRequest[NodeBalancerStats](ctx, c, e)
 }

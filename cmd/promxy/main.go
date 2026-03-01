@@ -27,7 +27,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promslog"
 	"github.com/prometheus/common/version"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
@@ -238,15 +238,15 @@ func main() {
 	reloadables = append(reloadables, ps)
 	proxyStorage = ps
 
-	logCfg := &promlog.Config{
-		Level:  &promlog.AllowedLevel{},
-		Format: &promlog.AllowedFormat{},
+	logCfg := &promslog.Config{
+		Level:  &promslog.AllowedLevel{},
+		Format: &promslog.AllowedFormat{},
 	}
 	if err := logCfg.Level.Set("info"); err != nil {
 		logrus.Fatalf("Unable to set log level: %v", err)
 	}
 
-	logger := promlog.New(logCfg)
+	logger := promslog.New(logCfg)
 
 	engineOpts := promql.EngineOpts{
 		Reg:                      prometheus.DefaultRegisterer,

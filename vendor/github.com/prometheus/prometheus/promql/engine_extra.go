@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/prometheus/prometheus/promql/parser/posrange"
 )
 
 func findPathRange(path []parser.Node, eRanges []evalRange) time.Duration {
@@ -36,6 +37,6 @@ func findPathRange(path []parser.Node, eRanges []evalRange) time.Duration {
 
 // evalRange summarizes a defined evalRange (from a MatrixSelector) within the ast
 type evalRange struct {
-	Prefix []parser.PositionRange
+	Prefix []posrange.PositionRange
 	Range  time.Duration
 }

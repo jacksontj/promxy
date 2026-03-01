@@ -17,12 +17,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"strconv"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/common/promslog"
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -35,27 +36,32 @@ const (
 	NodeLegacyHostIP = "LegacyHostIP"
 )
 
-var (
-	nodeAddCount    = eventCount.WithLabelValues("node", "add")
-	nodeUpdateCount = eventCount.WithLabelValues("node", "update")
-	nodeDeleteCount = eventCount.WithLabelValues("node", "delete")
-)
-
 // Node discovers Kubernetes nodes.
 type Node struct {
-	logger   log.Logger
+	logger   *slog.Logger
 	informer cache.SharedInformer
 	store    cache.Store
 	queue    *workqueue.Type
 }
 
 // NewNode returns a new node discovery.
-func NewNode(l log.Logger, inf cache.SharedInformer) *Node {
+func NewNode(l *slog.Logger, inf cache.SharedInformer, eventCount *prometheus.CounterVec) *Node {
 	if l == nil {
-		l = log.NewNopLogger()
+		l = promslog.NewNopLogger()
 	}
-	n := &Node{logger: l, informer: inf, store: inf.GetStore(), queue: workqueue.NewNamed("node")}
-	n.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+
+	nodeAddCount := eventCount.WithLabelValues(RoleNode.String(), MetricLabelRoleAdd)
+	nodeUpdateCount := eventCount.WithLabelValues(RoleNode.String(), MetricLabelRoleUpdate)
+	nodeDeleteCount := eventCount.WithLabelValues(RoleNode.String(), MetricLabelRoleDelete)
+
+	n := &Node{
+		logger:   l,
+		informer: inf,
+		store:    inf.GetStore(),
+		queue:    workqueue.NewNamed(RoleNode.String()),
+	}
+
+	_, err := n.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(o interface{}) {
 			nodeAddCount.Inc()
 			n.enqueue(o)
@@ -69,11 +75,14 @@ func NewNode(l log.Logger, inf cache.SharedInformer) *Node {
 			n.enqueue(o)
 		},
 	})
+	if err != nil {
+		l.Error("Error adding nodes event handler.", "err", err)
+	}
 	return n
 }
 
 func (n *Node) enqueue(obj interface{}) {
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	key, err := nodeName(obj)
 	if err != nil {
 		return
 	}
@@ -87,7 +96,7 @@ func (n *Node) Run(ctx context.Context, ch chan<- []*targetgroup.Group) {
 
 	if !cache.WaitForCacheSync(ctx.Done(), n.informer.HasSynced) {
 		if !errors.Is(ctx.Err(), context.Canceled) {
-			level.Error(n.logger).Log("msg", "node informer unable to sync cache")
+			n.logger.Error("node informer unable to sync cache")
 		}
 		return
 	}
@@ -124,7 +133,7 @@ func (n *Node) process(ctx context.Context, ch chan<- []*targetgroup.Group) bool
 	}
 	node, err := convertToNode(o)
 	if err != nil {
-		level.Error(n.logger).Log("msg", "converting to Node object failed", "err", err)
+		n.logger.Error("converting to Node object failed", "err", err)
 		return true
 	}
 	send(ctx, ch, n.buildNode(node))
@@ -149,33 +158,18 @@ func nodeSourceFromName(name string) string {
 }
 
 const (
-	nodeNameLabel               = metaLabelPrefix + "node_name"
-	nodeProviderIDLabel         = metaLabelPrefix + "node_provider_id"
-	nodeLabelPrefix             = metaLabelPrefix + "node_label_"
-	nodeLabelPresentPrefix      = metaLabelPrefix + "node_labelpresent_"
-	nodeAnnotationPrefix        = metaLabelPrefix + "node_annotation_"
-	nodeAnnotationPresentPrefix = metaLabelPrefix + "node_annotationpresent_"
-	nodeAddressPrefix           = metaLabelPrefix + "node_address_"
+	nodeProviderIDLabel = metaLabelPrefix + "node_provider_id"
+	nodeAddressPrefix   = metaLabelPrefix + "node_address_"
 )
 
 func nodeLabels(n *apiv1.Node) model.LabelSet {
 	// Each label and annotation will create two key-value pairs in the map.
-	ls := make(model.LabelSet, 2*(len(n.Labels)+len(n.Annotations))+1)
+	ls := make(model.LabelSet)
 
-	ls[nodeNameLabel] = lv(n.Name)
 	ls[nodeProviderIDLabel] = lv(n.Spec.ProviderID)
 
-	for k, v := range n.Labels {
-		ln := strutil.SanitizeLabelName(k)
-		ls[model.LabelName(nodeLabelPrefix+ln)] = lv(v)
-		ls[model.LabelName(nodeLabelPresentPrefix+ln)] = presentValue
-	}
+	addObjectMetaLabels(ls, n.ObjectMeta, RoleNode)
 
-	for k, v := range n.Annotations {
-		ln := strutil.SanitizeLabelName(k)
-		ls[model.LabelName(nodeAnnotationPrefix+ln)] = lv(v)
-		ls[model.LabelName(nodeAnnotationPresentPrefix+ln)] = presentValue
-	}
 	return ls
 }
 
@@ -187,7 +181,7 @@ func (n *Node) buildNode(node *apiv1.Node) *targetgroup.Group {
 
 	addr, addrMap, err := nodeAddress(node)
 	if err != nil {
-		level.Warn(n.logger).Log("msg", "No node address found", "err", err)
+		n.logger.Warn("No node address found", "err", err)
 		return nil
 	}
 	addr = net.JoinHostPort(addr, strconv.FormatInt(int64(node.Status.DaemonEndpoints.KubeletEndpoint.Port), 10))
@@ -206,7 +200,7 @@ func (n *Node) buildNode(node *apiv1.Node) *targetgroup.Group {
 	return tg
 }
 
-// nodeAddresses returns the provided node's address, based on the priority:
+// nodeAddress returns the provided node's address, based on the priority:
 // 1. NodeInternalIP
 // 2. NodeInternalDNS
 // 3. NodeExternalIP
@@ -214,7 +208,7 @@ func (n *Node) buildNode(node *apiv1.Node) *targetgroup.Group {
 // 5. NodeLegacyHostIP
 // 6. NodeHostName
 //
-// Derived from k8s.io/kubernetes/pkg/util/node/node.go
+// Derived from k8s.io/kubernetes/pkg/util/node/node.go.
 func nodeAddress(node *apiv1.Node) (string, map[apiv1.NodeAddressType][]string, error) {
 	m := map[apiv1.NodeAddressType][]string{}
 	for _, a := range node.Status.Addresses {

@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -20,7 +20,7 @@ type TargetGroupPut struct {
 	Id *string `json:"id,omitempty"`
 	// The type of object that has been created.
 	Type *Type `json:"type,omitempty"`
-	// URL to the object representation (absolute path).
+	// The URL to the object representation (absolute path).
 	Href       *string                `json:"href,omitempty"`
 	Properties *TargetGroupProperties `json:"properties"`
 }
@@ -46,7 +46,7 @@ func NewTargetGroupPutWithDefaults() *TargetGroupPut {
 }
 
 // GetId returns the Id field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupPut) GetId() *string {
 	if o == nil {
 		return nil
@@ -84,7 +84,7 @@ func (o *TargetGroupPut) HasId() bool {
 }
 
 // GetType returns the Type field value
-// If the value is explicit nil, the zero value for Type will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupPut) GetType() *Type {
 	if o == nil {
 		return nil
@@ -122,7 +122,7 @@ func (o *TargetGroupPut) HasType() bool {
 }
 
 // GetHref returns the Href field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupPut) GetHref() *string {
 	if o == nil {
 		return nil
@@ -160,7 +160,7 @@ func (o *TargetGroupPut) HasHref() bool {
 }
 
 // GetProperties returns the Properties field value
-// If the value is explicit nil, the zero value for TargetGroupProperties will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupPut) GetProperties() *TargetGroupProperties {
 	if o == nil {
 		return nil
@@ -202,15 +202,19 @@ func (o TargetGroupPut) MarshalJSON() ([]byte, error) {
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
+
 	if o.Type != nil {
 		toSerialize["type"] = o.Type
 	}
+
 	if o.Href != nil {
 		toSerialize["href"] = o.Href
 	}
+
 	if o.Properties != nil {
 		toSerialize["properties"] = o.Properties
 	}
+
 	return json.Marshal(toSerialize)
 }
 

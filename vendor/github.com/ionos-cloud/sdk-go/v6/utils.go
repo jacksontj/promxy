@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -12,9 +12,42 @@ package ionoscloud
 
 import (
 	"encoding/json"
+	"fmt"
+	"reflect"
 	"strings"
 	"time"
 )
+
+var (
+	// used to set a nullable field to nil. This is a sentinel address that will be checked in the MarshalJson function.
+	// if set to this address, a nil value will be marshalled
+	Nilstring string = "<<ExplicitNil>>"
+	Nilint32  int32  = -334455
+	Nilbool   bool   = false
+)
+
+// ToPtr - returns a pointer to the given value.
+func ToPtr[T any](v T) *T {
+	return &v
+}
+
+// ToValue - returns the value of the pointer passed in
+func ToValue[T any](ptr *T) T {
+	return *ptr
+}
+
+// ToValueDefault - returns the value of the pointer passed in, or the default type value if the pointer is nil
+func ToValueDefault[T any](ptr *T) T {
+	var defaultVal T
+	if ptr == nil {
+		return defaultVal
+	}
+	return *ptr
+}
+
+func SliceToValueDefault[T any](ptrSlice *[]T) []T {
+	return append([]T{}, *ptrSlice...)
+}
 
 // PtrBool - returns a pointer to given boolean value.
 func PtrBool(v bool) *bool { return &v }
@@ -741,4 +774,38 @@ func (t *IonosTime) UnmarshalJSON(data []byte) error {
 	}
 	*t = IonosTime{tt}
 	return nil
+}
+
+// IsNil checks if an input is nil
+func IsNil(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	switch reflect.TypeOf(i).Kind() {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
+		return reflect.ValueOf(i).IsNil()
+	case reflect.Array:
+		return reflect.ValueOf(i).IsZero()
+	}
+	return false
+}
+
+// EnsureURLFormat checks that the URL has the correct format (no trailing slash,
+// has http/https scheme prefix) and updates it if necessary
+func EnsureURLFormat(url string) string {
+	length := len(url)
+
+	if length <= 1 {
+		return url
+	}
+
+	if url[length-1] == '/' {
+		url = url[:length-1]
+	}
+
+	if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") {
+		url = fmt.Sprintf("https://%s", url)
+	}
+
+	return url
 }

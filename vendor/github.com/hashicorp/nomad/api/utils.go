@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 import (
@@ -29,4 +32,13 @@ func formatFloat(f float64, maxPrec int) string {
 // pointerOf returns a pointer to a.
 func pointerOf[A any](a A) *A {
 	return &a
+}
+
+// pointerCopy returns a new pointer to a.
+func pointerCopy[A any](a *A) *A {
+	if a == nil {
+		return nil
+	}
+	na := *a
+	return &na
 }

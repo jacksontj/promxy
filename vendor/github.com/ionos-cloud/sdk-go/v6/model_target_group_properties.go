@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,12 +16,14 @@ import (
 
 // TargetGroupProperties struct for TargetGroupProperties
 type TargetGroupProperties struct {
-	// The name of the target group.
+	// The target group name.
 	Name *string `json:"name"`
-	// Balancing algorithm
+	// The balancing algorithm. A balancing algorithm consists of predefined rules with the logic that a load balancer uses to distribute network traffic between servers.  - **Round Robin**: Targets are served alternately according to their weighting.  - **Least Connection**: The target with the least active connection is served.  - **Random**: The targets are served based on a consistent pseudorandom algorithm.  - **Source IP**: It is ensured that the same client IP address reaches the same target.
 	Algorithm *string `json:"algorithm"`
-	// Balancing protocol
+	// The forwarding protocol. Only the value 'HTTP' is allowed.
 	Protocol *string `json:"protocol"`
+	// The forwarding protocol version. Value is ignored when protocol is not 'HTTP'.
+	ProtocolVersion *string `json:"protocolVersion,omitempty"`
 	// Array of items in the collection.
 	Targets         *[]TargetGroupTarget        `json:"targets,omitempty"`
 	HealthCheck     *TargetGroupHealthCheck     `json:"healthCheck,omitempty"`
@@ -51,7 +53,7 @@ func NewTargetGroupPropertiesWithDefaults() *TargetGroupProperties {
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -89,7 +91,7 @@ func (o *TargetGroupProperties) HasName() bool {
 }
 
 // GetAlgorithm returns the Algorithm field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupProperties) GetAlgorithm() *string {
 	if o == nil {
 		return nil
@@ -127,7 +129,7 @@ func (o *TargetGroupProperties) HasAlgorithm() bool {
 }
 
 // GetProtocol returns the Protocol field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupProperties) GetProtocol() *string {
 	if o == nil {
 		return nil
@@ -164,8 +166,46 @@ func (o *TargetGroupProperties) HasProtocol() bool {
 	return false
 }
 
+// GetProtocolVersion returns the ProtocolVersion field value
+// If the value is explicit nil, nil is returned
+func (o *TargetGroupProperties) GetProtocolVersion() *string {
+	if o == nil {
+		return nil
+	}
+
+	return o.ProtocolVersion
+
+}
+
+// GetProtocolVersionOk returns a tuple with the ProtocolVersion field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *TargetGroupProperties) GetProtocolVersionOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.ProtocolVersion, true
+}
+
+// SetProtocolVersion sets field value
+func (o *TargetGroupProperties) SetProtocolVersion(v string) {
+
+	o.ProtocolVersion = &v
+
+}
+
+// HasProtocolVersion returns a boolean if a field has been set.
+func (o *TargetGroupProperties) HasProtocolVersion() bool {
+	if o != nil && o.ProtocolVersion != nil {
+		return true
+	}
+
+	return false
+}
+
 // GetTargets returns the Targets field value
-// If the value is explicit nil, the zero value for []TargetGroupTarget will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupProperties) GetTargets() *[]TargetGroupTarget {
 	if o == nil {
 		return nil
@@ -203,7 +243,7 @@ func (o *TargetGroupProperties) HasTargets() bool {
 }
 
 // GetHealthCheck returns the HealthCheck field value
-// If the value is explicit nil, the zero value for TargetGroupHealthCheck will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupProperties) GetHealthCheck() *TargetGroupHealthCheck {
 	if o == nil {
 		return nil
@@ -241,7 +281,7 @@ func (o *TargetGroupProperties) HasHealthCheck() bool {
 }
 
 // GetHttpHealthCheck returns the HttpHealthCheck field value
-// If the value is explicit nil, the zero value for TargetGroupHttpHealthCheck will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupProperties) GetHttpHealthCheck() *TargetGroupHttpHealthCheck {
 	if o == nil {
 		return nil
@@ -283,21 +323,31 @@ func (o TargetGroupProperties) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.Algorithm != nil {
 		toSerialize["algorithm"] = o.Algorithm
 	}
+
 	if o.Protocol != nil {
 		toSerialize["protocol"] = o.Protocol
 	}
+
+	if o.ProtocolVersion != nil {
+		toSerialize["protocolVersion"] = o.ProtocolVersion
+	}
+
 	if o.Targets != nil {
 		toSerialize["targets"] = o.Targets
 	}
+
 	if o.HealthCheck != nil {
 		toSerialize["healthCheck"] = o.HealthCheck
 	}
+
 	if o.HttpHealthCheck != nil {
 		toSerialize["httpHealthCheck"] = o.HttpHealthCheck
 	}
+
 	return json.Marshal(toSerialize)
 }
 

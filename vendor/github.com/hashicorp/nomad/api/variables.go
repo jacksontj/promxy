@@ -1,14 +1,14 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
 const (
@@ -183,6 +183,44 @@ func (vars *Variables) GetVariableItems(path string, qo *QueryOptions) (Variable
 	return v.Items, qm, nil
 }
 
+// RenewLock renews the lease for the lock on the given variable. It has to be called
+// before the lock's TTL expires or the lock will be automatically released after the
+// delay period.
+func (vars *Variables) RenewLock(v *Variable, qo *WriteOptions) (*VariableMetadata, *WriteMeta, error) {
+	v.Path = cleanPathString(v.Path)
+	var out VariableMetadata
+
+	wm, err := vars.client.put("/v1/var/"+v.Path+"?lock-renew", v, &out, qo)
+	if err != nil {
+		return nil, wm, err
+	}
+	return &out, wm, nil
+}
+
+// ReleaseLock removes the lock on the given variable.
+func (vars *Variables) ReleaseLock(v *Variable, qo *WriteOptions) (*Variable, *WriteMeta, error) {
+	return vars.lockOperation(v, qo, "lock-release")
+}
+
+// AcquireLock adds a lock on the given variable and starts a lease on it. In order
+// to make any update on the locked variable, the lock ID has to be included in the
+// request. In order to maintain ownership of the lock, the lease needs to be
+// periodically renewed before the lock's TTL expires.
+func (vars *Variables) AcquireLock(v *Variable, qo *WriteOptions) (*Variable, *WriteMeta, error) {
+	return vars.lockOperation(v, qo, "lock-acquire")
+}
+
+func (vars *Variables) lockOperation(v *Variable, qo *WriteOptions, operation string) (*Variable, *WriteMeta, error) {
+	v.Path = cleanPathString(v.Path)
+	var out Variable
+
+	wm, err := vars.client.put("/v1/var/"+v.Path+"?"+operation, v, &out, qo)
+	if err != nil {
+		return nil, wm, err
+	}
+	return &out, wm, nil
+}
+
 // readInternal exists because the API's higher-level read method requires
 // the status code to be 200 (OK). For Peek(), we do not consider 403 (Permission
 // Denied or 404 (Not Found) an error, this function just returns a nil in those
@@ -197,8 +235,8 @@ func (vars *Variables) readInternal(endpoint string, out **Variable, q *QueryOpt
 	}
 	r.setQueryOptions(q)
 
-	checkFn := requireStatusIn(http.StatusOK, http.StatusNotFound, http.StatusForbidden)
-	rtt, resp, err := checkFn(vars.client.doRequest(r))
+	checkFn := requireStatusIn(http.StatusOK, http.StatusNotFound, http.StatusForbidden) //nolint:bodyclose
+	rtt, resp, err := checkFn(vars.client.doRequest(r))                                  //nolint:bodyclose
 	if err != nil {
 		return nil, err
 	}
@@ -246,12 +284,12 @@ func (vars *Variables) deleteInternal(path string, q *WriteOptions) (*WriteMeta,
 	}
 	r.setWriteOptions(q)
 
-	checkFn := requireStatusIn(http.StatusOK, http.StatusNoContent)
-	rtt, resp, err := checkFn(vars.client.doRequest(r))
-
+	checkFn := requireStatusIn(http.StatusOK, http.StatusNoContent) //nolint:bodyclose
+	rtt, resp, err := checkFn(vars.client.doRequest(r))             //nolint:bodyclose
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	wm := &WriteMeta{RequestTime: rtt}
 	_ = parseWriteMeta(resp, wm)
@@ -267,11 +305,12 @@ func (vars *Variables) deleteChecked(path string, checkIndex uint64, q *WriteOpt
 		return nil, err
 	}
 	r.setWriteOptions(q)
-	checkFn := requireStatusIn(http.StatusOK, http.StatusNoContent, http.StatusConflict)
-	rtt, resp, err := checkFn(vars.client.doRequest(r))
+	checkFn := requireStatusIn(http.StatusOK, http.StatusNoContent, http.StatusConflict) //nolint:bodyclose
+	rtt, resp, err := checkFn(vars.client.doRequest(r))                                  //nolint:bodyclose
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	wm := &WriteMeta{RequestTime: rtt}
 	_ = parseWriteMeta(resp, wm)
@@ -303,8 +342,8 @@ func (vars *Variables) writeChecked(endpoint string, in *Variable, out *Variable
 	r.setWriteOptions(q)
 	r.obj = in
 
-	checkFn := requireStatusIn(http.StatusOK, http.StatusNoContent, http.StatusConflict)
-	rtt, resp, err := checkFn(vars.client.doRequest(r))
+	checkFn := requireStatusIn(http.StatusOK, http.StatusNoContent, http.StatusConflict) //nolint:bodyclose
+	rtt, resp, err := checkFn(vars.client.doRequest(r))                                  //nolint:bodyclose
 
 	if err != nil {
 		return nil, err
@@ -358,6 +397,9 @@ type Variable struct {
 
 	// Items contains the k/v variable component
 	Items VariableItems `hcl:"items"`
+
+	// Lock holds the information about the variable lock if its being used.
+	Lock *VariableLock `hcl:",lock,optional" json:",omitempty"`
 }
 
 // VariableMetadata specifies the metadata for a variable and
@@ -380,6 +422,24 @@ type VariableMetadata struct {
 
 	// ModifyTime is the unix nano of the last modified time
 	ModifyTime int64 `hcl:"modify_time"`
+
+	// Lock holds the information about the variable lock if its being used.
+	Lock *VariableLock `hcl:",lock,optional" json:",omitempty"`
+}
+
+type VariableLock struct {
+	// ID is generated by Nomad to provide a unique caller ID which can be used
+	// for renewals and unlocking.
+	ID string
+
+	// TTL describes the time-to-live of the current lock holder.
+	// This is a string version of a time.Duration like "2m".
+	TTL string
+
+	// LockDelay describes a grace period that exists after a lock is lost,
+	// before another client may acquire the lock. This helps protect against
+	// split-brains. This is a string version of a time.Duration like "2m".
+	LockDelay string
 }
 
 // VariableItems are the key/value pairs of a Variable.
@@ -446,6 +506,16 @@ func (v *Variable) AsPrettyJSON() string {
 	return string(b)
 }
 
+// LockID returns the ID of the lock. In the event this is not held, or the
+// variable is not a lock, this string will be empty.
+func (v *Variable) LockID() string {
+	if v.Lock == nil {
+		return ""
+	}
+
+	return v.Lock.ID
+}
+
 type ErrCASConflict struct {
 	CheckIndex uint64
 	Conflict   *Variable
@@ -453,40 +523,4 @@ type ErrCASConflict struct {
 
 func (e ErrCASConflict) Error() string {
 	return fmt.Sprintf("cas conflict: expected ModifyIndex %v; found %v", e.CheckIndex, e.Conflict.ModifyIndex)
-}
-
-// doRequestWrapper is a function that wraps the client's doRequest method
-// and can be used to provide error and response handling
-type doRequestWrapper = func(time.Duration, *http.Response, error) (time.Duration, *http.Response, error)
-
-// requireStatusIn is a doRequestWrapper generator that takes expected HTTP
-// response codes and validates that the received response code is among them
-func requireStatusIn(statuses ...int) doRequestWrapper {
-	fn := func(d time.Duration, resp *http.Response, e error) (time.Duration, *http.Response, error) {
-		if e != nil {
-			if resp != nil {
-				_ = resp.Body.Close()
-			}
-			return d, nil, e
-		}
-
-		for _, status := range statuses {
-			if resp.StatusCode == status {
-				return d, resp, nil
-			}
-		}
-
-		return d, nil, generateUnexpectedResponseCodeError(resp)
-	}
-	return fn
-}
-
-// generateUnexpectedResponseCodeError creates a standardized error
-// when the the API client's newRequest method receives an unexpected
-// HTTP response code when accessing the variable's HTTP API
-func generateUnexpectedResponseCodeError(resp *http.Response) error {
-	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, resp.Body)
-	_ = resp.Body.Close()
-	return fmt.Errorf("Unexpected response code: %d (%s)", resp.StatusCode, buf.Bytes())
 }

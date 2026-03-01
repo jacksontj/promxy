@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -48,7 +48,7 @@ func NewLanWithDefaults() *Lan {
 }
 
 // GetId returns the Id field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *Lan) GetId() *string {
 	if o == nil {
 		return nil
@@ -86,7 +86,7 @@ func (o *Lan) HasId() bool {
 }
 
 // GetType returns the Type field value
-// If the value is explicit nil, the zero value for Type will be returned
+// If the value is explicit nil, nil is returned
 func (o *Lan) GetType() *Type {
 	if o == nil {
 		return nil
@@ -124,7 +124,7 @@ func (o *Lan) HasType() bool {
 }
 
 // GetHref returns the Href field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *Lan) GetHref() *string {
 	if o == nil {
 		return nil
@@ -162,7 +162,7 @@ func (o *Lan) HasHref() bool {
 }
 
 // GetMetadata returns the Metadata field value
-// If the value is explicit nil, the zero value for DatacenterElementMetadata will be returned
+// If the value is explicit nil, nil is returned
 func (o *Lan) GetMetadata() *DatacenterElementMetadata {
 	if o == nil {
 		return nil
@@ -200,7 +200,7 @@ func (o *Lan) HasMetadata() bool {
 }
 
 // GetProperties returns the Properties field value
-// If the value is explicit nil, the zero value for LanProperties will be returned
+// If the value is explicit nil, nil is returned
 func (o *Lan) GetProperties() *LanProperties {
 	if o == nil {
 		return nil
@@ -238,7 +238,7 @@ func (o *Lan) HasProperties() bool {
 }
 
 // GetEntities returns the Entities field value
-// If the value is explicit nil, the zero value for LanEntities will be returned
+// If the value is explicit nil, nil is returned
 func (o *Lan) GetEntities() *LanEntities {
 	if o == nil {
 		return nil
@@ -280,21 +280,27 @@ func (o Lan) MarshalJSON() ([]byte, error) {
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
+
 	if o.Type != nil {
 		toSerialize["type"] = o.Type
 	}
+
 	if o.Href != nil {
 		toSerialize["href"] = o.Href
 	}
+
 	if o.Metadata != nil {
 		toSerialize["metadata"] = o.Metadata
 	}
+
 	if o.Properties != nil {
 		toSerialize["properties"] = o.Properties
 	}
+
 	if o.Entities != nil {
 		toSerialize["entities"] = o.Entities
 	}
+
 	return json.Marshal(toSerialize)
 }
 

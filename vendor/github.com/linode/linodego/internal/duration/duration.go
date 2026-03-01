@@ -20,16 +20,17 @@ func UnmarshalTimeRemaining(m json.RawMessage) *int {
 
 	var timeStr string
 	if err := json.Unmarshal(jsonBytes, &timeStr); err == nil && len(timeStr) > 0 {
-		if dur, err := durationToSeconds(timeStr); err != nil {
+		dur, err := durationToSeconds(timeStr)
+		if err != nil {
 			panic(err)
-		} else {
-			return &dur
 		}
-	} else {
-		var intPtr int
-		if err := json.Unmarshal(jsonBytes, &intPtr); err == nil {
-			return &intPtr
-		}
+
+		return &dur
+	}
+
+	var intPtr int
+	if err := json.Unmarshal(jsonBytes, &intPtr); err == nil {
+		return &intPtr
 	}
 
 	log.Println("[WARN] Unexpected unmarshalTimeRemaining value: ", jsonBytes)
@@ -50,7 +51,7 @@ func durationToSeconds(s string) (int, error) {
 
 	l := len(segs)
 
-	for i := 0; i < l; i++ {
+	for i := range l {
 		m, err := strconv.Atoi(segs[i])
 		if err != nil {
 			return 0, err

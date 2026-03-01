@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -18,9 +18,9 @@ import (
 type ContractProperties struct {
 	// The contract number.
 	ContractNumber *int64 `json:"contractNumber,omitempty"`
-	// The owner of the contract.
+	// The contract owner's user name.
 	Owner *string `json:"owner,omitempty"`
-	// The status of the contract.
+	// The contract status.
 	Status *string `json:"status,omitempty"`
 	// The registration domain of the contract.
 	RegDomain      *string         `json:"regDomain,omitempty"`
@@ -46,7 +46,7 @@ func NewContractPropertiesWithDefaults() *ContractProperties {
 }
 
 // GetContractNumber returns the ContractNumber field value
-// If the value is explicit nil, the zero value for int64 will be returned
+// If the value is explicit nil, nil is returned
 func (o *ContractProperties) GetContractNumber() *int64 {
 	if o == nil {
 		return nil
@@ -84,7 +84,7 @@ func (o *ContractProperties) HasContractNumber() bool {
 }
 
 // GetOwner returns the Owner field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *ContractProperties) GetOwner() *string {
 	if o == nil {
 		return nil
@@ -122,7 +122,7 @@ func (o *ContractProperties) HasOwner() bool {
 }
 
 // GetStatus returns the Status field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *ContractProperties) GetStatus() *string {
 	if o == nil {
 		return nil
@@ -160,7 +160,7 @@ func (o *ContractProperties) HasStatus() bool {
 }
 
 // GetRegDomain returns the RegDomain field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *ContractProperties) GetRegDomain() *string {
 	if o == nil {
 		return nil
@@ -198,7 +198,7 @@ func (o *ContractProperties) HasRegDomain() bool {
 }
 
 // GetResourceLimits returns the ResourceLimits field value
-// If the value is explicit nil, the zero value for ResourceLimits will be returned
+// If the value is explicit nil, nil is returned
 func (o *ContractProperties) GetResourceLimits() *ResourceLimits {
 	if o == nil {
 		return nil
@@ -240,18 +240,23 @@ func (o ContractProperties) MarshalJSON() ([]byte, error) {
 	if o.ContractNumber != nil {
 		toSerialize["contractNumber"] = o.ContractNumber
 	}
+
 	if o.Owner != nil {
 		toSerialize["owner"] = o.Owner
 	}
+
 	if o.Status != nil {
 		toSerialize["status"] = o.Status
 	}
+
 	if o.RegDomain != nil {
 		toSerialize["regDomain"] = o.RegDomain
 	}
+
 	if o.ResourceLimits != nil {
 		toSerialize["resourceLimits"] = o.ResourceLimits
 	}
+
 	return json.Marshal(toSerialize)
 }
 

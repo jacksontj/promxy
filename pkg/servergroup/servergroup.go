@@ -17,7 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promslog"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/model/labels"
@@ -52,14 +52,14 @@ func NewServerGroup() (*ServerGroup, error) {
 		Ready:     make(chan struct{}),
 	}
 
-	logCfg := &promlog.Config{
-		Level:  &promlog.AllowedLevel{},
-		Format: &promlog.AllowedFormat{},
+	logCfg := &promslog.Config{
+		Level:  &promslog.Level{},
+		Format: &promslog.Format{},
 	}
 	if err := logCfg.Level.Set("info"); err != nil {
 		return nil, err
 	}
-	sg.targetManager = discovery.NewManager(ctx, promlog.New(logCfg))
+	sg.targetManager = discovery.NewManager(ctx, promslog.New(logCfg))
 	// Background the updating
 	go sg.targetManager.Run()
 	go sg.Sync()

@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -52,7 +52,7 @@ func NewNoStateMetaDataWithDefaults() *NoStateMetaData {
 }
 
 // GetEtag returns the Etag field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NoStateMetaData) GetEtag() *string {
 	if o == nil {
 		return nil
@@ -90,7 +90,7 @@ func (o *NoStateMetaData) HasEtag() bool {
 }
 
 // GetCreatedDate returns the CreatedDate field value
-// If the value is explicit nil, the zero value for time.Time will be returned
+// If the value is explicit nil, nil is returned
 func (o *NoStateMetaData) GetCreatedDate() *time.Time {
 	if o == nil {
 		return nil
@@ -135,7 +135,7 @@ func (o *NoStateMetaData) HasCreatedDate() bool {
 }
 
 // GetCreatedBy returns the CreatedBy field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NoStateMetaData) GetCreatedBy() *string {
 	if o == nil {
 		return nil
@@ -173,7 +173,7 @@ func (o *NoStateMetaData) HasCreatedBy() bool {
 }
 
 // GetCreatedByUserId returns the CreatedByUserId field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NoStateMetaData) GetCreatedByUserId() *string {
 	if o == nil {
 		return nil
@@ -211,7 +211,7 @@ func (o *NoStateMetaData) HasCreatedByUserId() bool {
 }
 
 // GetLastModifiedDate returns the LastModifiedDate field value
-// If the value is explicit nil, the zero value for time.Time will be returned
+// If the value is explicit nil, nil is returned
 func (o *NoStateMetaData) GetLastModifiedDate() *time.Time {
 	if o == nil {
 		return nil
@@ -256,7 +256,7 @@ func (o *NoStateMetaData) HasLastModifiedDate() bool {
 }
 
 // GetLastModifiedBy returns the LastModifiedBy field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NoStateMetaData) GetLastModifiedBy() *string {
 	if o == nil {
 		return nil
@@ -294,7 +294,7 @@ func (o *NoStateMetaData) HasLastModifiedBy() bool {
 }
 
 // GetLastModifiedByUserId returns the LastModifiedByUserId field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NoStateMetaData) GetLastModifiedByUserId() *string {
 	if o == nil {
 		return nil
@@ -336,24 +336,31 @@ func (o NoStateMetaData) MarshalJSON() ([]byte, error) {
 	if o.Etag != nil {
 		toSerialize["etag"] = o.Etag
 	}
+
 	if o.CreatedDate != nil {
 		toSerialize["createdDate"] = o.CreatedDate
 	}
+
 	if o.CreatedBy != nil {
 		toSerialize["createdBy"] = o.CreatedBy
 	}
+
 	if o.CreatedByUserId != nil {
 		toSerialize["createdByUserId"] = o.CreatedByUserId
 	}
+
 	if o.LastModifiedDate != nil {
 		toSerialize["lastModifiedDate"] = o.LastModifiedDate
 	}
+
 	if o.LastModifiedBy != nil {
 		toSerialize["lastModifiedBy"] = o.LastModifiedBy
 	}
+
 	if o.LastModifiedByUserId != nil {
 		toSerialize["lastModifiedByUserId"] = o.LastModifiedByUserId
 	}
+
 	return json.Marshal(toSerialize)
 }
 

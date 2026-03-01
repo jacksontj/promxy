@@ -2,19 +2,23 @@ package linodego
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 )
 
-// IPAddressesPagedResponse represents a paginated IPAddress API response
-type IPAddressesPagedResponse struct {
-	*PageOptions
-	Data []InstanceIP `json:"data"`
+// IPAddressUpdateOptionsV2 fields are those accepted by UpdateIPAddress.
+// NOTE: An IP's RDNS can be reset to default using the following pattern:
+//
+//	IPAddressUpdateOptionsV2{
+//		RDNS: linodego.Pointer[*string](nil),
+//	}
+type IPAddressUpdateOptionsV2 struct {
+	// The reverse DNS assigned to this address. For public IPv4 addresses, this will be set to a default value provided by Linode if set to nil.
+	Reserved *bool    `json:"reserved,omitempty"`
+	RDNS     **string `json:"rdns,omitempty"`
 }
 
-// IPAddressUpdateOptions fields are those accepted by UpdateToken
+// IPAddressUpdateOptions fields are those accepted by UpdateIPAddress.
+// Deprecated: Please use IPAddressUpdateOptionsV2 for all new implementations.
 type IPAddressUpdateOptions struct {
-	// The reverse DNS assigned to this address. For public IPv4 addresses, this will be set to a default value provided by Linode if set to nil.
 	RDNS *string `json:"rdns"`
 }
 
@@ -22,6 +26,14 @@ type IPAddressUpdateOptions struct {
 type LinodeIPAssignment struct {
 	Address  string `json:"address"`
 	LinodeID int    `json:"linode_id"`
+}
+
+type AllocateReserveIPOptions struct {
+	Type     string `json:"type"`
+	Public   bool   `json:"public"`
+	Reserved bool   `json:"reserved,omitempty"`
+	Region   string `json:"region,omitempty"`
+	LinodeID int    `json:"linode_id,omitempty"`
 }
 
 // LinodesAssignIPsOptions fields are those accepted by InstancesAssignIPs.
@@ -37,122 +49,67 @@ type IPAddressesShareOptions struct {
 	LinodeID int      `json:"linode_id"`
 }
 
-// GetUpdateOptions converts a IPAddress to IPAddressUpdateOptions for use in UpdateIPAddress
+// ListIPAddressesQuery fields are those accepted as query params for the
+// ListIPAddresses function.
+type ListIPAddressesQuery struct {
+	SkipIPv6RDNS bool `query:"skip_ipv6_rdns"`
+}
+
+// GetUpdateOptionsV2 converts a IPAddress to IPAddressUpdateOptionsV2 for use in UpdateIPAddressV2.
+func (i InstanceIP) GetUpdateOptionsV2() IPAddressUpdateOptionsV2 {
+	rdns := copyString(&i.RDNS)
+
+	return IPAddressUpdateOptionsV2{
+		RDNS:     &rdns,
+		Reserved: copyBool(&i.Reserved),
+	}
+}
+
+// GetUpdateOptions converts a IPAddress to IPAddressUpdateOptions for use in UpdateIPAddress.
+// Deprecated: Please use GetUpdateOptionsV2 for all new implementations.
 func (i InstanceIP) GetUpdateOptions() (o IPAddressUpdateOptions) {
 	o.RDNS = copyString(&i.RDNS)
 	return
 }
 
-// endpoint gets the endpoint URL for IPAddress
-func (IPAddressesPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.IPAddresses.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return endpoint
-}
-
-// appendData appends IPAddresses when processing paginated InstanceIPAddress responses
-func (resp *IPAddressesPagedResponse) appendData(r *IPAddressesPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
-// ListIPAddresses lists IPAddresses
+// ListIPAddresses lists IPAddresses.
 func (c *Client) ListIPAddresses(ctx context.Context, opts *ListOptions) ([]InstanceIP, error) {
-	response := IPAddressesPagedResponse{}
-	err := c.listHelper(ctx, &response, opts)
-	if err != nil {
-		return nil, err
-	}
-	return response.Data, nil
+	return getPaginatedResults[InstanceIP](ctx, c, "networking/ips", opts)
 }
 
-// GetIPAddress gets the template with the provided ID
+// GetIPAddress gets the IPAddress with the provided IP.
 func (c *Client) GetIPAddress(ctx context.Context, id string) (*InstanceIP, error) {
-	e, err := c.IPAddresses.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-	e = fmt.Sprintf("%s/%s", e, id)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&InstanceIP{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*InstanceIP), nil
+	e := formatAPIPath("networking/ips/%s", id)
+	return doGETRequest[InstanceIP](ctx, c, e)
 }
 
-// UpdateIPAddress updates the IPAddress with the specified id
-func (c *Client) UpdateIPAddress(ctx context.Context, id string, updateOpts IPAddressUpdateOptions) (*InstanceIP, error) {
-	var body string
-	e, err := c.IPAddresses.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-	e = fmt.Sprintf("%s/%s", e, id)
+// UpdateIPAddressV2 updates the IP address with the specified address.
+func (c *Client) UpdateIPAddressV2(ctx context.Context, address string, opts IPAddressUpdateOptionsV2) (*InstanceIP, error) {
+	e := formatAPIPath("networking/ips/%s", address)
+	return doPUTRequest[InstanceIP](ctx, c, e, opts)
+}
 
-	req := c.R(ctx).SetResult(&InstanceIP{})
-
-	if bodyData, err := json.Marshal(updateOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*InstanceIP), nil
+// UpdateIPAddress updates the IP address with the specified id.
+// Deprecated: Please use UpdateIPAddressV2 for all new implementation.
+func (c *Client) UpdateIPAddress(ctx context.Context, id string, opts IPAddressUpdateOptions) (*InstanceIP, error) {
+	e := formatAPIPath("networking/ips/%s", id)
+	return doPUTRequest[InstanceIP](ctx, c, e, opts)
 }
 
 // InstancesAssignIPs assigns multiple IPv4 addresses and/or IPv6 ranges to multiple Linodes in one Region.
 // This allows swapping, shuffling, or otherwise reorganizing IPs to your Linodes.
-func (c *Client) InstancesAssignIPs(ctx context.Context, updateOpts LinodesAssignIPsOptions) error {
-	var body string
-
-	e, err := c.IPAddresses.Endpoint()
-	if err != nil {
-		return err
-	}
-
-	e = fmt.Sprintf("%s/assign", e)
-
-	if bodyData, err := json.Marshal(updateOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return NewError(err)
-	}
-
-	_, err = coupleAPIErrors(c.R(ctx).
-		SetBody(body).
-		Post(e))
-
-	return err
+func (c *Client) InstancesAssignIPs(ctx context.Context, opts LinodesAssignIPsOptions) error {
+	return doPOSTRequestNoResponseBody(ctx, c, "networking/ips/assign", opts)
 }
 
 // ShareIPAddresses allows IP address reassignment (also referred to as IP failover)
 // from one Linode to another if the primary Linode becomes unresponsive.
-func (c *Client) ShareIPAddresses(ctx context.Context, shareOpts IPAddressesShareOptions) error {
-	var body string
+func (c *Client) ShareIPAddresses(ctx context.Context, opts IPAddressesShareOptions) error {
+	return doPOSTRequestNoResponseBody(ctx, c, "networking/ips/share", opts)
+}
 
-	e, err := c.IPAddresses.Endpoint()
-	if err != nil {
-		return err
-	}
-
-	e = fmt.Sprintf("%s/share", e)
-
-	if bodyData, err := json.Marshal(shareOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return NewError(err)
-	}
-
-	_, err = coupleAPIErrors(c.R(ctx).
-		SetBody(body).
-		Post(e))
-
-	return err
+// AllocateReserveIP allocates a new IPv4 address to the Account, with the option to reserve it
+// and optionally assign it to a Linode.
+func (c *Client) AllocateReserveIP(ctx context.Context, opts AllocateReserveIPOptions) (*InstanceIP, error) {
+	return doPOSTRequest[InstanceIP](ctx, c, "networking/ips", opts)
 }

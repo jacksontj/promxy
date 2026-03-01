@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -13,7 +13,7 @@ package ionoscloud
 import (
 	_context "context"
 	"fmt"
-	_ioutil "io/ioutil"
+	"io"
 	_nethttp "net/http"
 	_neturl "net/url"
 	"strings"
@@ -55,8 +55,8 @@ func (r ApiDatacentersApplicationloadbalancersDeleteRequest) Execute() (*APIResp
 }
 
 /*
- * DatacentersApplicationloadbalancersDelete Delete Application Load Balancers
- * Remove the specified Application Load Balancer from the data center..
+ * DatacentersApplicationloadbalancersDelete Delete an Application Load Balancer by ID
+ * Removes the specified Application Load Balancer from the data center.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
@@ -136,7 +136,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -166,7 +166,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -220,8 +220,8 @@ func (r ApiDatacentersApplicationloadbalancersFindByApplicationLoadBalancerIdReq
 }
 
 /*
- * DatacentersApplicationloadbalancersFindByApplicationLoadBalancerId Retrieve Application Load Balancers
- * Retrieve the properties of the specified Application Load Balancer within the data center.
+ * DatacentersApplicationloadbalancersFindByApplicationLoadBalancerId Get an Application Load Balancer by ID
+ * Retrieves the properties of the specified Application Load Balancer within the data center.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
@@ -303,7 +303,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -333,7 +333,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -398,12 +398,12 @@ func (r ApiDatacentersApplicationloadbalancersFlowlogsDeleteRequest) Execute() (
 }
 
 /*
- * DatacentersApplicationloadbalancersFlowlogsDelete Delete ALB Flow Logs
- * Delete the specified Application Load Balancer Flow Log.
+ * DatacentersApplicationloadbalancersFlowlogsDelete Delete an ALB Flow Log by ID
+ * Deletes the Application Load Balancer flow log specified by its ID.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
- * @param flowLogId The unique ID of the Flow Log.
+ * @param flowLogId The unique ID of the flow log.
  * @return ApiDatacentersApplicationloadbalancersFlowlogsDeleteRequest
  */
 func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancersFlowlogsDelete(ctx _context.Context, datacenterId string, applicationLoadBalancerId string, flowLogId string) ApiDatacentersApplicationloadbalancersFlowlogsDeleteRequest {
@@ -482,7 +482,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -512,7 +512,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -567,12 +567,12 @@ func (r ApiDatacentersApplicationloadbalancersFlowlogsFindByFlowLogIdRequest) Ex
 }
 
 /*
- * DatacentersApplicationloadbalancersFlowlogsFindByFlowLogId Retrieve ALB Flow Logs
- * Retrieve the specified Application Load Balancer Flow Log.
+ * DatacentersApplicationloadbalancersFlowlogsFindByFlowLogId Get an ALB Flow Log by ID
+ * Retrieves the Application Load Balancer flow log specified by its ID.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
- * @param flowLogId The unique ID of the Flow Log.
+ * @param flowLogId The unique ID of the flow log.
  * @return ApiDatacentersApplicationloadbalancersFlowlogsFindByFlowLogIdRequest
  */
 func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancersFlowlogsFindByFlowLogId(ctx _context.Context, datacenterId string, applicationLoadBalancerId string, flowLogId string) ApiDatacentersApplicationloadbalancersFlowlogsFindByFlowLogIdRequest {
@@ -653,7 +653,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -683,7 +683,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -748,7 +748,7 @@ func (r ApiDatacentersApplicationloadbalancersFlowlogsGetRequest) XContractNumbe
 // Filters query parameters limit results to those containing a matching value for a specific property.
 func (r ApiDatacentersApplicationloadbalancersFlowlogsGetRequest) Filter(key string, value string) ApiDatacentersApplicationloadbalancersFlowlogsGetRequest {
 	filterKey := fmt.Sprintf(FilterQueryParam, key)
-	r.filters[filterKey] = []string{value}
+	r.filters[filterKey] = append(r.filters[filterKey], value)
 	return r
 }
 
@@ -769,8 +769,8 @@ func (r ApiDatacentersApplicationloadbalancersFlowlogsGetRequest) Execute() (Flo
 }
 
 /*
- * DatacentersApplicationloadbalancersFlowlogsGet List ALB Flow Logs
- * List the Flow Logs for the specified Application Load Balancer.
+ * DatacentersApplicationloadbalancersFlowlogsGet Get ALB Flow Logs
+ * Retrieves the flow logs for the specified Application Load Balancer.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
@@ -866,7 +866,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -896,7 +896,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -966,12 +966,12 @@ func (r ApiDatacentersApplicationloadbalancersFlowlogsPatchRequest) Execute() (F
 }
 
 /*
- * DatacentersApplicationloadbalancersFlowlogsPatch Partially modify ALB Flow Logs
- * Update the properties of the specified Application Load Balancer Flow Log.
+ * DatacentersApplicationloadbalancersFlowlogsPatch Partially Modify an ALB Flow Log by ID
+ * Updates the properties of the Application Load Balancer flow log specified by its ID.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
- * @param flowLogId The unique ID of the Flow Log.
+ * @param flowLogId The unique ID of the flow log.
  * @return ApiDatacentersApplicationloadbalancersFlowlogsPatchRequest
  */
 func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancersFlowlogsPatch(ctx _context.Context, datacenterId string, applicationLoadBalancerId string, flowLogId string) ApiDatacentersApplicationloadbalancersFlowlogsPatchRequest {
@@ -1057,7 +1057,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -1087,7 +1087,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -1156,8 +1156,8 @@ func (r ApiDatacentersApplicationloadbalancersFlowlogsPostRequest) Execute() (Fl
 }
 
 /*
- * DatacentersApplicationloadbalancersFlowlogsPost Create ALB Flow Logs
- * Add a new Flow Log for the Application Load Balancer.
+ * DatacentersApplicationloadbalancersFlowlogsPost Create an ALB Flow Log
+ * Creates a flow log for the Application Load Balancer specified by ID.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
@@ -1244,7 +1244,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -1274,7 +1274,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -1344,12 +1344,12 @@ func (r ApiDatacentersApplicationloadbalancersFlowlogsPutRequest) Execute() (Flo
 }
 
 /*
- * DatacentersApplicationloadbalancersFlowlogsPut Modify ALB Flow Logs
- * Modify the specified Application Load Balancer Flow Log.
+ * DatacentersApplicationloadbalancersFlowlogsPut Modify an ALB Flow Log by ID
+ * Modifies the Application Load Balancer flow log specified by its ID.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
- * @param flowLogId The unique ID of the Flow Log.
+ * @param flowLogId The unique ID of the flow log.
  * @return ApiDatacentersApplicationloadbalancersFlowlogsPutRequest
  */
 func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancersFlowlogsPut(ctx _context.Context, datacenterId string, applicationLoadBalancerId string, flowLogId string) ApiDatacentersApplicationloadbalancersFlowlogsPutRequest {
@@ -1435,7 +1435,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -1465,7 +1465,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -1530,8 +1530,8 @@ func (r ApiDatacentersApplicationloadbalancersForwardingrulesDeleteRequest) Exec
 }
 
 /*
- * DatacentersApplicationloadbalancersForwardingrulesDelete Delete ALB forwarding rules
- * Delete the specified Application Load Balancer forwarding rule.
+ * DatacentersApplicationloadbalancersForwardingrulesDelete Delete an ALB Forwarding Rule by ID
+ * Deletes the Application Load Balancer forwarding rule specified by its ID.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
@@ -1614,7 +1614,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -1644,7 +1644,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -1699,8 +1699,8 @@ func (r ApiDatacentersApplicationloadbalancersForwardingrulesFindByForwardingRul
 }
 
 /*
- * DatacentersApplicationloadbalancersForwardingrulesFindByForwardingRuleId Retrieve ALB forwarding rules
- * Retrieve the specified Application Load Balancer forwarding rule.
+ * DatacentersApplicationloadbalancersForwardingrulesFindByForwardingRuleId Get an ALB Forwarding Rule by ID
+ * Retrieves the Application Load Balancer forwarding rule specified by its ID.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
@@ -1785,7 +1785,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -1815,7 +1815,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -1880,7 +1880,7 @@ func (r ApiDatacentersApplicationloadbalancersForwardingrulesGetRequest) XContra
 // Filters query parameters limit results to those containing a matching value for a specific property.
 func (r ApiDatacentersApplicationloadbalancersForwardingrulesGetRequest) Filter(key string, value string) ApiDatacentersApplicationloadbalancersForwardingrulesGetRequest {
 	filterKey := fmt.Sprintf(FilterQueryParam, key)
-	r.filters[filterKey] = []string{value}
+	r.filters[filterKey] = append(r.filters[filterKey], value)
 	return r
 }
 
@@ -1901,8 +1901,8 @@ func (r ApiDatacentersApplicationloadbalancersForwardingrulesGetRequest) Execute
 }
 
 /*
- * DatacentersApplicationloadbalancersForwardingrulesGet List ALB forwarding rules
- * List the forwarding rules for the specified Application Load Balancer.
+ * DatacentersApplicationloadbalancersForwardingrulesGet Get ALB Forwarding Rules
+ * Lists the forwarding rules of the specified Application Load Balancer.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
@@ -1998,7 +1998,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -2028,7 +2028,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -2098,8 +2098,8 @@ func (r ApiDatacentersApplicationloadbalancersForwardingrulesPatchRequest) Execu
 }
 
 /*
- * DatacentersApplicationloadbalancersForwardingrulesPatch Partially modify ALB forwarding rules
- * Update the properties of the specified Application Load Balancer forwarding rule.
+ * DatacentersApplicationloadbalancersForwardingrulesPatch Partially modify an ALB Forwarding Rule by ID
+ * Updates the properties of the Application Load Balancer forwarding rule specified by its ID.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
@@ -2189,7 +2189,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -2219,7 +2219,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -2288,8 +2288,8 @@ func (r ApiDatacentersApplicationloadbalancersForwardingrulesPostRequest) Execut
 }
 
 /*
- * DatacentersApplicationloadbalancersForwardingrulesPost Create ALB forwarding rules
- * Create a forwarding rule for the Application Load Balancer.
+ * DatacentersApplicationloadbalancersForwardingrulesPost Create an ALB Forwarding Rule
+ * Creates a forwarding rule for the specified Application Load Balancer.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
@@ -2376,7 +2376,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -2406,7 +2406,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -2476,8 +2476,8 @@ func (r ApiDatacentersApplicationloadbalancersForwardingrulesPutRequest) Execute
 }
 
 /*
- * DatacentersApplicationloadbalancersForwardingrulesPut Modify ALB forwarding rules
- * Modify the specified Application Load Balancer forwarding rule.
+ * DatacentersApplicationloadbalancersForwardingrulesPut Modify an ALB Forwarding Rule by ID
+ * Modifies the Application Load Balancer forwarding rule specified by its ID.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
@@ -2567,7 +2567,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -2597,7 +2597,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -2671,7 +2671,7 @@ func (r ApiDatacentersApplicationloadbalancersGetRequest) Limit(limit int32) Api
 // Filters query parameters limit results to those containing a matching value for a specific property.
 func (r ApiDatacentersApplicationloadbalancersGetRequest) Filter(key string, value string) ApiDatacentersApplicationloadbalancersGetRequest {
 	filterKey := fmt.Sprintf(FilterQueryParam, key)
-	r.filters[filterKey] = []string{value}
+	r.filters[filterKey] = append(r.filters[filterKey], value)
 	return r
 }
 
@@ -2692,8 +2692,8 @@ func (r ApiDatacentersApplicationloadbalancersGetRequest) Execute() (Application
 }
 
 /*
- * DatacentersApplicationloadbalancersGet List Application Load Balancers
- * List all Application Load Balancers within the data center.
+ * DatacentersApplicationloadbalancersGet Get Application Load Balancers
+ * Lists all Application Load Balancers within a data center.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @return ApiDatacentersApplicationloadbalancersGetRequest
@@ -2802,7 +2802,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -2832,7 +2832,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -2901,8 +2901,8 @@ func (r ApiDatacentersApplicationloadbalancersPatchRequest) Execute() (Applicati
 }
 
 /*
- * DatacentersApplicationloadbalancersPatch Partially modify Application Load Balancers
- * Update the properties of the specified Application Load Balancer within the data center.
+ * DatacentersApplicationloadbalancersPatch Partially Modify an Application Load Balancer by ID
+ * Updates the properties of the specified Application Load Balancer within the data center.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
@@ -2989,7 +2989,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -3019,7 +3019,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -3087,8 +3087,8 @@ func (r ApiDatacentersApplicationloadbalancersPostRequest) Execute() (Applicatio
 }
 
 /*
- * DatacentersApplicationloadbalancersPost Create Application Load Balancers
- * Create an Application Load Balancer within the datacenter.
+ * DatacentersApplicationloadbalancersPost Create an Application Load Balancer
+ * Creates an Application Load Balancer within the data center.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @return ApiDatacentersApplicationloadbalancersPostRequest
@@ -3172,7 +3172,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -3202,7 +3202,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {
@@ -3271,8 +3271,8 @@ func (r ApiDatacentersApplicationloadbalancersPutRequest) Execute() (Application
 }
 
 /*
- * DatacentersApplicationloadbalancersPut Modify Application Load Balancers
- * Modify the properties of the specified Application Load Balancer within the data center.
+ * DatacentersApplicationloadbalancersPut Modify an Application Load Balancer by ID
+ * Modifies the properties of the specified Application Load Balancer within the data center.
  * @param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  * @param datacenterId The unique ID of the data center.
  * @param applicationLoadBalancerId The unique ID of the Application Load Balancer.
@@ -3359,7 +3359,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 	if r.ctx != nil {
 		// API Key Authentication
 		if auth, ok := r.ctx.Value(ContextAPIKeys).(map[string]APIKey); ok {
-			if apiKey, ok := auth["Token Authentication"]; ok {
+			if apiKey, ok := auth["TokenAuthentication"]; ok {
 				var key string
 				if apiKey.Prefix != "" {
 					key = apiKey.Prefix + " " + apiKey.Key
@@ -3389,7 +3389,7 @@ func (a *ApplicationLoadBalancersApiService) DatacentersApplicationloadbalancers
 		return localVarReturnValue, localVarAPIResponse, err
 	}
 
-	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarAPIResponse.Payload = localVarBody
 	if err != nil {

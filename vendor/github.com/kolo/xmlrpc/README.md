@@ -50,6 +50,7 @@ Structs encoded to struct by following rules:
 * field name become member name;
 * if field has xmlrpc tag, its value become member name.
 * for fields tagged with `",omitempty"`, empty values are omitted;
+* fields tagged with `"-"` are omitted.
 
 Server method can accept few arguments, to handle this case there is
 special approach to handle slice of empty interfaces (`[]interface{}`).

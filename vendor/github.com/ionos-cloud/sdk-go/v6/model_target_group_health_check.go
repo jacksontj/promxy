@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,11 +16,11 @@ import (
 
 // TargetGroupHealthCheck struct for TargetGroupHealthCheck
 type TargetGroupHealthCheck struct {
-	// The maximum time in milliseconds to wait for a target to respond to a check. For target VMs with 'Check Interval' set, the lesser of the two  values is used once the TCP connection is established.
+	// The maximum time in milliseconds is to wait for a target to respond to a check. For target VMs with a 'Check Interval' set, the smaller of the two values is used once the TCP connection is established.
 	CheckTimeout *int32 `json:"checkTimeout,omitempty"`
-	// The interval in milliseconds between consecutive health checks; default is 2000.
+	// The interval in milliseconds between consecutive health checks; the default value is '2000'.
 	CheckInterval *int32 `json:"checkInterval,omitempty"`
-	// The maximum number of attempts to reconnect to a target after a connection failure. Valid range is 0 to 65535, and default is three reconnection attempts.
+	// The maximum number of attempts to reconnect to a target after a connection failure. The valid range is '0 to 65535'; the default value is '3'.
 	Retries *int32 `json:"retries,omitempty"`
 }
 
@@ -43,7 +43,7 @@ func NewTargetGroupHealthCheckWithDefaults() *TargetGroupHealthCheck {
 }
 
 // GetCheckTimeout returns the CheckTimeout field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupHealthCheck) GetCheckTimeout() *int32 {
 	if o == nil {
 		return nil
@@ -81,7 +81,7 @@ func (o *TargetGroupHealthCheck) HasCheckTimeout() bool {
 }
 
 // GetCheckInterval returns the CheckInterval field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupHealthCheck) GetCheckInterval() *int32 {
 	if o == nil {
 		return nil
@@ -119,7 +119,7 @@ func (o *TargetGroupHealthCheck) HasCheckInterval() bool {
 }
 
 // GetRetries returns the Retries field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupHealthCheck) GetRetries() *int32 {
 	if o == nil {
 		return nil
@@ -161,12 +161,15 @@ func (o TargetGroupHealthCheck) MarshalJSON() ([]byte, error) {
 	if o.CheckTimeout != nil {
 		toSerialize["checkTimeout"] = o.CheckTimeout
 	}
+
 	if o.CheckInterval != nil {
 		toSerialize["checkInterval"] = o.CheckInterval
 	}
+
 	if o.Retries != nil {
 		toSerialize["retries"] = o.Retries
 	}
+
 	return json.Marshal(toSerialize)
 }
 
