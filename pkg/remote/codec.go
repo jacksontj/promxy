@@ -17,11 +17,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/storage"
@@ -152,10 +155,10 @@ func ToQueryResult(ss storage.SeriesSet, sampleLimit int) (*prompb.QueryResult, 
 	resp := &prompb.QueryResult{}
 	for ss.Next() {
 		series := ss.At()
-		iter := series.Iterator()
+		iter := series.Iterator(nil)
 		samples := []prompb.Sample{}
 
-		for iter.Next() {
+		for chunkenc.ValNone != iter.Next() {
 			numSamples++
 			if sampleLimit > 0 && numSamples > sampleLimit {
 				return nil, HTTPError{
@@ -254,7 +257,7 @@ func (c *concreteSeriesSet) Warnings() annotations.Annotations { return nil }
 
 // concreteSeries implements storage.Series.
 type concreteSeries struct {
-	labels  labels.Labels
+	labels  []labels.Label
 	samples []prompb.Sample
 }
 
@@ -262,8 +265,15 @@ func (c *concreteSeries) Labels() labels.Labels {
 	return labels.New(c.labels...)
 }
 
-func (c *concreteSeries) Iterator() chunkenc.Iterator {
+func (c *concreteSeries) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
 	return newConcreteSeriersIterator(c)
+}
+
+func boolToValType(b bool) chunkenc.ValueType {
+	if b {
+		return chunkenc.ValFloat
+	}
+	return chunkenc.ValNone
 }
 
 // concreteSeriesIterator implements storage.SeriesIterator.
@@ -280,11 +290,11 @@ func newConcreteSeriersIterator(series *concreteSeries) chunkenc.Iterator {
 }
 
 // Seek implements storage.SeriesIterator.
-func (c *concreteSeriesIterator) Seek(t int64) bool {
+func (c *concreteSeriesIterator) Seek(t int64) chunkenc.ValueType {
 	c.cur = sort.Search(len(c.series.samples), func(n int) bool {
 		return c.series.samples[n].Timestamp >= t
 	})
-	return c.cur < len(c.series.samples)
+	return boolToValType(c.cur < len(c.series.samples))
 }
 
 // At implements storage.SeriesIterator.
@@ -294,9 +304,9 @@ func (c *concreteSeriesIterator) At() (t int64, v float64) {
 }
 
 // Next implements storage.SeriesIterator.
-func (c *concreteSeriesIterator) Next() bool {
+func (c *concreteSeriesIterator) Next() chunkenc.ValueType {
 	c.cur++
-	return c.cur < len(c.series.samples)
+	return boolToValType(c.cur < len(c.series.samples))
 }
 
 // Err implements storage.SeriesIterator.
@@ -304,8 +314,23 @@ func (c *concreteSeriesIterator) Err() error {
 	return nil
 }
 
+// TODO
+func (c *concreteSeriesIterator) AtT() int64 {
+	panic("not implemented")
+}
+
+// TODO
+func (c *concreteSeriesIterator) AtHistogram(*histogram.Histogram) (int64, *histogram.Histogram) {
+	panic("not implemented")
+}
+
+// TODO
+func (c *concreteSeriesIterator) AtFloatHistogram(*histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
+	panic("not implemented")
+}
+
 // validateLabelsAndMetricName validates the label names/values and metric names returned from remote read.
-func validateLabelsAndMetricName(ls labels.Labels) error {
+func validateLabelsAndMetricName(ls []labels.Label) error {
 	for _, l := range ls {
 		if l.Name == labels.MetricName && !model.IsValidMetricName(model.LabelValue(l.Value)) {
 			return fmt.Errorf("invalid metric name: %v", l.Value)
@@ -394,33 +419,35 @@ func LabelProtosToMetric(labelPairs []*prompb.Label) model.Metric {
 	return metric
 }
 
-func labelProtosToLabels(labelPairs []prompb.Label) labels.Labels {
-	result := make(labels.Labels, 0, len(labelPairs))
+func labelProtosToLabels(labelPairs []prompb.Label) []labels.Label {
+	result := make([]labels.Label, 0, len(labelPairs))
 	for _, l := range labelPairs {
 		result = append(result, labels.Label{
 			Name:  l.Name,
 			Value: l.Value,
 		})
 	}
-	sort.Sort(result)
+	slices.SortFunc(result, func(a, b labels.Label) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 	return result
 }
 
-func labelsToLabelsProto(labels labels.Labels) []prompb.Label {
-	result := make([]prompb.Label, 0, len(labels))
-	for _, l := range labels {
+func labelsToLabelsProto(lbls labels.Labels) []prompb.Label {
+	result := make([]prompb.Label, 0, lbls.Len())
+	lbls.Range(func(l labels.Label) {
 		result = append(result, prompb.Label{
 			Name:  l.Name,
 			Value: l.Value,
 		})
-	}
+	})
 	return result
 }
 
 func labelsToMetric(ls labels.Labels) model.Metric {
-	metric := make(model.Metric, len(ls))
-	for _, l := range ls {
+	metric := make(model.Metric, ls.Len())
+	ls.Range(func(l labels.Label) {
 		metric[model.LabelName(l.Name)] = model.LabelValue(l.Value)
-	}
+	})
 	return metric
 }
