@@ -22,6 +22,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
 var remoteReadQueries = prometheus.NewGaugeVec(
@@ -80,13 +81,13 @@ func (q *querier) Select(sortSeries bool, p *storage.SelectHints, matchers ...*l
 }
 
 // LabelValues implements storage.Querier and is a noop.
-func (q *querier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (q *querier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	// TODO implement?
 	return nil, nil, fmt.Errorf("not implemented")
 }
 
 // LabelNames implements storage.Querier and is a noop.
-func (q *querier) LabelNames(matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (q *querier) LabelNames(matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	// TODO implement?
 	return nil, nil, fmt.Errorf("not implemented")
 }

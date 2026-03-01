@@ -14,6 +14,7 @@ import (
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/promclient"
 	"github.com/jacksontj/promxy/pkg/promhttputil"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
 // ProxyQuerier Implements prometheus' Querier interface
@@ -39,7 +40,7 @@ func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*l
 	}()
 
 	var result model.Value
-	var warnings storage.Warnings
+	var warnings annotations.Annotations
 	var err error
 	// Select() is a combined API call for query/query_range/series.
 	// as of right now there is no great way of differentiating between a
@@ -85,7 +86,7 @@ func (h *ProxyQuerier) Select(_ bool, hints *storage.SelectHints, matchers ...*l
 }
 
 // LabelValues returns all potential values for a label name.
-func (h *ProxyQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (h *ProxyQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
@@ -119,7 +120,7 @@ func (h *ProxyQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (h *ProxyQuerier) LabelNames(matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (h *ProxyQuerier) LabelNames(matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{

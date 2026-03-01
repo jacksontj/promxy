@@ -11,15 +11,16 @@ import (
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
-// StorageWarningsToAPIWarnings simply converts `storage.Warnings` to `v1.Warnings`
+// StorageWarningsToAPIWarnings simply converts `annotations.Annotations` to `v1.Warnings`
 // which is simply converting a []error -> []string
 // TODO: move to a util package?
-func StorageWarningsToAPIWarnings(warnings storage.Warnings) v1.Warnings {
-	ret := make(v1.Warnings, len(warnings))
-	for i, w := range warnings {
-		ret[i] = w.Error()
+func StorageWarningsToAPIWarnings(warnings annotations.Annotations) v1.Warnings {
+	ret := make(v1.Warnings, 0, len(warnings))
+	for errStr := range warnings {
+		ret = append(ret, errStr)
 	}
 
 	return ret
@@ -32,15 +33,15 @@ func ParserValueToModelValue(value parser.Value) (model.Value, error) {
 		matrix := make(model.Matrix, v.Len())
 		for i, item := range v {
 			metric := make(model.Metric)
-			for _, label := range item.Metric {
-				metric[model.LabelName(label.Name)] = model.LabelValue(label.Value)
-			}
+			item.Metric.Range(func(l labels.Label) {
+				metric[model.LabelName(l.Name)] = model.LabelValue(l.Value)
 
-			samples := make([]model.SamplePair, len(item.Points))
-			for x, sample := range item.Points {
+			})
+			samples := make([]model.SamplePair, len(item.Floats))
+			for x, sample := range item.Floats {
 				samples[x] = model.SamplePair{
 					Timestamp: model.Time(sample.T),
-					Value:     model.SampleValue(sample.V),
+					Value:     model.SampleValue(sample.F),
 				}
 			}
 
@@ -86,7 +87,7 @@ func (a *EngineAPI) Query(ctx context.Context, query string, ts time.Time) (mode
 
 // QueryRange performs a query for the given range.
 func (a *EngineAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
-	engineQuery, err := a.e.NewRangeQuery(a.q, &promql.QueryOpts{false}, query, r.Start, r.End, r.Step)
+	engineQuery, err := a.e.NewRangeQuery(ctx, a.q, promql.NewPrometheusQueryOpts(false, time.Duration(0)), query, r.Start, r.End, r.Step)
 	if err != nil {
 		return nil, nil, err
 	}

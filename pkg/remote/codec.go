@@ -22,11 +22,11 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/prometheus/common/model"
-
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
 // decodeReadLimit is the maximum size of a read request body in bytes.
@@ -229,7 +229,7 @@ func (e errSeriesSet) Err() error {
 	return e.err
 }
 
-func (e errSeriesSet) Warnings() storage.Warnings { return nil }
+func (e errSeriesSet) Warnings() annotations.Annotations { return nil }
 
 // concreteSeriesSet implements storage.SeriesSet.
 type concreteSeriesSet struct {
@@ -250,7 +250,7 @@ func (c *concreteSeriesSet) Err() error {
 	return nil
 }
 
-func (c *concreteSeriesSet) Warnings() storage.Warnings { return nil }
+func (c *concreteSeriesSet) Warnings() annotations.Annotations { return nil }
 
 // concreteSeries implements storage.Series.
 type concreteSeries struct {

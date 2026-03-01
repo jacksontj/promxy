@@ -3,7 +3,6 @@ package promclient
 import (
 	"fmt"
 	"reflect"
-	"sort"
 
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
@@ -128,25 +127,17 @@ func (s *SeriesIterator) Labels() labels.Labels {
 	case *model.Scalar:
 		return labels.Labels{} // A scalar has (by definition) no labels
 	case *model.Sample: // From a vector
-		ret := make(labels.Labels, 0, len(valueTyped.Metric))
+		lbls := make([]labels.Label, 0, len(valueTyped.Metric))
 		for k, v := range valueTyped.Metric {
-			ret = append(ret, labels.Label{string(k), string(v)})
+			lbls = append(lbls, labels.Label{Name: string(k), Value: string(v)})
 		}
-		// TODO: move this into prom
-		// there is no reason me (the series iterator) should have to sort these
-		// if prom needs them sorted sometimes it should be responsible for doing so
-		sort.Sort(ret)
-		return ret
+		return labels.New(lbls...)
 	case *model.SampleStream:
-		ret := make(labels.Labels, 0, len(valueTyped.Metric))
+		lbls := make([]labels.Label, 0, len(valueTyped.Metric))
 		for k, v := range valueTyped.Metric {
-			ret = append(ret, labels.Label{string(k), string(v)})
+			lbls = append(lbls, labels.Label{Name: string(k), Value: string(v)})
 		}
-		// TODO: move this into prom
-		// there is no reason me (the series iterator) should have to sort these
-		// if prom needs them sorted sometimes it should be responsible for doing so
-		sort.Sort(ret)
-		return ret
+		return labels.New(lbls...)
 	default:
 		panic("Unknown data type!")
 	}

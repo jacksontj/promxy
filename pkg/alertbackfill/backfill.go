@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 
 	"github.com/jacksontj/promxy/pkg/promclient"
 	"github.com/jacksontj/promxy/pkg/proxyquerier"
@@ -61,15 +62,15 @@ func (q *AlertBackfillQueryable) Querier(ctx context.Context, mint, maxt int64) 
 
 type queryResult struct {
 	v        model.Value
-	warnings storage.Warnings
+	warnings annotations.Annotations
 	err      error
 }
 
 // TODO: move to a util package?
-func StringsToWarnings(ins []string) storage.Warnings {
-	warnings := make(storage.Warnings, len(ins))
-	for i, in := range ins {
-		warnings[i] = errors.New(in)
+func StringsToWarnings(ins []string) annotations.Annotations {
+	warnings := make(annotations.Annotations, len(ins))
+	for _, in := range ins {
+		warnings[in] = errors.New(in)
 	}
 
 	return warnings
@@ -155,11 +156,11 @@ func (q *AlertBackfillQuerier) Select(sortSeries bool, hints *storage.SelectHint
 	return proxyquerier.NewSeriesSet(series, result.warnings, nil)
 }
 
-func (q *AlertBackfillQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (q *AlertBackfillQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, fmt.Errorf("not implemented")
 }
 
-func (q *AlertBackfillQuerier) LabelNames(matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (q *AlertBackfillQuerier) LabelNames(matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, fmt.Errorf("not implemented")
 }
 
