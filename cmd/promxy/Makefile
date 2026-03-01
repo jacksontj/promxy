@@ -1,9 +1,8 @@
 test-demo:
-	go build -race -mod=vendor -tags netgo,builtinassets && ./promxy --rules.alertbackfill --log-level=debug --http.shutdown-delay=0s --config=demo.conf --web.external-url=http://localhost:8082/promxy
-
+	go build -race -mod=vendor -tags netgo,builtinassets,slicelabels && ./promxy --rules.alertbackfill --log-level=debug --http.shutdown-delay=0s --config=demo.conf --web.external-url=http://localhost:8082/promxy
 
 test-local:
-	go build -race -mod=vendor -tags netgo,builtinassets && ./promxy --http.shutdown-delay=0s --config=local_test.conf --web.external-url=http://localhost:8082/promxy --log-level=debug
+	go build -race -mod=vendor -tags netgo,builtinassets,slicelabels && ./promxy --http.shutdown-delay=0s --config=local_test.conf --web.external-url=http://localhost:8082/promxy --log-level=debug
 
 version:
-	go build -race -mod=vendor -tags netgo,builtinassets && ./promxy --version
+	go build -race -mod=vendor -tags netgo,builtinassets.slicelabels && ./promxy --version

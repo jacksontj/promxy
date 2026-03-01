@@ -233,7 +233,7 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/prometheus/prometheus => github.com/jacksontj/prometheus v1.8.1-0.20260301030927-7dcee15db2c6
+replace github.com/prometheus/prometheus => github.com/jacksontj/prometheus v0.3.5-fork.1
 
 replace github.com/golang/glog => github.com/kubermatic/glog-gokit v0.0.0-20181129151237-8ab7e4c2d352
 

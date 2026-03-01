@@ -42,5 +42,5 @@ vendor:
 
 .PHONY: update-prom-fork
 update-prom-fork:
-	GO111MODULE=on $(GO) mod edit -replace github.com/prometheus/prometheus=github.com/jacksontj/prometheus@v0.3.5.0-fork
+	GO111MODULE=on $(GO) mod edit -replace github.com/prometheus/prometheus=github.com/jacksontj/prometheus@v0.3.5-fork.1
 	$(MAKE) vendor
