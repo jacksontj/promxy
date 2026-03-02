@@ -387,11 +387,13 @@ func TestSigV4RoundTripperErrorHandling(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "SigV4 with only region (credential chain)",
+			name: "SigV4 with explicit credentials",
 			sigv4Config: &sigv4.SigV4Config{
-				Region: "us-west-2",
+				Region:    "us-west-2",
+				AccessKey: "test-access-key",
+				SecretKey: "test-secret-key",
 			},
-			expectError: false, // Credential chain resolution happens at request time, not config time
+			expectError: false,
 		},
 	}
 
