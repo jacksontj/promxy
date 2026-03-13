@@ -3,10 +3,12 @@ package promclient
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
@@ -90,17 +92,27 @@ func NewLabelFilterClient(ctx context.Context, a API, cfg *LabelFilterConfig) (*
 		cfg: cfg,
 	}
 
-	// Do an initial sync
-	if err := c.Sync(ctx); err != nil {
-		return nil, err
-	}
-
 	if cfg.SyncInterval > 0 {
 		go func() {
 			ticker := time.NewTicker(cfg.SyncInterval)
+			retryBackoff := backoff.NewExponentialBackOff(backoff.WithInitialInterval(time.Second), backoff.WithMaxInterval(cfg.SyncInterval))
+			syncCh := make(chan struct{}, 1)
+			syncCh <- struct{}{} // Trigger the first sync immediately
+			defer ticker.Stop()
+			defer close(syncCh)
+			lastSync := time.Time{}
 			for {
 				select {
 				case <-ticker.C:
+					if time.Since(lastSync) < cfg.SyncInterval {
+						continue
+					}
+					// Add jitter
+					go func() {
+						<-time.After(time.Duration(float64(cfg.SyncInterval) * 0.1 * rand.Float64()))
+						syncCh <- struct{}{}
+					}()
+				case <-syncCh:
 					start := time.Now()
 					err := c.Sync(ctx)
 					took := time.Since(start)
@@ -108,12 +120,17 @@ func NewLabelFilterClient(ctx context.Context, a API, cfg *LabelFilterConfig) (*
 					if err != nil {
 						logrus.Errorf("error syncing in label_filter from downstream: %#v", err)
 						status = "error"
+						go func() {
+							<-time.After(retryBackoff.NextBackOff())
+							syncCh <- struct{}{}
+						}()
+					} else {
+						lastSync = time.Now()
+						retryBackoff.Reset()
 					}
 					syncCount.WithLabelValues(status).Inc()
 					syncSummary.WithLabelValues(status).Observe(took.Seconds())
-
 				case <-ctx.Done():
-					ticker.Stop()
 					return
 				}
 			}
@@ -152,10 +169,10 @@ func (c *LabelFilterClient) Sync(ctx context.Context) error {
 
 	for _, label := range c.cfg.DynamicLabels {
 		labelFilter := make(map[string]struct{})
-		// TODO: warn?
 		vals, _, err := c.LabelValues(ctx, label, nil, model.Time(0).Time(), model.Now().Time())
 		if err != nil {
-			return err
+			logrus.Warnf("error getting label values for %s: %v", label, err)
+			continue
 		}
 		for _, v := range vals {
 			labelFilter[string(v)] = struct{}{}
