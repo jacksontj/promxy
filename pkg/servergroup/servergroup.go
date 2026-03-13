@@ -111,6 +111,11 @@ func (s *ServerGroup) RoundTrip(r *http.Request) (*http.Response, error) {
 		r.Header.Set(k, v)
 		logrus.Tracef("Set ServerGroup custom header %s: %s", k, v)
 	}
+	// Ensure Body is non-nil so downstream transports (e.g. SigV4) that
+	// unconditionally read the body don't panic on GET requests.
+	if r.Body == nil {
+		r.Body = http.NoBody
+	}
 	return s.client.Transport.RoundTrip(r)
 }
 
