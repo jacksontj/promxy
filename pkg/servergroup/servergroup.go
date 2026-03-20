@@ -97,6 +97,35 @@ type ServerGroup struct {
 	state atomic.Value
 }
 
+func (s *ServerGroup) groupIdentifier() string {
+	if s.Cfg != nil {
+		if s.Cfg.Name != "" {
+			return s.Cfg.Name
+		}
+		return fmt.Sprintf("ord=%d", s.Cfg.Ordinal)
+	}
+	return "unknown"
+}
+
+func (s *ServerGroup) logTargetTransition(oldCount, newCount int, initial bool) {
+	ident := s.groupIdentifier()
+	fields := logrus.Fields{
+		"server_group": ident,
+		"old_targets":  oldCount,
+		"new_targets":  newCount,
+	}
+	if s.Cfg != nil {
+		fields["ordinal"] = s.Cfg.Ordinal
+	}
+
+	switch {
+	case initial && newCount == 0:
+		logrus.WithFields(fields).Warnf("ServerGroup '%s' started with zero targets; check service discovery configuration and relabel rules", ident)
+	case oldCount > 0 && newCount == 0:
+		logrus.WithFields(fields).Warnf("ServerGroup '%s' transitioned to zero targets; check service discovery configuration and relabel rules", ident)
+	}
+}
+
 // Cancel stops backround processes (e.g. discovery manager)
 func (s *ServerGroup) Cancel() {
 	s.ctxCancel()
@@ -150,6 +179,11 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 	apiClients := make([]promclient.API, 0)
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
+	oldState := s.State()
+	oldCount := 0
+	if oldState != nil {
+		oldCount = len(oldState.Targets)
+	}
 	defer func() {
 		if err != nil {
 			ctxCancel()
@@ -291,7 +325,9 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 		serverGroupSummary.WithLabelValues(targets[i], api, status).Observe(took)
 	}
 
+	currentTargetCount := len(targets)
 	logrus.Debugf("Updating targets from discovery manager: %v", targets)
+
 	apiClient, err := promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc, 1, s.Cfg.GetPreferMax())
 	if err != nil {
 		return err
@@ -313,7 +349,9 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 		newState.apiClient = &promclient.DowngradeErrorAPI{newState.apiClient}
 	}
 
-	oldState := s.State()   // Fetch the current state (so we can stop it)
+	initialLoad := !s.loaded
+	s.logTargetTransition(oldCount, currentTargetCount, initialLoad)
+
 	s.state.Store(newState) // Store new state
 	if oldState != nil {
 		oldState.ctxCancel() // Cancel the old state
