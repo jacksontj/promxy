@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -25,7 +26,7 @@ func TestUnauthenticatedServerFunctions(t *testing.T) {
 	router := httprouter.New()
 	router.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
 
-	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "")
+	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, WebConfigFile{"", ""})
 	if err != nil {
 		t.Fatalf("an error occurred during creation of server: %s", err.Error())
 	}
@@ -55,6 +56,55 @@ func TestUnauthenticatedServerFunctions(t *testing.T) {
 	server.Close()
 }
 
+func TestUnauthenticatedServerFunctionsWithWebConfig(t *testing.T) {
+	freePort, err := getFreePort()
+	if err != nil {
+		t.Fatalf("could not get a free port to run test: %s", err.Error())
+	}
+	bindAddr := fmt.Sprintf("localhost:%d", freePort)
+	router := httprouter.New()
+	router.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
+
+	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, WebConfigFile{"", "testdata/http-server-config.yml"})
+	if err != nil {
+		t.Fatalf("an error occurred during creation of server: %s", err.Error())
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{},
+	}
+
+	time.Sleep(time.Millisecond * 5)
+	resp, err := client.Get(fmt.Sprintf("http://%s/metrics", bindAddr))
+	if err != nil {
+		t.Fatalf("could not make request to metrics endpoint: %s", err.Error())
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("could not read response body: %s", err.Error())
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("an unexpected error occurred: unauthenticed client was unable to make a request to the unauthenticated server. Response body: %s", body)
+	}
+
+	if !strings.Contains(string(body), "go_goroutines") {
+		t.Fatalf("could not find metric name 'go_goroutines' in response")
+	}
+
+	expectedHeaders := http.Header{
+		"Content-Security-Policy": {"default-src 'self';"},
+		"X-Frame-Options":         {"sameorigin"},
+	}
+
+	if !headerContains(resp.Header, expectedHeaders) {
+		t.Fatalf("could not find expected headers in response, expected: %v, but received: %v.", expectedHeaders, resp.Header)
+	}
+
+	server.Close()
+}
+
 func TestAuthenticatedServerDoesNotStartupWithInvalidConfig(t *testing.T) {
 	freePort, err := getFreePort()
 	if err != nil {
@@ -64,9 +114,19 @@ func TestAuthenticatedServerDoesNotStartupWithInvalidConfig(t *testing.T) {
 	router := httprouter.New()
 	router.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
 
-	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/invalid-tls-server-config.yml")
+	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, WebConfigFile{"testdata/invalid-tls-server-config.yml", ""})
 	if err == nil {
 		t.Fatalf("server validated an invalid tlsConfig")
+	}
+
+	if server != nil {
+		server.Close()
+	}
+
+	// Test web server config
+	server, err = CreateAndStart(bindAddr, "text", time.Second*5, nil, router, WebConfigFile{"", "testdata/invalid-web-server-config.yml"})
+	if err == nil {
+		t.Fatalf("server validated an invalid webConfig")
 	}
 
 	if server != nil {
@@ -83,9 +143,9 @@ func TestMutualTLSClientCannotConnectToAuthenticatedServerWithoutCerts(t *testin
 	router := httprouter.New()
 	router.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
 
-	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/tls-server-config.yml")
+	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, WebConfigFile{"testdata/tls-server-config.yml", ""})
 	if err != nil {
-		t.Fatalf("an error occurred during creation of server: %s", err.Error())
+		t.Fatalf("an error occurred during creation of server using tlsConfig: %s", err.Error())
 	}
 
 	client := &http.Client{
@@ -102,6 +162,18 @@ func TestMutualTLSClientCannotConnectToAuthenticatedServerWithoutCerts(t *testin
 	}
 
 	server.Close()
+
+	// Test web server config
+	server, err = CreateAndStart(bindAddr, "text", time.Second*5, nil, router, WebConfigFile{"", "testdata/web-server-config.yml"})
+	if err != nil {
+		t.Fatalf("an error occurred during creation of server using webConfig: %s", err.Error())
+	}
+
+	_, err = client.Get(fmt.Sprintf("https://%s/metrics", bindAddr))
+	if err == nil {
+		t.Fatalf("was able to make a request to metrics endpoint when it should no have: %s", err.Error())
+	}
+	server.Close()
 }
 
 func TestMutualTLSClientCanConnectToAuthenticatedServerWithCerts(t *testing.T) {
@@ -113,9 +185,9 @@ func TestMutualTLSClientCanConnectToAuthenticatedServerWithCerts(t *testing.T) {
 	router := httprouter.New()
 	router.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
 
-	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/tls-server-config.yml")
+	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, WebConfigFile{"testdata/tls-server-config.yml", ""})
 	if err != nil {
-		t.Fatalf("an error occurred during creation of server: %s", err.Error())
+		t.Fatalf("an error occurred during creation of server using tlsConfig: %s", err.Error())
 	}
 
 	client := setupAuthenticatedClient(t)
@@ -138,6 +210,68 @@ func TestMutualTLSClientCanConnectToAuthenticatedServerWithCerts(t *testing.T) {
 		t.Fatalf("could not find metric name 'go_goroutines' in response")
 	}
 	server.Close()
+}
+
+func TestMutualTLSClientCanConnectToAuthenticatedServerWithWebConfig(t *testing.T) {
+	freePort, err := getFreePort()
+	if err != nil {
+		t.Fatalf("could not get a free port to run test: %s", err.Error())
+	}
+	bindAddr := fmt.Sprintf("localhost:%d", freePort)
+	router := httprouter.New()
+	router.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
+
+	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, WebConfigFile{"", "testdata/web-server-config.yml"})
+	if err != nil {
+		t.Fatalf("an error occurred during creation of server using webConfig: %s", err.Error())
+	}
+
+	client := setupAuthenticatedClient(t)
+	resp, err := client.Get(fmt.Sprintf("https://%s/metrics", bindAddr))
+	if err != nil {
+		t.Fatalf("could not make request to metrics endpoint: %s", err.Error())
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("could not read response body: %s", err.Error())
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("authenticated client was unable to make a request to the authenticated server. Response body: %s", body)
+	}
+
+	if !strings.Contains(string(body), "go_goroutines") {
+		t.Fatalf("could not find metric name 'go_goroutines' in response")
+	}
+
+	expectedHeaders := http.Header{
+		"Content-Security-Policy": {"default-src 'self';"},
+		"X-Frame-Options":         {"sameorigin"},
+	}
+
+	if !headerContains(resp.Header, expectedHeaders) {
+		t.Fatalf("could not find expected headers in response, expected: %v, but received: %v.", expectedHeaders, resp.Header)
+	}
+
+	server.Close()
+
+}
+
+func headerContains(header http.Header, expectedHeader http.Header) bool {
+	for expectedKey, expectedValues := range expectedHeader {
+		headerValues, ok := header[expectedKey]
+		if !ok {
+			return false
+		}
+
+		for _, expectedValue := range expectedValues {
+			if !slices.Contains(headerValues, expectedValue) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func getFreePort() (int, error) {

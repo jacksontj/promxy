@@ -1,0 +1,9 @@
+tls_server_config:
+  cert_file: "../../server/testdata/server.crt"
+  key_file: "../../server/testdata/server.key"
+  client_auth_type: "RequireAndVerifyClientCert"
+  client_ca_file: "../../server/testdata/test-ca.crt"
+http_server_config:
+  headers:
+    Content-Security-Policy: "default-src 'self';"
+    X-Frame-Options: "sameorigin"
