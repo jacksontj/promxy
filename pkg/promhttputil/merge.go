@@ -44,12 +44,17 @@ func (s WarningSet) Warnings() v1.Warnings {
 }
 
 // ValueAddLabelSet adds the labelset `l` to the value `a`
-func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
+func ValueAddLabelSet(a model.Value, l, extL model.LabelSet) error {
 	switch aTyped := a.(type) {
 	case model.Vector:
 		for _, item := range aTyped {
 			for k, v := range l {
 				item.Metric[k] = v
+			}
+			for k, v := range extL {
+				if _, ok := item.Metric[k]; !ok {
+					item.Metric[k] = v
+				}
 			}
 		}
 
@@ -61,6 +66,11 @@ func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
 			}
 			for k, v := range l {
 				item.Metric[k] = v
+			}
+			for k, v := range extL {
+				if _, ok := item.Metric[k]; !ok {
+					item.Metric[k] = v
+				}
 			}
 		}
 	}
