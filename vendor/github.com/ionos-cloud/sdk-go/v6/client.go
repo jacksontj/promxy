@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -22,8 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"log"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -54,7 +52,7 @@ const (
 	RequestStatusFailed  = "FAILED"
 	RequestStatusDone    = "DONE"
 
-	Version = "6.1.0"
+	Version = "6.3.4"
 )
 
 // Constants for APIs
@@ -106,6 +104,8 @@ type APIClient struct {
 	PrivateCrossConnectsApi *PrivateCrossConnectsApiService
 
 	RequestsApi *RequestsApiService
+
+	SecurityGroupsApi *SecurityGroupsApiService
 
 	ServersApi *ServersApiService
 
@@ -164,6 +164,7 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	c.NetworkLoadBalancersApi = (*NetworkLoadBalancersApiService)(&c.common)
 	c.PrivateCrossConnectsApi = (*PrivateCrossConnectsApiService)(&c.common)
 	c.RequestsApi = (*RequestsApiService)(&c.common)
+	c.SecurityGroupsApi = (*SecurityGroupsApiService)(&c.common)
 	c.ServersApi = (*ServersApiService)(&c.common)
 	c.SnapshotsApi = (*SnapshotsApiService)(&c.common)
 	c.TargetGroupsApi = (*TargetGroupsApiService)(&c.common)
@@ -175,7 +176,7 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	return c
 }
 
-//AddPinnedCert - enables pinning of the sha256 public fingerprint to the http client's transport
+// AddPinnedCert - enables pinning of the sha256 public fingerprint to the http client's transport
 func AddPinnedCert(transport *http.Transport, pkFingerprint string) {
 	if pkFingerprint != "" {
 		transport.DialTLSContext = addPinnedCertVerification([]byte(pkFingerprint), new(tls.Config))
@@ -338,14 +339,21 @@ func (c *APIClient) callAPI(request *http.Request) (*http.Response, time.Duratio
 			}
 		}
 
-		if c.cfg.Debug {
-			dump, err := httputil.DumpRequestOut(clonedRequest, true)
-			if err == nil {
-				log.Printf(" [DEBUG] DumpRequestOut : %s\n", string(dump))
-			} else {
-				log.Println("[DEBUG] DumpRequestOut err: ", err)
+		if c.cfg.Debug || c.cfg.LogLevel.Satisfies(Debug) {
+			logRequest := request.Clone(request.Context())
+
+			// Remove the Authorization header if Debug is enabled (but not in Trace mode)
+			if !c.cfg.LogLevel.Satisfies(Trace) {
+				logRequest.Header.Del("Authorization")
 			}
-			log.Printf("\n try no: %d\n", retryCount)
+
+			dump, err := httputil.DumpRequestOut(logRequest, true)
+			if err == nil {
+				c.cfg.Logger.Printf(" DumpRequestOut : %s\n", string(dump))
+			} else {
+				c.cfg.Logger.Printf(" DumpRequestOut err: %+v", err)
+			}
+			c.cfg.Logger.Printf("\n try no: %d\n", retryCount)
 		}
 
 		httpRequestStartTime := time.Now()
@@ -356,12 +364,12 @@ func (c *APIClient) callAPI(request *http.Request) (*http.Response, time.Duratio
 			return resp, httpRequestTime, err
 		}
 
-		if c.cfg.Debug {
+		if c.cfg.Debug || c.cfg.LogLevel.Satisfies(Debug) {
 			dump, err := httputil.DumpResponse(resp, true)
 			if err == nil {
-				log.Printf("\n [DEBUG] DumpResponse : %s\n", string(dump))
+				c.cfg.Logger.Printf("\n DumpResponse : %s\n", string(dump))
 			} else {
-				log.Println("[DEBUG] DumpResponse err ", err)
+				c.cfg.Logger.Printf(" DumpResponse err %+v", err)
 			}
 		}
 
@@ -371,6 +379,9 @@ func (c *APIClient) callAPI(request *http.Request) (*http.Response, time.Duratio
 		case http.StatusServiceUnavailable,
 			http.StatusGatewayTimeout,
 			http.StatusBadGateway:
+			if request.Method == http.MethodPost {
+				return resp, httpRequestTime, err
+			}
 			backoffTime = c.GetConfig().WaitTime
 
 		case http.StatusTooManyRequests:
@@ -389,26 +400,37 @@ func (c *APIClient) callAPI(request *http.Request) (*http.Response, time.Duratio
 		}
 
 		if retryCount >= c.GetConfig().MaxRetries {
-			if c.cfg.Debug {
-				log.Printf("number of maximum retries exceeded (%d retries)\n", c.cfg.MaxRetries)
+			if c.cfg.Debug || c.cfg.LogLevel.Satisfies(Debug) {
+				c.cfg.Logger.Printf(" Number of maximum retries exceeded (%d retries)\n", c.cfg.MaxRetries)
 			}
 			break
 		} else {
-			c.backOff(backoffTime)
+			c.backOff(request.Context(), backoffTime)
 		}
 	}
 
 	return resp, httpRequestTime, err
 }
 
-func (c *APIClient) backOff(t time.Duration) {
+func (c *APIClient) backOff(ctx context.Context, t time.Duration) {
 	if t > c.GetConfig().MaxWaitTime {
 		t = c.GetConfig().MaxWaitTime
 	}
-	if c.cfg.Debug {
-		log.Printf("sleeping %s before retrying request\n", t.String())
+	if c.cfg.Debug || c.cfg.LogLevel.Satisfies(Debug) {
+		c.cfg.Logger.Printf(" sleeping %s before retrying request\n", t.String())
 	}
-	time.Sleep(t)
+
+	if t <= 0 {
+		return
+	}
+
+	timer := time.NewTimer(t)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
+	}
 }
 
 // Allow modification of underlying config for alternate implementations and testing
@@ -430,6 +452,15 @@ func (c *APIClient) prepareRequest(
 	fileBytes []byte) (localVarRequest *http.Request, err error) {
 
 	var body *bytes.Buffer
+
+	val, isSetInEnv := os.LookupEnv(IonosContractNumber)
+	_, isSetInMap := headerParams["X-Contract-Number"]
+	if headerParams == nil {
+		headerParams = make(map[string]string)
+	}
+	if !isSetInMap && isSetInEnv {
+		headerParams["X-Contract-Number"] = val
+	}
 
 	// Detect postBody type and post.
 	if postBody != nil {
@@ -494,6 +525,10 @@ func (c *APIClient) prepareRequest(
 		body.WriteString(formParams.Encode())
 		// Set Content-Length
 		headerParams["Content-Length"] = fmt.Sprintf("%d", body.Len())
+	}
+
+	if queryParams == nil {
+		queryParams = make(url.Values)
 	}
 
 	// Setup path and query parameters
@@ -637,7 +672,7 @@ func (c *APIClient) GetRequestStatus(ctx context.Context, path string) (*Request
 	var responseBody = make([]byte, 0)
 	if resp != nil {
 		var errRead error
-		responseBody, errRead = ioutil.ReadAll(resp.Body)
+		responseBody, errRead = io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		if errRead != nil {
 			return nil, nil, errRead
@@ -706,7 +741,7 @@ type DeleteStateChannel struct {
 // fn() is a function that returns from the API the resource you want to check it's state.
 // Successful states that can be checked: Available, or Active
 func (c *APIClient) WaitForState(ctx context.Context, fn resourceGetCallFn, resourceID string) (bool, error) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(c.cfg.PollInterval)
 	defer ticker.Stop()
 
 	for {
@@ -716,7 +751,7 @@ func (c *APIClient) WaitForState(ctx context.Context, fn resourceGetCallFn, reso
 		case <-ticker.C:
 			resource, err := fn(c, resourceID)
 			if err != nil {
-				return false, fmt.Errorf("error occured when calling the fn function %w", err)
+				return false, fmt.Errorf("error occurred when calling the fn function: %w", err)
 			}
 			if resource == nil {
 				return false, errors.New("fail to get resource")
@@ -739,9 +774,9 @@ func (c *APIClient) WaitForState(ctx context.Context, fn resourceGetCallFn, reso
 }
 
 // fn() is a function that returns from the API the resource you want to check it's state
-// the channel is of type string and it represents the state of the resource. Successful states that can be checked: Available, or Active
+// the channel is of type StateChannel and it represents the state of the resource. Successful states that can be checked: Available, or Active
 func (c *APIClient) waitForStateWithChanel(ctx context.Context, fn resourceGetCallFn, resourceID string, ch chan<- StateChannel) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(c.cfg.PollInterval)
 	defer ticker.Stop()
 	done := make(chan bool, 1)
 
@@ -752,6 +787,7 @@ func (c *APIClient) waitForStateWithChanel(ctx context.Context, fn resourceGetCa
 				"",
 				ctx.Err(),
 			}
+			return
 		case <-done:
 			return
 		case <-ticker.C:
@@ -759,33 +795,26 @@ func (c *APIClient) waitForStateWithChanel(ctx context.Context, fn resourceGetCa
 			if err != nil {
 				ch <- StateChannel{
 					"",
-					fmt.Errorf("error occured when calling the fn function", err),
+					fmt.Errorf("error occurred when calling the fn function: %w", err),
 				}
-				done <- true
-			}
-			if resource == nil {
+			} else if resource == nil {
 				ch <- StateChannel{
 					"",
 					errors.New("fail to get resource"),
 				}
-				done <- true
-			}
-
-			if metadata := resource.GetMetadata(); metadata != nil {
+			} else if metadata := resource.GetMetadata(); metadata != nil {
 				if state, ok := metadata.GetStateOk(); ok && state != nil {
 					if *state == Available || *state == Active {
 						ch <- StateChannel{
 							*state,
 							nil,
 						}
-						done <- true
 					}
 					if *state == Failed || *state == FailedSuspended || *state == FailedUpdating {
 						ch <- StateChannel{
 							"",
 							errors.New("state of the resource is " + *state),
 						}
-						done <- true
 					}
 				}
 			} else {
@@ -793,15 +822,15 @@ func (c *APIClient) waitForStateWithChanel(ctx context.Context, fn resourceGetCa
 					"",
 					errors.New("metadata could not be retrieved from the fn API call"),
 				}
-				done <- true
 			}
+			done <- true
 		}
 		continue
 	}
 }
 
 // fn() is a function that returns from the API the resource you want to check it's state
-// the channel is of type string and it represents the state of the resource. Successful states that can be checked: Available, or Active
+// the channel is of type StateChannel and it represents the state of the resource. Successful states that can be checked: Available, or Active
 func (c *APIClient) WaitForStateAsync(ctx context.Context, fn resourceGetCallFn, resourceID string, ch chan<- StateChannel) {
 	go c.waitForStateWithChanel(ctx, fn, resourceID, ch)
 }
@@ -809,7 +838,7 @@ func (c *APIClient) WaitForStateAsync(ctx context.Context, fn resourceGetCallFn,
 // fn() is a function that returns from the API the resource you want to check it's state.
 // a resource is deleted when status code 404 is returned from the get call to API
 func (c *APIClient) WaitForDeletion(ctx context.Context, fn resourceDeleteCallFn, resourceID string) (bool, error) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(c.cfg.PollInterval)
 	defer ticker.Stop()
 
 	for {
@@ -820,7 +849,7 @@ func (c *APIClient) WaitForDeletion(ctx context.Context, fn resourceDeleteCallFn
 			apiResponse, err := fn(c, resourceID)
 			if err != nil {
 				if apiResponse == nil {
-					return false, fmt.Errorf("fail to get response %w", err)
+					return false, fmt.Errorf("fail to get response: %w", err)
 				}
 				if apiResp := apiResponse.Response; apiResp != nil {
 					if apiResp.StatusCode == http.StatusNotFound {
@@ -837,7 +866,7 @@ func (c *APIClient) WaitForDeletion(ctx context.Context, fn resourceDeleteCallFn
 // fn() is a function that returns from the API the resource you want to check it's state
 // the channel is of type int and it represents the status response of the resource, which in this case is 404 to check when the resource is not found.
 func (c *APIClient) waitForDeletionWithChannel(ctx context.Context, fn resourceDeleteCallFn, resourceID string, ch chan<- DeleteStateChannel) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(c.cfg.PollInterval)
 	defer ticker.Stop()
 	done := make(chan bool, 1)
 
@@ -848,6 +877,7 @@ func (c *APIClient) waitForDeletionWithChannel(ctx context.Context, fn resourceD
 				0,
 				ctx.Err(),
 			}
+			return
 		case <-done:
 			return
 		case <-ticker.C:
@@ -856,24 +886,21 @@ func (c *APIClient) waitForDeletionWithChannel(ctx context.Context, fn resourceD
 				if apiResponse == nil {
 					ch <- DeleteStateChannel{
 						0,
-						fmt.Errorf("API Response from fn is empty %w ", err),
+						fmt.Errorf("API Response from fn is empty: %w ", err),
 					}
-					done <- true
-				}
-				if apiresp := apiResponse.Response; apiresp != nil {
+				} else if apiresp := apiResponse.Response; apiresp != nil {
 					if statusCode := apiresp.StatusCode; statusCode == http.StatusNotFound {
 						ch <- DeleteStateChannel{
 							statusCode,
 							nil,
 						}
-						done <- true
 					} else {
 						ch <- DeleteStateChannel{
 							statusCode,
 							err,
 						}
-						done <- true
 					}
+					done <- true
 				}
 			}
 		}
@@ -907,7 +934,7 @@ func (c *APIClient) WaitForRequest(ctx context.Context, path string) (*APIRespon
 		return nil, err
 	}
 
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(c.cfg.PollInterval)
 	defer ticker.Stop()
 	for {
 		resp, httpRequestTime, err := c.callAPI(r)
@@ -915,7 +942,7 @@ func (c *APIClient) WaitForRequest(ctx context.Context, path string) (*APIRespon
 		var localVarBody = make([]byte, 0)
 		if resp != nil {
 			var errRead error
-			localVarBody, errRead = ioutil.ReadAll(resp.Body)
+			localVarBody, errRead = io.ReadAll(resp.Body)
 			_ = resp.Body.Close()
 			if errRead != nil {
 				return nil, errRead
@@ -944,7 +971,8 @@ func (c *APIClient) WaitForRequest(ctx context.Context, path string) (*APIRespon
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			return localVarAPIResponse, fmt.Errorf("WaitForRequest failed; received status code %d from API", resp.StatusCode)
+			msg := fmt.Sprintf("WaitForRequest failed; received status code %d from API", resp.StatusCode)
+			return localVarAPIResponse, NewGenericOpenAPIError(msg, localVarBody, nil, resp.StatusCode)
 		}
 		if status.Metadata != nil && status.Metadata.Status != nil {
 			switch *status.Metadata.Status {
@@ -959,9 +987,7 @@ func (c *APIClient) WaitForRequest(ctx context.Context, path string) (*APIRespon
 				if status.Metadata.Message != nil {
 					message = *status.Metadata.Message
 				}
-				return localVarAPIResponse, errors.New(
-					fmt.Sprintf("Request %s failed: %s", id, message),
-				)
+				return localVarAPIResponse, fmt.Errorf("Request %s failed: %s", id, message)
 			}
 		}
 		select {
@@ -1101,7 +1127,7 @@ func strlen(s string) int {
 	return utf8.RuneCountInString(s)
 }
 
-// GenericOpenAPIError Provides access to the body, error and model on returned errors.
+// GenericOpenAPIError provides access to the body, error and model on returned errors.
 type GenericOpenAPIError struct {
 	statusCode int
 	body       []byte
@@ -1109,9 +1135,9 @@ type GenericOpenAPIError struct {
 	model      interface{}
 }
 
-//NewGenericOpenAPIError - constructor for GenericOpenAPIError
-func NewGenericOpenAPIError(message string, body []byte, model interface{}, statusCode int) *GenericOpenAPIError {
-	return &GenericOpenAPIError{
+// NewGenericOpenAPIError - constructor for GenericOpenAPIError
+func NewGenericOpenAPIError(message string, body []byte, model interface{}, statusCode int) GenericOpenAPIError {
+	return GenericOpenAPIError{
 		statusCode: statusCode,
 		body:       body,
 		error:      message,

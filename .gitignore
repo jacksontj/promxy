@@ -1,4 +1,13 @@
+/promxy
 cmd/promxy/promxy
 cmd/remote_write_exporter/remote_write_exporter
 build/*
 .idea
+.claude
+/debug
+/.policy.yml
+/tmp/
+/cmd/promxy/robust.yaml
+/cmd/promxy/test.yaml
+/cmd/promxy/vm.yaml
+/cmd/promxy/alert_example_dupe.rule

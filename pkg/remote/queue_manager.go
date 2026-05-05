@@ -15,15 +15,16 @@ package remote
 
 import (
 	"context"
+	"io"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"log/slog"
+
 	"golang.org/x/time/rate"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
@@ -159,7 +160,7 @@ type StorageClient interface {
 // QueueManager manages a queue of samples to be sent to the Storage
 // indicated by the provided StorageClient.
 type QueueManager struct {
-	logger log.Logger
+	logger *slog.Logger
 
 	flushDeadline  time.Duration
 	cfg            config.QueueConfig
@@ -181,11 +182,11 @@ type QueueManager struct {
 }
 
 // NewQueueManager builds a new QueueManager.
-func NewQueueManager(logger log.Logger, cfg config.QueueConfig, externalLabels labels.Labels, relabelConfigs []*relabel.Config, client StorageClient, flushDeadline time.Duration) *QueueManager {
+func NewQueueManager(logger *slog.Logger, cfg config.QueueConfig, externalLabels labels.Labels, relabelConfigs []*relabel.Config, client StorageClient, flushDeadline time.Duration) *QueueManager {
 	if logger == nil {
-		logger = log.NewNopLogger()
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	} else {
-		logger = log.With(logger, "queue", client.Name())
+		logger = logger.With("queue", client.Name())
 	}
 	t := &QueueManager{
 		logger:         logger,
@@ -232,17 +233,20 @@ func (t *QueueManager) Append(s *model.Sample) error {
 		}
 	}
 
-	ls := relabel.Process(b.Labels(), t.relabelConfigs...)
-
-	// If there are no labels; don't queue the sample
-	if len(ls) < 1 {
+	ls, keep := relabel.Process(b.Labels(), t.relabelConfigs...)
+	if !keep {
 		return nil
 	}
 
-	snew.Metric = make(model.Metric, len(ls))
-	for _, label := range ls {
-		snew.Metric[model.LabelName(label.Name)] = model.LabelValue(label.Value)
+	// If there are no labels; don't queue the sample
+	if ls.IsEmpty() {
+		return nil
 	}
+
+	snew.Metric = make(model.Metric, ls.Len())
+	ls.Range(func(label labels.Label) {
+		snew.Metric[model.LabelName(label.Name)] = model.LabelValue(label.Value)
+	})
 
 	if snew.Metric == nil {
 		return nil
@@ -257,7 +261,7 @@ func (t *QueueManager) Append(s *model.Sample) error {
 	} else {
 		droppedSamplesTotal.WithLabelValues(t.queueName).Inc()
 		if t.logLimiter.Allow() {
-			level.Warn(t.logger).Log("msg", "Remote storage queue full, discarding sample. Multiple subsequent messages of this kind may be suppressed.")
+			t.logger.Warn("Remote storage queue full, discarding sample. Multiple subsequent messages of this kind may be suppressed.")
 		}
 	}
 	return nil
@@ -285,7 +289,7 @@ func (t *QueueManager) Start() {
 // Stop stops sending samples to the remote storage and waits for pending
 // sends to complete.
 func (t *QueueManager) Stop() {
-	level.Info(t.logger).Log("msg", "Stopping remote storage...")
+	t.logger.Info("Stopping remote storage...")
 	close(t.quit)
 	t.wg.Wait()
 
@@ -293,7 +297,7 @@ func (t *QueueManager) Stop() {
 	defer t.shardsMtx.Unlock()
 	t.shards.stop(t.flushDeadline)
 
-	level.Info(t.logger).Log("msg", "Remote storage stopped.")
+	t.logger.Info("Remote storage stopped.")
 }
 
 func (t *QueueManager) updateShardsLoop() {
@@ -338,7 +342,7 @@ func (t *QueueManager) calculateDesiredShards() {
 		timePerSample = samplesOutDuration / samplesOut
 		desiredShards = (timePerSample * (samplesIn + samplesPending + t.integralAccumulator)) / float64(time.Second)
 	)
-	level.Debug(t.logger).Log("msg", "QueueManager.caclulateDesiredShards",
+	t.logger.Debug("QueueManager.caclulateDesiredShards",
 		"samplesIn", samplesIn, "samplesOut", samplesOut,
 		"samplesPending", samplesPending, "desiredShards", desiredShards)
 
@@ -347,7 +351,7 @@ func (t *QueueManager) calculateDesiredShards() {
 		lowerBound = float64(t.numShards) * (1. - shardToleranceFraction)
 		upperBound = float64(t.numShards) * (1. + shardToleranceFraction)
 	)
-	level.Debug(t.logger).Log("msg", "QueueManager.updateShardsLoop",
+	t.logger.Debug("QueueManager.updateShardsLoop",
 		"lowerBound", lowerBound, "desiredShards", desiredShards, "upperBound", upperBound)
 	if lowerBound <= desiredShards && desiredShards <= upperBound {
 		return
@@ -367,10 +371,10 @@ func (t *QueueManager) calculateDesiredShards() {
 	// to stay close to shardUpdateDuration.
 	select {
 	case t.reshardChan <- numShards:
-		level.Info(t.logger).Log("msg", "Remote storage resharding", "from", t.numShards, "to", numShards)
+		t.logger.Info("Remote storage resharding", "from", t.numShards, "to", numShards)
 		t.numShards = numShards
 	default:
-		level.Info(t.logger).Log("msg", "Currently resharding, skipping.")
+		t.logger.Info("Currently resharding, skipping.")
 	}
 }
 
@@ -445,7 +449,7 @@ func (s *shards) stop(deadline time.Duration) {
 	case <-s.done:
 		return
 	case <-time.After(deadline):
-		level.Error(s.qm.logger).Log("msg", "Failed to flush all samples on shutdown")
+		s.qm.logger.Error("Failed to flush all samples on shutdown")
 	}
 
 	// Force an unclean shutdown.
@@ -500,9 +504,9 @@ func (s *shards) runShard(i int) {
 		case sample, ok := <-queue:
 			if !ok {
 				if len(pendingSamples) > 0 {
-					level.Debug(s.qm.logger).Log("msg", "Flushing samples to remote storage...", "count", len(pendingSamples))
+					s.qm.logger.Debug("Flushing samples to remote storage...", "count", len(pendingSamples))
 					s.sendSamples(pendingSamples)
-					level.Debug(s.qm.logger).Log("msg", "Done flushing.")
+					s.qm.logger.Debug("Done flushing.")
 				}
 				return
 			}
@@ -553,7 +557,7 @@ func (s *shards) sendSamplesWithBackoff(samples model.Samples) {
 			return
 		}
 
-		level.Warn(s.qm.logger).Log("msg", "Error sending samples to remote storage", "count", len(samples), "err", err)
+		s.qm.logger.Warn("Error sending samples to remote storage", "count", len(samples), "err", err)
 		if _, ok := err.(recoverableError); !ok {
 			break
 		}

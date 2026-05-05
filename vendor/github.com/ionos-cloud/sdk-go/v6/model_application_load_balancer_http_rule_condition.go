@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,15 +16,15 @@ import (
 
 // ApplicationLoadBalancerHttpRuleCondition struct for ApplicationLoadBalancerHttpRuleCondition
 type ApplicationLoadBalancerHttpRuleCondition struct {
-	// Type of the HTTP rule condition.
+	// The HTTP rule condition type.
 	Type *string `json:"type"`
-	// Matching rule for the HTTP rule condition attribute; mandatory for HEADER, PATH, QUERY, METHOD, HOST, and COOKIE types; must be null when type is SOURCE_IP.
+	// The matching rule for the HTTP rule condition attribute; this parameter is mandatory for 'HEADER', 'PATH', 'QUERY', 'METHOD', 'HOST', and 'COOKIE' types. It must be 'null' if the type is 'SOURCE_IP'.
 	Condition *string `json:"condition"`
-	// Specifies whether the condition is negated or not; the default is False.
+	// Specifies whether the condition should be negated; the default value is 'FALSE'.
 	Negate *bool `json:"negate,omitempty"`
-	// Must be null when type is PATH, METHOD, HOST, or SOURCE_IP. Key can only be set when type is COOKIES, HEADER, or QUERY.
+	// The key can only be set when the HTTP rule condition type is 'COOKIES', 'HEADER', or 'QUERY'. For the type 'PATH', 'METHOD', 'HOST', or 'SOURCE_IP' the value must be 'null'.
 	Key *string `json:"key,omitempty"`
-	// Mandatory for conditions CONTAINS, EQUALS, MATCHES, STARTS_WITH, ENDS_WITH; must be null when condition is EXISTS; should be a valid CIDR if provided and if type is SOURCE_IP.
+	// This parameter is mandatory for the conditions 'CONTAINS', 'EQUALS', 'MATCHES', 'STARTS_WITH', 'ENDS_WITH', or if the type is 'SOURCE_IP'. Specify a valid CIDR. If the condition is 'EXISTS', the value must be 'null'.
 	Value *string `json:"value,omitempty"`
 }
 
@@ -50,7 +50,7 @@ func NewApplicationLoadBalancerHttpRuleConditionWithDefaults() *ApplicationLoadB
 }
 
 // GetType returns the Type field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *ApplicationLoadBalancerHttpRuleCondition) GetType() *string {
 	if o == nil {
 		return nil
@@ -88,7 +88,7 @@ func (o *ApplicationLoadBalancerHttpRuleCondition) HasType() bool {
 }
 
 // GetCondition returns the Condition field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *ApplicationLoadBalancerHttpRuleCondition) GetCondition() *string {
 	if o == nil {
 		return nil
@@ -126,7 +126,7 @@ func (o *ApplicationLoadBalancerHttpRuleCondition) HasCondition() bool {
 }
 
 // GetNegate returns the Negate field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *ApplicationLoadBalancerHttpRuleCondition) GetNegate() *bool {
 	if o == nil {
 		return nil
@@ -164,7 +164,7 @@ func (o *ApplicationLoadBalancerHttpRuleCondition) HasNegate() bool {
 }
 
 // GetKey returns the Key field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *ApplicationLoadBalancerHttpRuleCondition) GetKey() *string {
 	if o == nil {
 		return nil
@@ -202,7 +202,7 @@ func (o *ApplicationLoadBalancerHttpRuleCondition) HasKey() bool {
 }
 
 // GetValue returns the Value field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *ApplicationLoadBalancerHttpRuleCondition) GetValue() *string {
 	if o == nil {
 		return nil
@@ -244,18 +244,23 @@ func (o ApplicationLoadBalancerHttpRuleCondition) MarshalJSON() ([]byte, error) 
 	if o.Type != nil {
 		toSerialize["type"] = o.Type
 	}
+
 	if o.Condition != nil {
 		toSerialize["condition"] = o.Condition
 	}
+
 	if o.Negate != nil {
 		toSerialize["negate"] = o.Negate
 	}
+
 	if o.Key != nil {
 		toSerialize["key"] = o.Key
 	}
+
 	if o.Value != nil {
 		toSerialize["value"] = o.Value
 	}
+
 	return json.Marshal(toSerialize)
 }
 

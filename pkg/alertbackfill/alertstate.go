@@ -17,9 +17,9 @@ MATRIXSAMPLE_LOOP:
 		metric := item.Metric.Clone()
 
 		// Add the labels which the alert would add
-		for _, label := range alertLabels {
+		alertLabels.Range(func(label labels.Label) {
 			metric[model.LabelName(label.Name)] = model.LabelValue(label.Value)
-		}
+		})
 
 		// Filter to results that match our matchers
 		for _, matcher := range matchers {

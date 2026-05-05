@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/scaleway/scaleway-sdk-go/errors"
 	"github.com/scaleway/scaleway-sdk-go/internal/auth"
-	"github.com/scaleway/scaleway-sdk-go/internal/errors"
 	"github.com/scaleway/scaleway-sdk-go/validation"
 )
 
@@ -35,6 +35,13 @@ func WithoutAuth() ClientOption {
 func WithAuth(accessKey, secretKey string) ClientOption {
 	return func(s *settings) {
 		s.token = auth.NewToken(accessKey, secretKey)
+	}
+}
+
+// WithJWT client option sets the client session token.
+func WithJWT(token string) ClientOption {
+	return func(s *settings) {
+		s.token = auth.NewJWT(token)
 	}
 }
 
@@ -75,6 +82,7 @@ func WithProfile(p *Profile) ClientOption {
 		accessKey := ""
 		if p.AccessKey != nil {
 			accessKey = *p.AccessKey
+			s.token = auth.NewAccessKeyOnly(accessKey)
 		}
 
 		if p.SecretKey != nil {
@@ -111,7 +119,7 @@ func WithProfile(p *Profile) ClientOption {
 	}
 }
 
-// WithProfile client option configures a client from the environment variables.
+// WithEnv client option configures a client from the environment variables.
 func WithEnv() ClientOption {
 	return WithProfile(LoadEnvProfile())
 }

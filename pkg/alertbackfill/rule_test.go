@@ -21,40 +21,37 @@ func TestFindGroupAndAlert(t *testing.T) {
 					"testalert", // name
 					nil,         // expression
 					time.Hour,   // hold
-					labels.Labels{
-						labels.Label{"labelkey", "labelvalue"},
-					}, // labels
-					nil,   // annotations
-					nil,   // externalLabels
-					"",    // externalURL
-					false, // restored
-					nil,   // logger
+					0,           // keepFiringFor
+					labels.FromStrings("labelkey", "labelvalue"), // labels
+					labels.EmptyLabels(),                         // annotations
+					labels.EmptyLabels(),                         // externalLabels
+					"",                                           // externalURL
+					false,                                        // restored
+					nil,                                          // logger
 				),
 				rules.NewAlertingRule(
 					"alertWithLabels", // name
 					nil,               // expression
 					time.Hour,         // hold
-					labels.Labels{
-						labels.Label{"labelkey", "labelvalue"},
-					}, // labels
-					nil,   // annotations
-					nil,   // externalLabels
-					"",    // externalURL
-					false, // restored
-					nil,   // logger
+					0,                 // keepFiringFor
+					labels.FromStrings("labelkey", "labelvalue"), // labels
+					labels.EmptyLabels(),                         // annotations
+					labels.EmptyLabels(),                         // externalLabels
+					"",                                           // externalURL
+					false,                                        // restored
+					nil,                                          // logger
 				),
 				rules.NewAlertingRule(
 					"alertWithLabels", // name
 					nil,               // expression
 					time.Hour,         // hold
-					labels.Labels{
-						labels.Label{"labelkey", "labelvalue2"},
-					}, // labels
-					nil,   // annotations
-					nil,   // externalLabels
-					"",    // externalURL
-					false, // restored
-					nil,   // logger
+					0,                 // keepFiringFor
+					labels.FromStrings("labelkey", "labelvalue2"), // labels
+					labels.EmptyLabels(),                          // annotations
+					labels.EmptyLabels(),                          // externalLabels
+					"",                                            // externalURL
+					false,                                         // restored
+					nil,                                           // logger
 				),
 			},
 			Opts: &rules.ManagerOptions{},

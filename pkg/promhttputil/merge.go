@@ -4,19 +4,46 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
-// WarningsConvert simply converts v1.Warnings to storage.Warnings
-func WarningsConvert(ws v1.Warnings) storage.Warnings {
-	w := make(storage.Warnings, len(ws))
-	for i, item := range ws {
-		w[i] = errors.New(item)
+// warningPrefixes are the textual prefixes prometheus uses when formatting
+// PromQL annotations through %w wrapping of the sentinel errors (see
+// util/annotations/annotations.go). The v1 HTTP/JSON API serialises
+// annotations as plain strings, losing the typed wrapping; downstreams that
+// re-inflate them (us) have to detect the prefix and re-wrap with the
+// matching sentinel so callers can distinguish info-vs-warning via
+// errors.Is.
+var warningPrefixes = []struct {
+	prefix string
+	parent error
+}{
+	{"PromQL warning: ", annotations.PromQLWarning},
+	{"PromQL info: ", annotations.PromQLInfo},
+}
+
+// WarningsConvert converts v1.Warnings (the JSON-decoded plain-string form
+// of an annotation set) to an annotations.Annotations, preserving the
+// info-vs-warning classification when the original prefix is present.
+func WarningsConvert(ws v1.Warnings) annotations.Annotations {
+	a := annotations.New()
+	for _, item := range ws {
+		a.Add(toAnnotationError(item))
 	}
-	return w
+	return *a
+}
+
+func toAnnotationError(s string) error {
+	for _, p := range warningPrefixes {
+		if rest, ok := strings.CutPrefix(s, p.prefix); ok {
+			return fmt.Errorf("%w: %s", p.parent, rest)
+		}
+	}
+	return errors.New(s)
 }
 
 // WarningSet simply contains a set of warnings
@@ -119,9 +146,19 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value, preferMax bool
 
 			// If we've seen this fingerPrint before, lets make sure that a value exists
 			if index, ok := fingerPrintMap[finger]; ok {
+				existing := newValue[index]
+				// If either side carries a histogram (Value/Histogram are
+				// mutually exclusive on a Sample), keep the first non-empty
+				// observation. preferMax only applies to float-vs-float.
+				if existing.Histogram != nil || item.Histogram != nil {
+					if existing.Histogram == nil && existing.Value == 0 && item.Histogram != nil {
+						newValue[index] = item
+					}
+					return
+				}
 				// Only replace if we have no value (which seems reasonable)
 				// Or we prefer max value and there is a bigger value
-				if newValue[index].Value == model.SampleValue(0) || preferMax && newValue[index].Value < item.Value {
+				if existing.Value == model.SampleValue(0) || preferMax && existing.Value < item.Value {
 					newValue[index].Value = item.Value
 				}
 			} else {
@@ -185,11 +222,31 @@ func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream, 
 		return nil, fmt.Errorf("cannot merge mismatch fingerprints")
 	}
 
-	// if either set of values are empty, return the one with data
+	// Float and histogram samples coexist on a SampleStream; merge each
+	// sequence independently so a series that carries both still flows
+	// through the anti-affinity dedup correctly.
+	mergedHistograms := mergeHistogramSamples(antiAffinityBuffer, a.Histograms, b.Histograms)
+
+	// if either set of values are empty, fall back to the side with float
+	// data; histograms are merged separately above and re-attached at the end.
+	if len(a.Values) == 0 && len(b.Values) == 0 {
+		return &model.SampleStream{
+			Metric:     a.Metric,
+			Histograms: mergedHistograms,
+		}, nil
+	}
 	if len(a.Values) == 0 {
-		return b, nil
+		return &model.SampleStream{
+			Metric:     b.Metric,
+			Values:     b.Values,
+			Histograms: mergedHistograms,
+		}, nil
 	} else if len(b.Values) == 0 {
-		return a, nil
+		return &model.SampleStream{
+			Metric:     a.Metric,
+			Values:     a.Values,
+			Histograms: mergedHistograms,
+		}, nil
 	}
 
 	// If B has more points then we want to use that as the base for merging. This is important as
@@ -294,7 +351,77 @@ func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream, 
 	}
 
 	return &model.SampleStream{
-		Metric: a.Metric,
-		Values: newValues,
+		Metric:     a.Metric,
+		Values:     newValues,
+		Histograms: mergedHistograms,
 	}, nil
+}
+
+// mergeHistogramSamples mirrors the float anti-affinity dedup in
+// MergeSampleStream for histogram samples. preferMax has no defined
+// semantics for histograms, so we always prefer the longer stream's sample
+// when both sides observe within the buffer window — equivalent to the
+// preferMax=false branch of the float merge.
+func mergeHistogramSamples(antiAffinityBuffer model.Time, a, b []model.SampleHistogramPair) []model.SampleHistogramPair {
+	if len(a) == 0 && len(b) == 0 {
+		return nil
+	}
+	if len(a) == 0 {
+		return b
+	}
+	if len(b) == 0 {
+		return a
+	}
+
+	if len(b) > len(a) {
+		a, b = b, a
+	}
+
+	newValues := make([]model.SampleHistogramPair, 0, len(a))
+
+	bOffset := 0
+	aStartBuffered := a[0].Timestamp - antiAffinityBuffer
+
+	if b[0].Timestamp < aStartBuffered {
+		for i, bValue := range b {
+			bOffset = i
+			if bValue.Timestamp < aStartBuffered {
+				newValues = append(newValues, bValue)
+			} else {
+				break
+			}
+		}
+	}
+
+	for _, aValue := range a {
+		if len(newValues) == 0 {
+			newValues = append(newValues, aValue)
+			continue
+		}
+
+		lastTime := newValues[len(newValues)-1].Timestamp
+		if (aValue.Timestamp - lastTime) > antiAffinityBuffer*2 {
+			for ; bOffset < len(b); bOffset++ {
+				bValue := b[bOffset]
+				if bValue.Timestamp >= aValue.Timestamp {
+					break
+				}
+				if bValue.Timestamp > lastTime+antiAffinityBuffer && bValue.Timestamp < (aValue.Timestamp-antiAffinityBuffer) {
+					newValues = append(newValues, bValue)
+				}
+			}
+		}
+
+		newValues = append(newValues, aValue)
+	}
+
+	lastTime := newValues[len(newValues)-1].Timestamp
+	for ; bOffset < len(b); bOffset++ {
+		bValue := b[bOffset]
+		if bValue.Timestamp > lastTime+antiAffinityBuffer {
+			newValues = append(newValues, bValue)
+		}
+	}
+
+	return newValues
 }

@@ -3,7 +3,6 @@ package linodego
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/linode/linodego/internal/parseabletime"
@@ -25,8 +24,15 @@ type NodeBalancer struct {
 	IPv6 *string `json:"ipv6"`
 	// Throttle connections per second (0-20). Set to 0 (zero) to disable throttling.
 	ClientConnThrottle int `json:"client_conn_throttle"`
+
+	// ClientUDPSessThrottle throttles UDP sessions per second. Set to 0 (zero) to disable throttling.
+	// NOTE: ClientUDPSessThrottle may not currently be available to all users.
+	ClientUDPSessThrottle int `json:"client_udp_sess_throttle"`
+
 	// Information about the amount of transfer this NodeBalancer has had so far this month.
 	Transfer NodeBalancerTransfer `json:"transfer"`
+	// This NodeBalancer's plan Type
+	Type NodeBalancerPlanType `json:"type"`
 
 	// An array of tags applied to this object. Tags are for organizational purposes only.
 	Tags []string `json:"tags"`
@@ -45,21 +51,48 @@ type NodeBalancerTransfer struct {
 	In *float64 `json:"in"`
 }
 
+type NodeBalancerVPCOptions struct {
+	IPv4Range           string `json:"ipv4_range,omitempty"`
+	IPv6Range           string `json:"ipv6_range,omitempty"`
+	SubnetID            int    `json:"subnet_id"`
+	IPv4RangeAutoAssign bool   `json:"ipv4_range_auto_assign,omitempty"`
+}
+
 // NodeBalancerCreateOptions are the options permitted for CreateNodeBalancer
 type NodeBalancerCreateOptions struct {
-	Label              *string                            `json:"label,omitempty"`
-	Region             string                             `json:"region,omitempty"`
-	ClientConnThrottle *int                               `json:"client_conn_throttle,omitempty"`
-	Configs            []*NodeBalancerConfigCreateOptions `json:"configs,omitempty"`
-	Tags               []string                           `json:"tags"`
+	Label              *string `json:"label,omitempty"`
+	Region             string  `json:"region,omitempty"`
+	ClientConnThrottle *int    `json:"client_conn_throttle,omitempty"`
+
+	// NOTE: ClientUDPSessThrottle may not currently be available to all users.
+	ClientUDPSessThrottle *int `json:"client_udp_sess_throttle,omitempty"`
+
+	Configs    []*NodeBalancerConfigCreateOptions `json:"configs,omitempty"`
+	Tags       []string                           `json:"tags"`
+	FirewallID int                                `json:"firewall_id,omitempty"`
+	Type       NodeBalancerPlanType               `json:"type,omitempty"`
+	VPCs       []NodeBalancerVPCOptions           `json:"vpcs,omitempty"`
 }
 
 // NodeBalancerUpdateOptions are the options permitted for UpdateNodeBalancer
 type NodeBalancerUpdateOptions struct {
-	Label              *string   `json:"label,omitempty"`
-	ClientConnThrottle *int      `json:"client_conn_throttle,omitempty"`
-	Tags               *[]string `json:"tags,omitempty"`
+	Label              *string `json:"label,omitempty"`
+	ClientConnThrottle *int    `json:"client_conn_throttle,omitempty"`
+
+	// NOTE: ClientUDPSessThrottle may not currently be available to all users.
+	ClientUDPSessThrottle *int `json:"client_udp_sess_throttle,omitempty"`
+
+	Tags *[]string `json:"tags,omitempty"`
 }
+
+// NodeBalancerPlanType constants start with NBType and include Linode API NodeBalancer's plan types
+type NodeBalancerPlanType string
+
+// NodeBalancerPlanType constants reflect the plan type used by a NodeBalancer Config
+const (
+	NBTypePremium NodeBalancerPlanType = "premium"
+	NBTypeCommon  NodeBalancerPlanType = "common"
+)
 
 // UnmarshalJSON implements the json.Unmarshaler interface
 func (i *NodeBalancer) UnmarshalJSON(b []byte) error {
@@ -86,127 +119,49 @@ func (i *NodeBalancer) UnmarshalJSON(b []byte) error {
 // GetCreateOptions converts a NodeBalancer to NodeBalancerCreateOptions for use in CreateNodeBalancer
 func (i NodeBalancer) GetCreateOptions() NodeBalancerCreateOptions {
 	return NodeBalancerCreateOptions{
-		Label:              i.Label,
-		Region:             i.Region,
-		ClientConnThrottle: &i.ClientConnThrottle,
-		Tags:               i.Tags,
+		Label:                 i.Label,
+		Region:                i.Region,
+		ClientConnThrottle:    &i.ClientConnThrottle,
+		ClientUDPSessThrottle: &i.ClientUDPSessThrottle,
+		Type:                  i.Type,
+		Tags:                  i.Tags,
 	}
 }
 
 // GetUpdateOptions converts a NodeBalancer to NodeBalancerUpdateOptions for use in UpdateNodeBalancer
 func (i NodeBalancer) GetUpdateOptions() NodeBalancerUpdateOptions {
 	return NodeBalancerUpdateOptions{
-		Label:              i.Label,
-		ClientConnThrottle: &i.ClientConnThrottle,
-		Tags:               &i.Tags,
+		Label:                 i.Label,
+		ClientConnThrottle:    &i.ClientConnThrottle,
+		ClientUDPSessThrottle: &i.ClientUDPSessThrottle,
+		Tags:                  &i.Tags,
 	}
-}
-
-// NodeBalancersPagedResponse represents a paginated NodeBalancer API response
-type NodeBalancersPagedResponse struct {
-	*PageOptions
-	Data []NodeBalancer `json:"data"`
-}
-
-func (NodeBalancersPagedResponse) endpoint(c *Client) string {
-	endpoint, err := c.NodeBalancers.Endpoint()
-	if err != nil {
-		panic(err)
-	}
-	return endpoint
-}
-
-func (resp *NodeBalancersPagedResponse) appendData(r *NodeBalancersPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
 }
 
 // ListNodeBalancers lists NodeBalancers
 func (c *Client) ListNodeBalancers(ctx context.Context, opts *ListOptions) ([]NodeBalancer, error) {
-	response := NodeBalancersPagedResponse{}
-	err := c.listHelper(ctx, &response, opts)
-	if err != nil {
-		return nil, err
-	}
-	return response.Data, nil
+	return getPaginatedResults[NodeBalancer](ctx, c, "nodebalancers", opts)
 }
 
 // GetNodeBalancer gets the NodeBalancer with the provided ID
-func (c *Client) GetNodeBalancer(ctx context.Context, id int) (*NodeBalancer, error) {
-	e, err := c.NodeBalancers.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-	e = fmt.Sprintf("%s/%d", e, id)
-	r, err := coupleAPIErrors(c.R(ctx).
-		SetResult(&NodeBalancer{}).
-		Get(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*NodeBalancer), nil
+func (c *Client) GetNodeBalancer(ctx context.Context, nodebalancerID int) (*NodeBalancer, error) {
+	e := formatAPIPath("nodebalancers/%d", nodebalancerID)
+	return doGETRequest[NodeBalancer](ctx, c, e)
 }
 
 // CreateNodeBalancer creates a NodeBalancer
-func (c *Client) CreateNodeBalancer(ctx context.Context, nodebalancer NodeBalancerCreateOptions) (*NodeBalancer, error) {
-	var body string
-	e, err := c.NodeBalancers.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-
-	req := c.R(ctx).SetResult(&NodeBalancer{})
-
-	if bodyData, err := json.Marshal(nodebalancer); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetHeader("Content-Type", "application/json").
-		SetBody(body).
-		Post(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*NodeBalancer), nil
+func (c *Client) CreateNodeBalancer(ctx context.Context, opts NodeBalancerCreateOptions) (*NodeBalancer, error) {
+	return doPOSTRequest[NodeBalancer](ctx, c, "nodebalancers", opts)
 }
 
 // UpdateNodeBalancer updates the NodeBalancer with the specified id
-func (c *Client) UpdateNodeBalancer(ctx context.Context, id int, updateOpts NodeBalancerUpdateOptions) (*NodeBalancer, error) {
-	var body string
-	e, err := c.NodeBalancers.Endpoint()
-	if err != nil {
-		return nil, err
-	}
-	e = fmt.Sprintf("%s/%d", e, id)
-
-	req := c.R(ctx).SetResult(&NodeBalancer{})
-
-	if bodyData, err := json.Marshal(updateOpts); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*NodeBalancer), nil
+func (c *Client) UpdateNodeBalancer(ctx context.Context, nodebalancerID int, opts NodeBalancerUpdateOptions) (*NodeBalancer, error) {
+	e := formatAPIPath("nodebalancers/%d", nodebalancerID)
+	return doPUTRequest[NodeBalancer](ctx, c, e, opts)
 }
 
 // DeleteNodeBalancer deletes the NodeBalancer with the specified id
-func (c *Client) DeleteNodeBalancer(ctx context.Context, id int) error {
-	e, err := c.NodeBalancers.Endpoint()
-	if err != nil {
-		return err
-	}
-	e = fmt.Sprintf("%s/%d", e, id)
-
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
-
-	return err
+func (c *Client) DeleteNodeBalancer(ctx context.Context, nodebalancerID int) error {
+	e := formatAPIPath("nodebalancers/%d", nodebalancerID)
+	return doDELETERequest(ctx, c, e)
 }

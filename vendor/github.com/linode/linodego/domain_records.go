@@ -3,7 +3,9 @@ package linodego
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"time"
+
+	"github.com/linode/linodego/internal/parseabletime"
 )
 
 // DomainRecord represents a DomainRecord object
@@ -19,6 +21,8 @@ type DomainRecord struct {
 	Protocol *string          `json:"protocol"`
 	TTLSec   int              `json:"ttl_sec"`
 	Tag      *string          `json:"tag"`
+	Created  *time.Time       `json:"-"`
+	Updated  *time.Time       `json:"-"`
 }
 
 // DomainRecordCreateOptions fields are those accepted by CreateDomainRecord
@@ -65,6 +69,27 @@ const (
 	RecordTypeCAA   DomainRecordType = "CAA"
 )
 
+// UnmarshalJSON for DomainRecord responses
+func (d *DomainRecord) UnmarshalJSON(b []byte) error {
+	type Mask DomainRecord
+
+	p := struct {
+		*Mask
+		Created *parseabletime.ParseableTime `json:"created"`
+		Updated *parseabletime.ParseableTime `json:"updated"`
+	}{
+		Mask: (*Mask)(d),
+	}
+
+	if err := json.Unmarshal(b, &p); err != nil {
+		return err
+	}
+
+	d.Created = (*time.Time)(p.Created)
+	d.Updated = (*time.Time)(p.Updated)
+	return nil
+}
+
 // GetUpdateOptions converts a DomainRecord to DomainRecordUpdateOptions for use in UpdateDomainRecord
 func (d DomainRecord) GetUpdateOptions() (du DomainRecordUpdateOptions) {
 	du.Type = d.Type
@@ -81,121 +106,31 @@ func (d DomainRecord) GetUpdateOptions() (du DomainRecordUpdateOptions) {
 	return
 }
 
-// DomainRecordsPagedResponse represents a paginated DomainRecord API response
-type DomainRecordsPagedResponse struct {
-	*PageOptions
-	Data []DomainRecord `json:"data"`
-}
-
-// endpoint gets the endpoint URL for InstanceConfig
-func (DomainRecordsPagedResponse) endpointWithID(c *Client, id int) string {
-	endpoint, err := c.DomainRecords.endpointWithParams(id)
-	if err != nil {
-		panic(err)
-	}
-
-	return endpoint
-}
-
-// appendData appends DomainRecords when processing paginated DomainRecord responses
-func (resp *DomainRecordsPagedResponse) appendData(r *DomainRecordsPagedResponse) {
-	resp.Data = append(resp.Data, r.Data...)
-}
-
 // ListDomainRecords lists DomainRecords
 func (c *Client) ListDomainRecords(ctx context.Context, domainID int, opts *ListOptions) ([]DomainRecord, error) {
-	response := DomainRecordsPagedResponse{}
-	err := c.listHelperWithID(ctx, &response, domainID, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
+	return getPaginatedResults[DomainRecord](ctx, c, formatAPIPath("domains/%d/records", domainID), opts)
 }
 
 // GetDomainRecord gets the domainrecord with the provided ID
-func (c *Client) GetDomainRecord(ctx context.Context, domainID int, id int) (*DomainRecord, error) {
-	e, err := c.DomainRecords.endpointWithParams(domainID)
-	if err != nil {
-		return nil, err
-	}
-
-	e = fmt.Sprintf("%s/%d", e, id)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&DomainRecord{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*DomainRecord), nil
+func (c *Client) GetDomainRecord(ctx context.Context, domainID int, recordID int) (*DomainRecord, error) {
+	e := formatAPIPath("domains/%d/records/%d", domainID, recordID)
+	return doGETRequest[DomainRecord](ctx, c, e)
 }
 
 // CreateDomainRecord creates a DomainRecord
-func (c *Client) CreateDomainRecord(ctx context.Context, domainID int, domainrecord DomainRecordCreateOptions) (*DomainRecord, error) {
-	var body string
-
-	e, err := c.DomainRecords.endpointWithParams(domainID)
-	if err != nil {
-		return nil, err
-	}
-
-	req := c.R(ctx).SetResult(&DomainRecord{})
-
-	bodyData, err := json.Marshal(domainrecord)
-	if err != nil {
-		return nil, NewError(err)
-	}
-
-	body = string(bodyData)
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Post(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*DomainRecord), nil
+func (c *Client) CreateDomainRecord(ctx context.Context, domainID int, opts DomainRecordCreateOptions) (*DomainRecord, error) {
+	e := formatAPIPath("domains/%d/records", domainID)
+	return doPOSTRequest[DomainRecord](ctx, c, e, opts)
 }
 
 // UpdateDomainRecord updates the DomainRecord with the specified id
-func (c *Client) UpdateDomainRecord(ctx context.Context, domainID int, id int, domainrecord DomainRecordUpdateOptions) (*DomainRecord, error) {
-	var body string
-
-	e, err := c.DomainRecords.endpointWithParams(domainID)
-	if err != nil {
-		return nil, err
-	}
-
-	e = fmt.Sprintf("%s/%d", e, id)
-
-	req := c.R(ctx).SetResult(&DomainRecord{})
-
-	if bodyData, err := json.Marshal(domainrecord); err == nil {
-		body = string(bodyData)
-	} else {
-		return nil, NewError(err)
-	}
-
-	r, err := coupleAPIErrors(req.
-		SetBody(body).
-		Put(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*DomainRecord), nil
+func (c *Client) UpdateDomainRecord(ctx context.Context, domainID int, recordID int, opts DomainRecordUpdateOptions) (*DomainRecord, error) {
+	e := formatAPIPath("domains/%d/records/%d", domainID, recordID)
+	return doPUTRequest[DomainRecord](ctx, c, e, opts)
 }
 
 // DeleteDomainRecord deletes the DomainRecord with the specified id
-func (c *Client) DeleteDomainRecord(ctx context.Context, domainID int, id int) error {
-	e, err := c.DomainRecords.endpointWithParams(domainID)
-	if err != nil {
-		return err
-	}
-
-	e = fmt.Sprintf("%s/%d", e, id)
-
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
-
-	return err
+func (c *Client) DeleteDomainRecord(ctx context.Context, domainID int, recordID int) error {
+	e := formatAPIPath("domains/%d/records/%d", domainID, recordID)
+	return doDELETERequest(ctx, c, e)
 }

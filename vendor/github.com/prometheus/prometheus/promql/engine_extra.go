@@ -4,12 +4,13 @@ import (
 	"time"
 
 	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/prometheus/prometheus/promql/parser/posrange"
 )
 
 func findPathRange(path []parser.Node, eRanges []evalRange) time.Duration {
 	var (
 		evalRange time.Duration
-		depth     int
+		depth     = -1
 	)
 	for _, r := range eRanges {
 		// If the prefix is longer then it can't be the parent of `child`
@@ -36,6 +37,6 @@ func findPathRange(path []parser.Node, eRanges []evalRange) time.Duration {
 
 // evalRange summarizes a defined evalRange (from a MatrixSelector) within the ast
 type evalRange struct {
-	Prefix []parser.PositionRange
+	Prefix []posrange.PositionRange
 	Range  time.Duration
 }

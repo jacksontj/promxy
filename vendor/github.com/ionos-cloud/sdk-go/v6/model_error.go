@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -40,7 +40,7 @@ func NewErrorWithDefaults() *Error {
 }
 
 // GetHttpStatus returns the HttpStatus field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *Error) GetHttpStatus() *int32 {
 	if o == nil {
 		return nil
@@ -78,7 +78,7 @@ func (o *Error) HasHttpStatus() bool {
 }
 
 // GetMessages returns the Messages field value
-// If the value is explicit nil, the zero value for []ErrorMessage will be returned
+// If the value is explicit nil, nil is returned
 func (o *Error) GetMessages() *[]ErrorMessage {
 	if o == nil {
 		return nil
@@ -120,9 +120,11 @@ func (o Error) MarshalJSON() ([]byte, error) {
 	if o.HttpStatus != nil {
 		toSerialize["httpStatus"] = o.HttpStatus
 	}
+
 	if o.Messages != nil {
 		toSerialize["messages"] = o.Messages
 	}
+
 	return json.Marshal(toSerialize)
 }
 

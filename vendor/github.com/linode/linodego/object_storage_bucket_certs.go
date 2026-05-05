@@ -2,11 +2,15 @@ package linodego
 
 import (
 	"context"
-	"encoding/json"
 )
 
+// Deprecated: Please use ObjectStorageBucketCertV2 for all new implementations.
 type ObjectStorageBucketCert struct {
 	SSL bool `json:"ssl"`
+}
+
+type ObjectStorageBucketCertV2 struct {
+	SSL *bool `json:"ssl"`
 }
 
 type ObjectStorageBucketCertUploadOptions struct {
@@ -15,45 +19,33 @@ type ObjectStorageBucketCertUploadOptions struct {
 }
 
 // UploadObjectStorageBucketCert uploads a TLS/SSL Cert to be used with an Object Storage Bucket.
-func (c *Client) UploadObjectStorageBucketCert(ctx context.Context, clusterID, bucket string, uploadOpts ObjectStorageBucketCertUploadOptions) (*ObjectStorageBucketCert, error) {
-	e, err := c.ObjectStorageBucketCerts.endpointWithParams(clusterID, bucket)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := json.Marshal(uploadOpts)
-	if err != nil {
-		return nil, err
-	}
-
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&ObjectStorageBucketCert{}).SetBody(string(body)).Post(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*ObjectStorageBucketCert), nil
+// Deprecated: Please use UploadObjectStorageBucketCertV2 for all new implementations.
+func (c *Client) UploadObjectStorageBucketCert(ctx context.Context, clusterOrRegionID, bucket string, opts ObjectStorageBucketCertUploadOptions) (*ObjectStorageBucketCert, error) {
+	e := formatAPIPath("object-storage/buckets/%s/%s/ssl", clusterOrRegionID, bucket)
+	return doPOSTRequest[ObjectStorageBucketCert](ctx, c, e, opts)
 }
 
 // GetObjectStorageBucketCert gets an ObjectStorageBucketCert
-func (c *Client) GetObjectStorageBucketCert(ctx context.Context, clusterID, bucket string) (*ObjectStorageBucketCert, error) {
-	e, err := c.ObjectStorageBucketCerts.endpointWithParams(clusterID, bucket)
-	if err != nil {
-		return nil, err
-	}
+// Deprecated: Please use GetObjectStorageBucketCertV2 for all new implementations.
+func (c *Client) GetObjectStorageBucketCert(ctx context.Context, clusterOrRegionID, bucket string) (*ObjectStorageBucketCert, error) {
+	e := formatAPIPath("object-storage/buckets/%s/%s/ssl", clusterOrRegionID, bucket)
+	return doGETRequest[ObjectStorageBucketCert](ctx, c, e)
+}
 
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&ObjectStorageBucketCert{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*ObjectStorageBucketCert), nil
+// UploadObjectStorageBucketCert uploads a TLS/SSL Cert to be used with an Object Storage Bucket.
+func (c *Client) UploadObjectStorageBucketCertV2(ctx context.Context, clusterOrRegionID, bucket string, opts ObjectStorageBucketCertUploadOptions) (*ObjectStorageBucketCertV2, error) {
+	e := formatAPIPath("object-storage/buckets/%s/%s/ssl", clusterOrRegionID, bucket)
+	return doPOSTRequest[ObjectStorageBucketCertV2](ctx, c, e, opts)
+}
+
+// GetObjectStorageBucketCertV2 gets an ObjectStorageBucketCert
+func (c *Client) GetObjectStorageBucketCertV2(ctx context.Context, clusterOrRegionID, bucket string) (*ObjectStorageBucketCertV2, error) {
+	e := formatAPIPath("object-storage/buckets/%s/%s/ssl", clusterOrRegionID, bucket)
+	return doGETRequest[ObjectStorageBucketCertV2](ctx, c, e)
 }
 
 // DeleteObjectStorageBucketCert deletes an ObjectStorageBucketCert
-func (c *Client) DeleteObjectStorageBucketCert(ctx context.Context, clusterID, bucket string) error {
-	e, err := c.ObjectStorageBucketCerts.endpointWithParams(clusterID, bucket)
-	if err != nil {
-		return err
-	}
-
-	_, err = coupleAPIErrors(c.R(ctx).Delete(e))
-	return err
+func (c *Client) DeleteObjectStorageBucketCert(ctx context.Context, clusterOrRegionID, bucket string) error {
+	e := formatAPIPath("object-storage/buckets/%s/%s/ssl", clusterOrRegionID, bucket)
+	return doDELETERequest(ctx, c, e)
 }

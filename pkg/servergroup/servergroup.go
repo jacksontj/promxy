@@ -17,15 +17,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/common/promlog"
-	"github.com/prometheus/common/sigv4"
+	prom_config "github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/storage/remote"
+	"github.com/prometheus/sigv4"
 	"github.com/sirupsen/logrus"
 
+	"github.com/jacksontj/promxy/pkg/logging"
 	"github.com/jacksontj/promxy/pkg/middleware"
 	"github.com/jacksontj/promxy/pkg/promclient"
 	//	sd_config "github.com/prometheus/prometheus/discovery/config"
@@ -53,14 +54,17 @@ func NewServerGroup() (*ServerGroup, error) {
 		Ready:     make(chan struct{}),
 	}
 
-	logCfg := &promlog.Config{
-		Level:  &promlog.AllowedLevel{},
-		Format: &promlog.AllowedFormat{},
-	}
-	if err := logCfg.Level.Set("info"); err != nil {
+	// TODO: route SD metrics into the global registry. We use a fresh registry
+	// here to avoid double-registration when multiple servergroups exist.
+	sdMetrics, err := discovery.RegisterSDMetrics(prometheus.NewRegistry(), discovery.NewRefreshMetrics(prometheus.NewRegistry()))
+	if err != nil {
 		return nil, err
 	}
-	sg.targetManager = discovery.NewManager(ctx, promlog.New(logCfg))
+	sdLogger := logging.NewLogger(logrus.WithField("component", "servergroup-discovery"))
+	sg.targetManager = discovery.NewManager(ctx, sdLogger, prometheus.NewRegistry(), sdMetrics)
+	if sg.targetManager == nil {
+		return nil, fmt.Errorf("failed to create discovery manager")
+	}
 	// Background the updating
 	go sg.targetManager.Run()
 	go sg.Sync()
@@ -178,10 +182,10 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				lset := labels.New(lbls...)
 
 				logrus.Tracef("Potential target pre-relabel: %v", lset)
-				lset = relabel.Process(lset, s.Cfg.RelabelConfigs...)
+				lset, keep := relabel.Process(lset, s.Cfg.RelabelConfigs...)
 				logrus.Tracef("Potential target post-relabel: %v", lset)
 				// Check if the target was dropped, if so we skip it
-				if len(lset) == 0 {
+				if !keep || lset.IsEmpty() {
 					continue
 				}
 
@@ -224,6 +228,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 						HTTPClientConfig: s.Cfg.HTTPConfig.HTTPConfig,
 						SigV4Config:      s.Cfg.HTTPConfig.SigV4Config,
 						Timeout:          model.Duration(time.Minute * 2),
+						ChunkedReadLimit: prom_config.DefaultChunkedReadLimit,
 					}
 					remoteStorageClient, err := remote.NewReadClient("foo", cfg)
 					if err != nil {
@@ -253,12 +258,12 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				}
 
 				// We remove all private labels after we set the target entry
-				modelLabelSet := make(model.LabelSet, len(lset))
-				for _, lbl := range lset {
+				modelLabelSet := make(model.LabelSet, lset.Len())
+				lset.Range(func(lbl labels.Label) {
 					if !strings.HasPrefix(string(lbl.Name), model.ReservedLabelPrefix) {
 						modelLabelSet[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
 					}
-				}
+				})
 
 				// Add labels
 				apiClient = &promclient.AddLabelClient{apiClient, modelLabelSet.Merge(s.Cfg.Labels)}
@@ -363,13 +368,24 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	// If a bearer token is provided, create a round tripper that will set the
 	// Authorization header correctly on each request.
 	if len(cfg.HTTPConfig.HTTPConfig.BearerToken) > 0 {
-		rt = config_util.NewAuthorizationCredentialsRoundTripper("Bearer", cfg.HTTPConfig.HTTPConfig.BearerToken, rt)
+		rt = config_util.NewAuthorizationCredentialsRoundTripper("Bearer", config_util.NewInlineSecret(string(cfg.HTTPConfig.HTTPConfig.BearerToken)), rt)
 	} else if len(cfg.HTTPConfig.HTTPConfig.BearerTokenFile) > 0 {
-		rt = config_util.NewAuthorizationCredentialsFileRoundTripper("Bearer", cfg.HTTPConfig.HTTPConfig.BearerTokenFile, rt)
+		rt = config_util.NewAuthorizationCredentialsRoundTripper("Bearer", config_util.NewFileSecret(cfg.HTTPConfig.HTTPConfig.BearerTokenFile), rt)
 	}
 
 	if cfg.HTTPConfig.HTTPConfig.BasicAuth != nil {
-		rt = config_util.NewBasicAuthRoundTripper(cfg.HTTPConfig.HTTPConfig.BasicAuth.Username, cfg.HTTPConfig.HTTPConfig.BasicAuth.Password, cfg.HTTPConfig.HTTPConfig.BasicAuth.PasswordFile, rt)
+		var passwordSecret config_util.SecretReader
+		switch {
+		case len(cfg.HTTPConfig.HTTPConfig.BasicAuth.Password) > 0:
+			passwordSecret = config_util.NewInlineSecret(string(cfg.HTTPConfig.HTTPConfig.BasicAuth.Password))
+		case len(cfg.HTTPConfig.HTTPConfig.BasicAuth.PasswordFile) > 0:
+			passwordSecret = config_util.NewFileSecret(cfg.HTTPConfig.HTTPConfig.BasicAuth.PasswordFile)
+		}
+		rt = config_util.NewBasicAuthRoundTripper(
+			config_util.NewInlineSecret(cfg.HTTPConfig.HTTPConfig.BasicAuth.Username),
+			passwordSecret,
+			rt,
+		)
 	}
 
 	s.client = &http.Client{Transport: rt}

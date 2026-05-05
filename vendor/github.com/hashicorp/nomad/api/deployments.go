@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 import (
@@ -15,7 +18,7 @@ func (c *Client) Deployments() *Deployments {
 	return &Deployments{client: c}
 }
 
-// List is used to dump all of the deployments.
+// List is used to dump all the deployments.
 func (d *Deployments) List(q *QueryOptions) ([]*Deployment, *QueryMeta, error) {
 	var resp []*Deployment
 	qm, err := d.client.query("/v1/deployments", &resp, q)
@@ -190,6 +193,10 @@ type Deployment struct {
 
 	CreateIndex uint64
 	ModifyIndex uint64
+
+	// Creation and modification times, stored as UnixNano
+	CreateTime int64
+	ModifyTime int64
 }
 
 // DeploymentState tracks the state of a deployment for a given task group.
@@ -257,6 +264,9 @@ type DeploymentPromoteRequest struct {
 
 	// Groups is used to set the promotion status per task group
 	Groups []string
+
+	// PromotedAt is the timestamp stored as Unix nano
+	PromotedAt int64
 
 	WriteRequest
 }

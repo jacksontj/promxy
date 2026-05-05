@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 
 	"github.com/jacksontj/promxy/pkg/promclient"
 	"github.com/jacksontj/promxy/pkg/proxyquerier"
@@ -42,14 +43,13 @@ func (q *AlertBackfillQueryable) SetRuleGroupFetcher(f RuleGroupFetcher) {
 }
 
 // Querier returns an AlertBackfillQuerier
-func (q *AlertBackfillQueryable) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+func (q *AlertBackfillQueryable) Querier(mint, maxt int64) (storage.Querier, error) {
 	api, err := promclient.NewEngineAPI(q.e, q.q)
 	if err != nil {
 		return nil, err
 	}
 
 	return &AlertBackfillQuerier{
-		ctx:        ctx,
 		api:        api,
 		q:          q.q,
 		ruleGroups: q.f(),
@@ -61,25 +61,26 @@ func (q *AlertBackfillQueryable) Querier(ctx context.Context, mint, maxt int64) 
 
 type queryResult struct {
 	v        model.Value
-	warnings storage.Warnings
+	warnings annotations.Annotations
 	err      error
 }
 
 // TODO: move to a util package?
-func StringsToWarnings(ins []string) storage.Warnings {
-	warnings := make(storage.Warnings, len(ins))
-	for i, in := range ins {
-		warnings[i] = errors.New(in)
+func StringsToWarnings(ins []string) annotations.Annotations {
+	if len(ins) == 0 {
+		return nil
 	}
-
-	return warnings
+	warnings := annotations.New()
+	for _, in := range ins {
+		warnings.Add(errors.New(in))
+	}
+	return *warnings
 }
 
 // AlertBackfillQuerier will Query a downstream storage.Queryable for the
 // ALERTS_FOR_STATE series, if that series is not found -- it will then
 // run the appropriate query_range equivalent to re-generate the data.
 type AlertBackfillQuerier struct {
-	ctx        context.Context
 	q          storage.Queryable
 	api        promclient.API
 	ruleGroups []*rules.Group
@@ -91,15 +92,15 @@ type AlertBackfillQuerier struct {
 }
 
 // Select will fetch and return the ALERTS_FOR_STATE series for the given matchers
-func (q *AlertBackfillQuerier) Select(sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+func (q *AlertBackfillQuerier) Select(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	// first, we call the actual downstream to see if we have the correct data
 	// this will return something if the remote_write from promxy has been saved
 	// somewhere where promxy is also configured to read from
-	querier, err := q.q.Querier(q.ctx, q.mint, q.maxt)
+	querier, err := q.q.Querier(q.mint, q.maxt)
 	if err != nil {
 		return proxyquerier.NewSeriesSet(nil, nil, err)
 	}
-	ret := querier.Select(sortSeries, hints, matchers...)
+	ret := querier.Select(ctx, sortSeries, hints, matchers...)
 	downstreamSeries := make([]storage.Series, 0)
 	for ret.Next() {
 		downstreamSeries = append(downstreamSeries, ret.At())
@@ -121,7 +122,7 @@ func (q *AlertBackfillQuerier) Select(sortSeries bool, hints *storage.SelectHint
 	// If we haven't queried this *rule* before; lets load that
 	if !ok {
 		now := time.Now()
-		value, warnings, err := q.api.QueryRange(q.ctx, matchingRule.Query().String(), v1.Range{
+		value, warnings, err := q.api.QueryRange(ctx, matchingRule.Query().String(), v1.Range{
 			// Start is the HoldDuration + 1 step (to avoid "edge" issues)
 			Start: now.Add(-1 * matchingRule.HoldDuration()).Add(-1 * interval),
 			End:   now,
@@ -149,17 +150,17 @@ func (q *AlertBackfillQuerier) Select(sortSeries bool, hints *storage.SelectHint
 
 	series := make([]storage.Series, len(iterators))
 	for i, iterator := range iterators {
-		series[i] = &proxyquerier.Series{iterator}
+		series[i] = &proxyquerier.Series{It: iterator}
 	}
 
 	return proxyquerier.NewSeriesSet(series, result.warnings, nil)
 }
 
-func (q *AlertBackfillQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (q *AlertBackfillQuerier) LabelValues(_ context.Context, _ string, _ *storage.LabelHints, _ ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, fmt.Errorf("not implemented")
 }
 
-func (q *AlertBackfillQuerier) LabelNames(matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (q *AlertBackfillQuerier) LabelNames(_ context.Context, _ *storage.LabelHints, _ ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, fmt.Errorf("not implemented")
 }
 

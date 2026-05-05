@@ -47,21 +47,28 @@ FIND_RULE:
 			// direct prometheus behavior
 			if alertingRule.Name() == alertname {
 				// Check the rule labels fit the matcher set
-				for _, lbl := range alertingRule.Labels() {
-				MATCHERLOOP:
+				ruleSkipped := false
+				alertingRule.Labels().Range(func(lbl labels.Label) {
+					if ruleSkipped {
+						return
+					}
 					for _, m := range matchers {
 						// skip matchers that we know we will overwrite
 						switch m.Name {
 						case model.MetricNameLabel, model.AlertNameLabel:
-							continue MATCHERLOOP
+							continue
 						}
 						if lbl.Name == m.Name {
 							if !m.Matches(lbl.Value) {
-								continue RULE_LOOP
+								ruleSkipped = true
+								return
 							}
 							break
 						}
 					}
+				})
+				if ruleSkipped {
+					continue RULE_LOOP
 				}
 
 				matchingGroupIdx = i

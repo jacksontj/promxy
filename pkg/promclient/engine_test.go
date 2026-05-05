@@ -8,17 +8,16 @@ import (
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/promql/promqltest"
 )
 
 func TestEngineAPI(t *testing.T) {
-	// create test
 	content, err := os.ReadFile("testdata/metric_relabel.test")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	test, err := promql.NewTest(t, string(content))
+	test, err := promqltest.NewTest(t, string(content))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,5 +54,4 @@ func TestEngineAPI(t *testing.T) {
 			t.Fatalf("expecting a single series: %v", matrixValue)
 		}
 	})
-
 }

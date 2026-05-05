@@ -125,7 +125,7 @@ func main() {
 	})
 
 	http.HandleFunc(opts.WriteTextPath, func(w http.ResponseWriter, r *http.Request) {
-		decoder := expfmt.NewDecoder(r.Body, expfmt.FmtText) // TODO: get content-type header instead
+		decoder := expfmt.NewDecoder(r.Body, expfmt.NewFormat(expfmt.TypeTextPlain)) // TODO: get content-type header instead
 		for {
 			var mf dto.MetricFamily
 			err := decoder.Decode(&mf)

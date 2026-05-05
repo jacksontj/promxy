@@ -153,12 +153,9 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 			newState.appenderCloser = remote.Close
 		}
 
-		// Whether old or new, update the appender
-		var err error
-		newState.appender, err = newState.remoteStorage.Appender()
-		if err != nil {
-			return err
-		}
+		// Whether old or new, update the appender. The remote.Storage Appender
+		// implementation does not actually use the context.
+		newState.appender = newState.remoteStorage.Appender(context.Background())
 
 	} else {
 		newState.appender = &appenderStub{}
@@ -257,10 +254,9 @@ func (p *ProxyStorage) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Querier returns a new Querier on the storage.
-func (p *ProxyStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+func (p *ProxyStorage) Querier(mint, maxt int64) (storage.Querier, error) {
 	state := p.GetState()
 	return &proxyquerier.ProxyQuerier{
-		Ctx:    ctx,
 		Start:  timestamp.Time(mint).UTC(),
 		End:    timestamp.Time(maxt).UTC(),
 		Client: state.client,
@@ -283,7 +279,7 @@ func (p *ProxyStorage) Appender(context.Context) storage.Appender {
 func (p *ProxyStorage) Close() error { return nil }
 
 // ChunkQuerier returns a new ChunkQuerier on the storage.
-func (p *ProxyStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (storage.ChunkQuerier, error) {
+func (p *ProxyStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -293,10 +289,12 @@ func (p *ProxyStorage) ExemplarQuerier(ctx context.Context) (storage.ExemplarQue
 }
 
 // Implement web.LocalStorage
-func (p *ProxyStorage) CleanTombstones() (err error)                         { return nil }
-func (p *ProxyStorage) Delete(mint, maxt int64, ms ...*labels.Matcher) error { return nil }
-func (p *ProxyStorage) Snapshot(dir string, withHead bool) error             { return nil }
-func (p *ProxyStorage) Stats(statsByLabelName string) (*tsdb.Stats, error) {
+func (p *ProxyStorage) CleanTombstones() (err error) { return nil }
+func (p *ProxyStorage) Delete(_ context.Context, mint, maxt int64, ms ...*labels.Matcher) error {
+	return nil
+}
+func (p *ProxyStorage) Snapshot(dir string, withHead bool) error { return nil }
+func (p *ProxyStorage) Stats(statsByLabelName string, _ int) (*tsdb.Stats, error) {
 	return &tsdb.Stats{IndexPostingStats: &index.PostingsStats{}}, nil
 }
 func (p *ProxyStorage) WALReplayStatus() (tsdb.WALReplayStatus, error) {

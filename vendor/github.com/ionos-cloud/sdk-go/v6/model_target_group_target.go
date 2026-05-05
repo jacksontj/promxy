@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,12 +16,14 @@ import (
 
 // TargetGroupTarget struct for TargetGroupTarget
 type TargetGroupTarget struct {
-	// The IP of the balanced target VM.
+	// The IP address of the balanced target.
 	Ip *string `json:"ip"`
-	// The port of the balanced target service; valid range is 1 to 65535.
+	// The port of the balanced target service; the valid range is 1 to 65535.
 	Port *int32 `json:"port"`
-	// Traffic is distributed in proportion to target weight, relative to the combined weight of all targets. A target with higher weight receives a greater share of traffic. Valid range is 0 to 256 and default is 1; targets with weight of 0 do not participate in load balancing but still accept persistent connections. It is best use values in the middle of the range to leave room for later adjustments.
+	// The traffic is distributed proportionally to target weight, which is the ratio of the total weight of all targets. A target with higher weight receives a larger share of traffic. The valid range is from 0 to 256; the default value is '1'. Targets with a weight of '0' do not participate in load balancing but still accept persistent connections. We recommend using values in the middle range to leave room for later adjustments.
 	Weight *int32 `json:"weight"`
+	// Proxy protocol version.
+	ProxyProtocol *string `json:"proxyProtocol,omitempty"`
 	// When the health check is enabled, the target is available only when it accepts regular TCP or HTTP connection attempts for state checking. The state check consists of one connection attempt with the target's address and port. The default value is 'TRUE'.
 	HealthCheckEnabled *bool `json:"healthCheckEnabled,omitempty"`
 	// When the maintenance mode is enabled, the target is prevented from receiving traffic; the default value is 'FALSE'.
@@ -38,6 +40,8 @@ func NewTargetGroupTarget(ip string, port int32, weight int32) *TargetGroupTarge
 	this.Ip = &ip
 	this.Port = &port
 	this.Weight = &weight
+	var proxyProtocol string = "none"
+	this.ProxyProtocol = &proxyProtocol
 
 	return &this
 }
@@ -47,11 +51,13 @@ func NewTargetGroupTarget(ip string, port int32, weight int32) *TargetGroupTarge
 // but it doesn't guarantee that properties required by API are set
 func NewTargetGroupTargetWithDefaults() *TargetGroupTarget {
 	this := TargetGroupTarget{}
+	var proxyProtocol string = "none"
+	this.ProxyProtocol = &proxyProtocol
 	return &this
 }
 
 // GetIp returns the Ip field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupTarget) GetIp() *string {
 	if o == nil {
 		return nil
@@ -89,7 +95,7 @@ func (o *TargetGroupTarget) HasIp() bool {
 }
 
 // GetPort returns the Port field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupTarget) GetPort() *int32 {
 	if o == nil {
 		return nil
@@ -127,7 +133,7 @@ func (o *TargetGroupTarget) HasPort() bool {
 }
 
 // GetWeight returns the Weight field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupTarget) GetWeight() *int32 {
 	if o == nil {
 		return nil
@@ -164,8 +170,46 @@ func (o *TargetGroupTarget) HasWeight() bool {
 	return false
 }
 
+// GetProxyProtocol returns the ProxyProtocol field value
+// If the value is explicit nil, nil is returned
+func (o *TargetGroupTarget) GetProxyProtocol() *string {
+	if o == nil {
+		return nil
+	}
+
+	return o.ProxyProtocol
+
+}
+
+// GetProxyProtocolOk returns a tuple with the ProxyProtocol field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *TargetGroupTarget) GetProxyProtocolOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.ProxyProtocol, true
+}
+
+// SetProxyProtocol sets field value
+func (o *TargetGroupTarget) SetProxyProtocol(v string) {
+
+	o.ProxyProtocol = &v
+
+}
+
+// HasProxyProtocol returns a boolean if a field has been set.
+func (o *TargetGroupTarget) HasProxyProtocol() bool {
+	if o != nil && o.ProxyProtocol != nil {
+		return true
+	}
+
+	return false
+}
+
 // GetHealthCheckEnabled returns the HealthCheckEnabled field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupTarget) GetHealthCheckEnabled() *bool {
 	if o == nil {
 		return nil
@@ -203,7 +247,7 @@ func (o *TargetGroupTarget) HasHealthCheckEnabled() bool {
 }
 
 // GetMaintenanceEnabled returns the MaintenanceEnabled field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupTarget) GetMaintenanceEnabled() *bool {
 	if o == nil {
 		return nil
@@ -245,18 +289,27 @@ func (o TargetGroupTarget) MarshalJSON() ([]byte, error) {
 	if o.Ip != nil {
 		toSerialize["ip"] = o.Ip
 	}
+
 	if o.Port != nil {
 		toSerialize["port"] = o.Port
 	}
+
 	if o.Weight != nil {
 		toSerialize["weight"] = o.Weight
 	}
+
+	if o.ProxyProtocol != nil {
+		toSerialize["proxyProtocol"] = o.ProxyProtocol
+	}
+
 	if o.HealthCheckEnabled != nil {
 		toSerialize["healthCheckEnabled"] = o.HealthCheckEnabled
 	}
+
 	if o.MaintenanceEnabled != nil {
 		toSerialize["maintenanceEnabled"] = o.MaintenanceEnabled
 	}
+
 	return json.Marshal(toSerialize)
 }
 

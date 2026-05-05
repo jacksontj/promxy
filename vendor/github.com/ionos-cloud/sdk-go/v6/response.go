@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -11,6 +11,7 @@
 package ionoscloud
 
 import (
+	"log"
 	"net/http"
 	"time"
 )
@@ -48,4 +49,25 @@ func NewAPIResponseWithError(errorMessage string) *APIResponse {
 
 	response := &APIResponse{Message: errorMessage}
 	return response
+}
+
+// HttpNotFound - returns true if a 404 status code was returned
+// returns false for nil APIResponse values
+func (resp *APIResponse) HttpNotFound() bool {
+	if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotFound {
+		return true
+	}
+	return false
+}
+
+// LogInfo - logs APIResponse values like RequestTime, Operation and StatusCode
+// does not print anything for nil APIResponse values
+func (resp *APIResponse) LogInfo() {
+	if resp != nil {
+		log.Printf("[DEBUG] Request time : %s for operation : %s",
+			resp.RequestTime, resp.Operation)
+		if resp.Response != nil {
+			log.Printf("[DEBUG] response status code : %d\n", resp.StatusCode)
+		}
+	}
 }

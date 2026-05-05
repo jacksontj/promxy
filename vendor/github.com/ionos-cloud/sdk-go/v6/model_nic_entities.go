@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,8 +16,9 @@ import (
 
 // NicEntities struct for NicEntities
 type NicEntities struct {
-	Flowlogs      *FlowLogs      `json:"flowlogs,omitempty"`
-	Firewallrules *FirewallRules `json:"firewallrules,omitempty"`
+	Flowlogs       *FlowLogs       `json:"flowlogs,omitempty"`
+	Firewallrules  *FirewallRules  `json:"firewallrules,omitempty"`
+	Securitygroups *SecurityGroups `json:"securitygroups,omitempty"`
 }
 
 // NewNicEntities instantiates a new NicEntities object
@@ -39,7 +40,7 @@ func NewNicEntitiesWithDefaults() *NicEntities {
 }
 
 // GetFlowlogs returns the Flowlogs field value
-// If the value is explicit nil, the zero value for FlowLogs will be returned
+// If the value is explicit nil, nil is returned
 func (o *NicEntities) GetFlowlogs() *FlowLogs {
 	if o == nil {
 		return nil
@@ -77,7 +78,7 @@ func (o *NicEntities) HasFlowlogs() bool {
 }
 
 // GetFirewallrules returns the Firewallrules field value
-// If the value is explicit nil, the zero value for FirewallRules will be returned
+// If the value is explicit nil, nil is returned
 func (o *NicEntities) GetFirewallrules() *FirewallRules {
 	if o == nil {
 		return nil
@@ -114,14 +115,58 @@ func (o *NicEntities) HasFirewallrules() bool {
 	return false
 }
 
+// GetSecuritygroups returns the Securitygroups field value
+// If the value is explicit nil, nil is returned
+func (o *NicEntities) GetSecuritygroups() *SecurityGroups {
+	if o == nil {
+		return nil
+	}
+
+	return o.Securitygroups
+
+}
+
+// GetSecuritygroupsOk returns a tuple with the Securitygroups field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *NicEntities) GetSecuritygroupsOk() (*SecurityGroups, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.Securitygroups, true
+}
+
+// SetSecuritygroups sets field value
+func (o *NicEntities) SetSecuritygroups(v SecurityGroups) {
+
+	o.Securitygroups = &v
+
+}
+
+// HasSecuritygroups returns a boolean if a field has been set.
+func (o *NicEntities) HasSecuritygroups() bool {
+	if o != nil && o.Securitygroups != nil {
+		return true
+	}
+
+	return false
+}
+
 func (o NicEntities) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Flowlogs != nil {
 		toSerialize["flowlogs"] = o.Flowlogs
 	}
+
 	if o.Firewallrules != nil {
 		toSerialize["firewallrules"] = o.Firewallrules
 	}
+
+	if o.Securitygroups != nil {
+		toSerialize["securitygroups"] = o.Securitygroups
+	}
+
 	return json.Marshal(toSerialize)
 }
 
