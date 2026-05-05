@@ -18,16 +18,15 @@ import (
 
 	_ "net/http/pprof"
 
-	kitlog "github.com/go-kit/log"
 	"github.com/golang/glog"
 	"github.com/grafana/regexp"
 	"github.com/jessevdk/go-flags"
 	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus"
+	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/version"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
@@ -70,7 +69,7 @@ var (
 )
 
 func init() {
-	prometheus.MustRegister(version.NewCollector("promxy"))
+	prometheus.MustRegister(versioncollector.NewCollector("promxy"))
 }
 
 type cliOpts struct {
@@ -212,11 +211,11 @@ func main() {
 
 	// Above level 6, the k8s client would log bearer tokens in clear-text.
 	glog.ClampLevel(6)
-	glog.SetLogger(logging.NewLogger(logrus.WithField("component", "k8s_client_runtime").Logger))
+	glog.SetLogger(logging.NewGoKitLogger(logrus.WithField("component", "k8s_client_runtime")))
 
 	// Above level 6, the k8s client would log bearer tokens in clear-text.
 	klog.ClampLevel(6)
-	klog.SetLogger(logging.NewLogger(logrus.WithField("component", "k8s_client_runtime").Logger))
+	klog.SetLogger(logging.NewGoKitLogger(logrus.WithField("component", "k8s_client_runtime")))
 
 	// Create base context for this daemon
 	ctx, cancel := context.WithCancel(context.Background())
@@ -238,15 +237,12 @@ func main() {
 	reloadables = append(reloadables, ps)
 	proxyStorage = ps
 
-	logCfg := &promlog.Config{
-		Level:  &promlog.AllowedLevel{},
-		Format: &promlog.AllowedFormat{},
-	}
-	if err := logCfg.Level.Set("info"); err != nil {
-		logrus.Fatalf("Unable to set log level: %v", err)
-	}
-
-	logger := promlog.New(logCfg)
+	// All prometheus libraries (notifier, scrape, web, discovery,
+	// promql.NewActiveQueryTracker) take an *slog.Logger. Bridge those
+	// through logrus so promxy's user-facing logging configuration
+	// (level, format, fields) governs both promxy's own output and the
+	// embedded prometheus-library output.
+	logger := logging.NewLogger(logrus.StandardLogger())
 
 	engineOpts := promql.EngineOpts{
 		Reg:                      prometheus.DefaultRegisterer,
@@ -265,7 +261,7 @@ func main() {
 		if opts.LocalStoragePath == "" {
 			logrus.Fatalf("local storage path must be defined if you wish to enable max query concurrency limits")
 		}
-		engineOpts.ActiveQueryTracker = promql.NewActiveQueryTracker(opts.LocalStoragePath, opts.QueryMaxConcurrency, kitlog.With(logger, "component", "activeQueryTracker"))
+		engineOpts.ActiveQueryTracker = promql.NewActiveQueryTracker(opts.LocalStoragePath, opts.QueryMaxConcurrency, logger.With("component", "activeQueryTracker"))
 	}
 
 	engine := promql.NewEngine(engineOpts)
@@ -282,11 +278,18 @@ func main() {
 			Registerer:    prometheus.DefaultRegisterer,
 			QueueCapacity: opts.NotificationQueueCapacity,
 		},
-		kitlog.With(logger, "component", "notifier"),
+		logger.With("component", "notifier"),
 	)
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(notifierManager))
 
-	discoveryManagerNotify := discovery.NewManager(ctx, kitlog.With(logger, "component", "discovery manager notify"))
+	notifyDiscoverySDMetrics, err := discovery.RegisterSDMetrics(prometheus.DefaultRegisterer, discovery.NewRefreshMetrics(prometheus.DefaultRegisterer))
+	if err != nil {
+		logrus.Fatalf("Error registering SD metrics: %v", err)
+	}
+	discoveryManagerNotify := discovery.NewManager(ctx, logger.With("component", "discovery manager notify"), prometheus.DefaultRegisterer, notifyDiscoverySDMetrics)
+	if discoveryManagerNotify == nil {
+		logrus.Fatalf("Error creating notify discovery manager")
+	}
 
 	reloadables = append(reloadables,
 		proxyconfig.WrapPromReloadable(&proxyconfig.ApplyConfigFunc{func(cfg *config.Config) error {
@@ -387,7 +390,10 @@ func main() {
 	}}))
 
 	// We need an empty scrape manager, simply to make the API not panic and error out
-	scrapeManager := scrape.NewManager(nil, kitlog.With(logger, "component", "scrape manager"), nil)
+	scrapeManager, err := scrape.NewManager(nil, logger.With("component", "scrape manager"), nil, nil, prometheus.DefaultRegisterer)
+	if err != nil {
+		logrus.Fatalf("Error creating scrape manager: %v", err)
+	}
 
 	webOptions := &web.Options{
 		Registerer:      prometheus.DefaultRegisterer,
@@ -433,7 +439,7 @@ func main() {
 
 	webHandler := web.New(logger, webOptions)
 	reloadables = append(reloadables, proxyconfig.WrapPromReloadable(webHandler))
-	webHandler.SetReady(true)
+	webHandler.SetReady(web.Ready)
 
 	apiPrefix := path.Join(webOptions.RoutePrefix, "/api/v1")
 	// Register API endpoint with correct route prefix

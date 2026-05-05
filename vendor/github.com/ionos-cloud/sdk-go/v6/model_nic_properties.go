@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -21,9 +21,19 @@ type NicProperties struct {
 	// The MAC address of the NIC.
 	Mac *string `json:"mac,omitempty"`
 	// Collection of IP addresses, assigned to the NIC. Explicitly assigned public IPs need to come from reserved IP blocks. Passing value null or empty array will assign an IP address automatically.
+	// to set this field to `nil` in order to be marshalled, the explicit nil address `Nil[]string` can be used, or the setter `SetIpsNil`
 	Ips *[]string `json:"ips,omitempty"`
 	// Indicates if the NIC will reserve an IP using DHCP.
 	Dhcp *bool `json:"dhcp,omitempty"`
+	// If this NIC is connected to an IPv6 enabled LAN then this property contains the IPv6 IP addresses of the NIC. The maximum number of IPv6 IP addresses per NIC is 50, if you need more, contact support. If you leave this property 'null' when adding a NIC, when changing the NIC's IPv6 CIDR block, when changing the LAN's IPv6 CIDR block or when moving the NIC to a different IPv6 enabled LAN, then we will automatically assign the same number of IPv6 addresses which you had before from the NICs new CIDR block. If you leave this property 'null' while not changing the CIDR block, the IPv6 IP addresses won't be changed either. You can also provide your own self choosen IPv6 addresses, which then must be inside the IPv6 CIDR block of this NIC.
+	// to set this field to `nil` in order to be marshalled, the explicit nil address `Nil[]string` can be used, or the setter `SetIpv6IpsNil`
+	Ipv6Ips *[]string `json:"ipv6Ips,omitempty"`
+	// If this NIC is connected to an IPv6 enabled LAN then this property contains the /80 IPv6 CIDR block of the NIC. If you leave this property 'null' when adding a NIC to an IPv6-enabled LAN, then an IPv6 CIDR block will automatically be assigned to the NIC, but you can also specify an /80 IPv6 CIDR block for the NIC on your own, which must be inside the /64 IPv6 CIDR block of the LAN and unique. This value can only be set, if the LAN already has an IPv6 CIDR block assigned. An IPv6-enabled LAN is limited to a maximum of 65,536 NICs.
+	// to set this field to `nil` in order to be marshalled, the explicit nil address `Nilstring` can be used, or the setter `SetIpv6CidrBlockNil`
+	Ipv6CidrBlock *string `json:"ipv6CidrBlock,omitempty"`
+	// Indicates if the NIC will receive an IPv6 using DHCP. It can be set to 'true' or 'false' only if this NIC is connected to an IPv6 enabled LAN.
+	// to set this field to `nil` in order to be marshalled, the explicit nil address `Nilbool` can be used, or the setter `SetDhcpv6Nil`
+	Dhcpv6 *bool `json:"dhcpv6,omitempty"`
 	// The LAN ID the NIC will be on. If the LAN ID does not exist, it will be implicitly created.
 	Lan *int32 `json:"lan"`
 	// Activate or deactivate the firewall. By default, an active firewall without any defined rules will block all incoming network traffic except for the firewall rules that explicitly allows certain protocols, IP addresses and ports.
@@ -34,6 +44,8 @@ type NicProperties struct {
 	DeviceNumber *int32 `json:"deviceNumber,omitempty"`
 	// The PCI slot number for the NIC.
 	PciSlot *int32 `json:"pciSlot,omitempty"`
+	// The vnet ID that belongs to this NIC; Requires system privileges, for internal usage only
+	Vnet *string `json:"vnet,omitempty"`
 }
 
 // NewNicProperties instantiates a new NicProperties object
@@ -43,6 +55,8 @@ type NicProperties struct {
 func NewNicProperties(lan int32) *NicProperties {
 	this := NicProperties{}
 
+	var dhcp bool = true
+	this.Dhcp = &dhcp
 	this.Lan = &lan
 
 	return &this
@@ -53,11 +67,13 @@ func NewNicProperties(lan int32) *NicProperties {
 // but it doesn't guarantee that properties required by API are set
 func NewNicPropertiesWithDefaults() *NicProperties {
 	this := NicProperties{}
+	var dhcp bool = true
+	this.Dhcp = &dhcp
 	return &this
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NicProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -95,7 +111,7 @@ func (o *NicProperties) HasName() bool {
 }
 
 // GetMac returns the Mac field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NicProperties) GetMac() *string {
 	if o == nil {
 		return nil
@@ -133,7 +149,7 @@ func (o *NicProperties) HasMac() bool {
 }
 
 // GetIps returns the Ips field value
-// If the value is explicit nil, the zero value for []string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NicProperties) GetIps() *[]string {
 	if o == nil {
 		return nil
@@ -171,7 +187,7 @@ func (o *NicProperties) HasIps() bool {
 }
 
 // GetDhcp returns the Dhcp field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *NicProperties) GetDhcp() *bool {
 	if o == nil {
 		return nil
@@ -208,8 +224,132 @@ func (o *NicProperties) HasDhcp() bool {
 	return false
 }
 
+// GetIpv6Ips returns the Ipv6Ips field value
+// If the value is explicit nil, nil is returned
+func (o *NicProperties) GetIpv6Ips() *[]string {
+	if o == nil {
+		return nil
+	}
+
+	return o.Ipv6Ips
+
+}
+
+// GetIpv6IpsOk returns a tuple with the Ipv6Ips field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *NicProperties) GetIpv6IpsOk() (*[]string, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.Ipv6Ips, true
+}
+
+// SetIpv6Ips sets field value
+func (o *NicProperties) SetIpv6Ips(v []string) {
+
+	o.Ipv6Ips = &v
+
+}
+
+// HasIpv6Ips returns a boolean if a field has been set.
+func (o *NicProperties) HasIpv6Ips() bool {
+	if o != nil && o.Ipv6Ips != nil {
+		return true
+	}
+
+	return false
+}
+
+// GetIpv6CidrBlock returns the Ipv6CidrBlock field value
+// If the value is explicit nil, nil is returned
+func (o *NicProperties) GetIpv6CidrBlock() *string {
+	if o == nil {
+		return nil
+	}
+
+	return o.Ipv6CidrBlock
+
+}
+
+// GetIpv6CidrBlockOk returns a tuple with the Ipv6CidrBlock field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *NicProperties) GetIpv6CidrBlockOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.Ipv6CidrBlock, true
+}
+
+// SetIpv6CidrBlock sets field value
+func (o *NicProperties) SetIpv6CidrBlock(v string) {
+
+	o.Ipv6CidrBlock = &v
+
+}
+
+// sets Ipv6CidrBlock to the explicit address that will be encoded as nil when marshaled
+func (o *NicProperties) SetIpv6CidrBlockNil() {
+	o.Ipv6CidrBlock = &Nilstring
+}
+
+// HasIpv6CidrBlock returns a boolean if a field has been set.
+func (o *NicProperties) HasIpv6CidrBlock() bool {
+	if o != nil && o.Ipv6CidrBlock != nil {
+		return true
+	}
+
+	return false
+}
+
+// GetDhcpv6 returns the Dhcpv6 field value
+// If the value is explicit nil, nil is returned
+func (o *NicProperties) GetDhcpv6() *bool {
+	if o == nil {
+		return nil
+	}
+
+	return o.Dhcpv6
+
+}
+
+// GetDhcpv6Ok returns a tuple with the Dhcpv6 field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *NicProperties) GetDhcpv6Ok() (*bool, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.Dhcpv6, true
+}
+
+// SetDhcpv6 sets field value
+func (o *NicProperties) SetDhcpv6(v bool) {
+
+	o.Dhcpv6 = &v
+
+}
+
+// sets Dhcpv6 to the explicit address that will be encoded as nil when marshaled
+func (o *NicProperties) SetDhcpv6Nil() {
+	o.Dhcpv6 = &Nilbool
+}
+
+// HasDhcpv6 returns a boolean if a field has been set.
+func (o *NicProperties) HasDhcpv6() bool {
+	if o != nil && o.Dhcpv6 != nil {
+		return true
+	}
+
+	return false
+}
+
 // GetLan returns the Lan field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *NicProperties) GetLan() *int32 {
 	if o == nil {
 		return nil
@@ -247,7 +387,7 @@ func (o *NicProperties) HasLan() bool {
 }
 
 // GetFirewallActive returns the FirewallActive field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *NicProperties) GetFirewallActive() *bool {
 	if o == nil {
 		return nil
@@ -285,7 +425,7 @@ func (o *NicProperties) HasFirewallActive() bool {
 }
 
 // GetFirewallType returns the FirewallType field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NicProperties) GetFirewallType() *string {
 	if o == nil {
 		return nil
@@ -323,7 +463,7 @@ func (o *NicProperties) HasFirewallType() bool {
 }
 
 // GetDeviceNumber returns the DeviceNumber field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *NicProperties) GetDeviceNumber() *int32 {
 	if o == nil {
 		return nil
@@ -361,7 +501,7 @@ func (o *NicProperties) HasDeviceNumber() bool {
 }
 
 // GetPciSlot returns the PciSlot field value
-// If the value is explicit nil, the zero value for int32 will be returned
+// If the value is explicit nil, nil is returned
 func (o *NicProperties) GetPciSlot() *int32 {
 	if o == nil {
 		return nil
@@ -398,33 +538,100 @@ func (o *NicProperties) HasPciSlot() bool {
 	return false
 }
 
+// GetVnet returns the Vnet field value
+// If the value is explicit nil, nil is returned
+func (o *NicProperties) GetVnet() *string {
+	if o == nil {
+		return nil
+	}
+
+	return o.Vnet
+
+}
+
+// GetVnetOk returns a tuple with the Vnet field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *NicProperties) GetVnetOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.Vnet, true
+}
+
+// SetVnet sets field value
+func (o *NicProperties) SetVnet(v string) {
+
+	o.Vnet = &v
+
+}
+
+// HasVnet returns a boolean if a field has been set.
+func (o *NicProperties) HasVnet() bool {
+	if o != nil && o.Vnet != nil {
+		return true
+	}
+
+	return false
+}
+
 func (o NicProperties) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.Mac != nil {
 		toSerialize["mac"] = o.Mac
 	}
-	toSerialize["ips"] = o.Ips
+
+	if o.Ips != nil {
+		toSerialize["ips"] = o.Ips
+	}
 	if o.Dhcp != nil {
 		toSerialize["dhcp"] = o.Dhcp
+	}
+
+	if o.Ipv6Ips != nil {
+		toSerialize["ipv6Ips"] = o.Ipv6Ips
+	}
+
+	if o.Ipv6CidrBlock == &Nilstring {
+		toSerialize["ipv6CidrBlock"] = nil
+	} else if o.Ipv6CidrBlock != nil {
+		toSerialize["ipv6CidrBlock"] = o.Ipv6CidrBlock
+	}
+
+	if o.Dhcpv6 == &Nilbool {
+		toSerialize["dhcpv6"] = nil
+	} else if o.Dhcpv6 != nil {
+		toSerialize["dhcpv6"] = o.Dhcpv6
 	}
 	if o.Lan != nil {
 		toSerialize["lan"] = o.Lan
 	}
+
 	if o.FirewallActive != nil {
 		toSerialize["firewallActive"] = o.FirewallActive
 	}
+
 	if o.FirewallType != nil {
 		toSerialize["firewallType"] = o.FirewallType
 	}
+
 	if o.DeviceNumber != nil {
 		toSerialize["deviceNumber"] = o.DeviceNumber
 	}
+
 	if o.PciSlot != nil {
 		toSerialize["pciSlot"] = o.PciSlot
 	}
+
+	if o.Vnet != nil {
+		toSerialize["vnet"] = o.Vnet
+	}
+
 	return json.Marshal(toSerialize)
 }
 

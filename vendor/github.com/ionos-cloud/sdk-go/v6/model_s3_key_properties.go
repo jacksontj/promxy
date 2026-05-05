@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,9 +16,9 @@ import (
 
 // S3KeyProperties struct for S3KeyProperties
 type S3KeyProperties struct {
-	// Secret of the S3 key.
+	// Secret of the Object storage key.
 	SecretKey *string `json:"secretKey,omitempty"`
-	// Denotes weather the S3 key is active.
+	// Denotes weather the Object storage key is active.
 	Active *bool `json:"active,omitempty"`
 }
 
@@ -41,7 +41,7 @@ func NewS3KeyPropertiesWithDefaults() *S3KeyProperties {
 }
 
 // GetSecretKey returns the SecretKey field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *S3KeyProperties) GetSecretKey() *string {
 	if o == nil {
 		return nil
@@ -79,7 +79,7 @@ func (o *S3KeyProperties) HasSecretKey() bool {
 }
 
 // GetActive returns the Active field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *S3KeyProperties) GetActive() *bool {
 	if o == nil {
 		return nil
@@ -121,9 +121,11 @@ func (o S3KeyProperties) MarshalJSON() ([]byte, error) {
 	if o.SecretKey != nil {
 		toSerialize["secretKey"] = o.SecretKey
 	}
+
 	if o.Active != nil {
 		toSerialize["active"] = o.Active
 	}
+
 	return json.Marshal(toSerialize)
 }
 

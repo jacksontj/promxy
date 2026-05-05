@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,17 +16,17 @@ import (
 
 // TargetGroupHttpHealthCheck struct for TargetGroupHttpHealthCheck
 type TargetGroupHttpHealthCheck struct {
-	// The path (destination URL) for the HTTP health check request; the default is /.
+	// The destination URL for HTTP the health check; the default is '/'.
 	Path *string `json:"path,omitempty"`
-	// The method for the HTTP health check.
+	// The method used for the health check request.
 	Method *string `json:"method,omitempty"`
-	//
+	// Specify the target's response type to match ALB's request.
 	MatchType *string `json:"matchType"`
-	// The response returned by the request, depending on the match type.
+	// The response returned by the request. It can be a status code or a response body depending on the definition of 'matchType'.
 	Response *string `json:"response"`
-	//
+	// Specifies whether to use a regular expression to parse the response body; the default value is 'FALSE'.  By using regular expressions, you can flexibly customize the expected response from a healthy server.
 	Regex *bool `json:"regex,omitempty"`
-	//
+	// Specifies whether to negate an individual entry; the default value is 'FALSE'.
 	Negate *bool `json:"negate,omitempty"`
 }
 
@@ -52,7 +52,7 @@ func NewTargetGroupHttpHealthCheckWithDefaults() *TargetGroupHttpHealthCheck {
 }
 
 // GetPath returns the Path field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupHttpHealthCheck) GetPath() *string {
 	if o == nil {
 		return nil
@@ -90,7 +90,7 @@ func (o *TargetGroupHttpHealthCheck) HasPath() bool {
 }
 
 // GetMethod returns the Method field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupHttpHealthCheck) GetMethod() *string {
 	if o == nil {
 		return nil
@@ -128,7 +128,7 @@ func (o *TargetGroupHttpHealthCheck) HasMethod() bool {
 }
 
 // GetMatchType returns the MatchType field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupHttpHealthCheck) GetMatchType() *string {
 	if o == nil {
 		return nil
@@ -166,7 +166,7 @@ func (o *TargetGroupHttpHealthCheck) HasMatchType() bool {
 }
 
 // GetResponse returns the Response field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupHttpHealthCheck) GetResponse() *string {
 	if o == nil {
 		return nil
@@ -204,7 +204,7 @@ func (o *TargetGroupHttpHealthCheck) HasResponse() bool {
 }
 
 // GetRegex returns the Regex field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupHttpHealthCheck) GetRegex() *bool {
 	if o == nil {
 		return nil
@@ -242,7 +242,7 @@ func (o *TargetGroupHttpHealthCheck) HasRegex() bool {
 }
 
 // GetNegate returns the Negate field value
-// If the value is explicit nil, the zero value for bool will be returned
+// If the value is explicit nil, nil is returned
 func (o *TargetGroupHttpHealthCheck) GetNegate() *bool {
 	if o == nil {
 		return nil
@@ -284,21 +284,27 @@ func (o TargetGroupHttpHealthCheck) MarshalJSON() ([]byte, error) {
 	if o.Path != nil {
 		toSerialize["path"] = o.Path
 	}
+
 	if o.Method != nil {
 		toSerialize["method"] = o.Method
 	}
+
 	if o.MatchType != nil {
 		toSerialize["matchType"] = o.MatchType
 	}
+
 	if o.Response != nil {
 		toSerialize["response"] = o.Response
 	}
+
 	if o.Regex != nil {
 		toSerialize["regex"] = o.Regex
 	}
+
 	if o.Negate != nil {
 		toSerialize["negate"] = o.Negate
 	}
+
 	return json.Marshal(toSerialize)
 }
 

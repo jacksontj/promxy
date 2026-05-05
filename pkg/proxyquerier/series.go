@@ -17,7 +17,7 @@ func (s *Series) Labels() labels.Labels {
 	return s.It.Labels()
 }
 
-// Iterator returns an iterator over the series
-func (s *Series) Iterator() chunkenc.Iterator {
+// Iterator returns an iterator over the series.
+func (s *Series) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
 	return s.It
 }

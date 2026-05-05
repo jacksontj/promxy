@@ -91,7 +91,7 @@ func parseConfigFile(tlsConfigFile string) (*tls.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	tlsStruct := &web.TLSStruct{
+	tlsStruct := &web.TLSConfig{
 		MinVersion:               tls.VersionTLS12,
 		MaxVersion:               tls.VersionTLS13,
 		PreferServerCipherSuites: true,

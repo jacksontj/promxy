@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 import (
@@ -67,18 +70,77 @@ func (n *Namespaces) Delete(namespace string, q *WriteOptions) (*WriteMeta, erro
 
 // Namespace is used to serialize a namespace.
 type Namespace struct {
-	Name         string
-	Description  string
-	Quota        string
-	Capabilities *NamespaceCapabilities `hcl:"capabilities,block"`
-	Meta         map[string]string
-	CreateIndex  uint64
-	ModifyIndex  uint64
+	Name                  string
+	Description           string
+	Quota                 string
+	Capabilities          *NamespaceCapabilities          `hcl:"capabilities,block"`
+	NodePoolConfiguration *NamespaceNodePoolConfiguration `hcl:"node_pool_config,block"`
+	VaultConfiguration    *NamespaceVaultConfiguration    `hcl:"vault,block"`
+	ConsulConfiguration   *NamespaceConsulConfiguration   `hcl:"consul,block"`
+	Meta                  map[string]string
+	CreateIndex           uint64
+	ModifyIndex           uint64
 }
 
+// NamespaceCapabilities represents a set of capabilities allowed for this
+// namespace, to be checked at job submission time.
 type NamespaceCapabilities struct {
-	EnabledTaskDrivers  []string `hcl:"enabled_task_drivers"`
-	DisabledTaskDrivers []string `hcl:"disabled_task_drivers"`
+	EnabledTaskDrivers   []string `hcl:"enabled_task_drivers"`
+	DisabledTaskDrivers  []string `hcl:"disabled_task_drivers"`
+	EnabledNetworkModes  []string `hcl:"enabled_network_modes"`
+	DisabledNetworkModes []string `hcl:"disabled_network_modes"`
+}
+
+// NamespaceNodePoolConfiguration stores configuration about node pools for a
+// namespace.
+type NamespaceNodePoolConfiguration struct {
+	Default string
+	Allowed []string
+	Denied  []string
+}
+
+// NamespaceVaultConfiguration stores configuration about permissions to Vault
+// clusters for a namespace, for use with Nomad Enterprise.
+type NamespaceVaultConfiguration struct {
+	// Default is the Vault cluster used by jobs in this namespace that don't
+	// specify a cluster of their own.
+	Default string
+
+	// Allowed specifies the Vault clusters that are allowed to be used by jobs
+	// in this namespace. By default, all clusters are allowed. If an empty list
+	// is provided only the namespace's default cluster is allowed. This field
+	// supports wildcard globbing through the use of `*` for multi-character
+	// matching. This field cannot be used with Denied.
+	Allowed []string
+
+	// Denied specifies the Vault clusters that are not allowed to be used by
+	// jobs in this namespace. This field supports wildcard globbing through the
+	// use of `*` for multi-character matching. If specified, any cluster is
+	// allowed to be used, except for those that match any of these patterns.
+	// This field cannot be used with Allowed.
+	Denied []string
+}
+
+// NamespaceConsulConfiguration stores configuration about permissions to Consul
+// clusters for a namespace, for use with Nomad Enterprise.
+type NamespaceConsulConfiguration struct {
+	// Default is the Consul cluster used by jobs in this namespace that don't
+	// specify a cluster of their own.
+	Default string
+
+	// Allowed specifies the Consul clusters that are allowed to be used by jobs
+	// in this namespace. By default, all clusters are allowed. If an empty list
+	// is provided only the namespace's default cluster is allowed. This field
+	// supports wildcard globbing through the use of `*` for multi-character
+	// matching. This field cannot be used with Denied.
+	Allowed []string
+
+	// Denied specifies the Consul clusters that are not allowed to be used by
+	// jobs in this namespace. This field supports wildcard globbing through the
+	// use of `*` for multi-character matching. If specified, any cluster is
+	// allowed to be used, except for those that match any of these patterns.
+	// This field cannot be used with Allowed.
+	Denied []string
 }
 
 // NamespaceIndexSort is a wrapper to sort Namespaces by CreateIndex. We
@@ -95,4 +157,13 @@ func (n NamespaceIndexSort) Less(i, j int) bool {
 
 func (n NamespaceIndexSort) Swap(i, j int) {
 	n[i], n[j] = n[j], n[i]
+}
+
+// NamespacedID is used for things that are unique only per-namespace,
+// such as jobs.
+type NamespacedID struct {
+	// Namespace is the Name of the Namespace
+	Namespace string
+	// ID is the ID of the namespaced object (e.g. Job ID)
+	ID string
 }

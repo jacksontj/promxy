@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,11 +16,11 @@ import (
 
 // KubernetesCluster struct for KubernetesCluster
 type KubernetesCluster struct {
-	// The resource's unique identifier.
+	// The resource unique identifier.
 	Id *string `json:"id,omitempty"`
-	// The type of object.
+	// The object type.
 	Type *string `json:"type,omitempty"`
-	// URL to the object representation (absolute path).
+	// The URL to the object representation (absolute path).
 	Href       *string                      `json:"href,omitempty"`
 	Metadata   *DatacenterElementMetadata   `json:"metadata,omitempty"`
 	Properties *KubernetesClusterProperties `json:"properties"`
@@ -48,7 +48,7 @@ func NewKubernetesClusterWithDefaults() *KubernetesCluster {
 }
 
 // GetId returns the Id field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesCluster) GetId() *string {
 	if o == nil {
 		return nil
@@ -86,7 +86,7 @@ func (o *KubernetesCluster) HasId() bool {
 }
 
 // GetType returns the Type field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesCluster) GetType() *string {
 	if o == nil {
 		return nil
@@ -124,7 +124,7 @@ func (o *KubernetesCluster) HasType() bool {
 }
 
 // GetHref returns the Href field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesCluster) GetHref() *string {
 	if o == nil {
 		return nil
@@ -162,7 +162,7 @@ func (o *KubernetesCluster) HasHref() bool {
 }
 
 // GetMetadata returns the Metadata field value
-// If the value is explicit nil, the zero value for DatacenterElementMetadata will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesCluster) GetMetadata() *DatacenterElementMetadata {
 	if o == nil {
 		return nil
@@ -200,7 +200,7 @@ func (o *KubernetesCluster) HasMetadata() bool {
 }
 
 // GetProperties returns the Properties field value
-// If the value is explicit nil, the zero value for KubernetesClusterProperties will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesCluster) GetProperties() *KubernetesClusterProperties {
 	if o == nil {
 		return nil
@@ -238,7 +238,7 @@ func (o *KubernetesCluster) HasProperties() bool {
 }
 
 // GetEntities returns the Entities field value
-// If the value is explicit nil, the zero value for KubernetesClusterEntities will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesCluster) GetEntities() *KubernetesClusterEntities {
 	if o == nil {
 		return nil
@@ -280,21 +280,27 @@ func (o KubernetesCluster) MarshalJSON() ([]byte, error) {
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
+
 	if o.Type != nil {
 		toSerialize["type"] = o.Type
 	}
+
 	if o.Href != nil {
 		toSerialize["href"] = o.Href
 	}
+
 	if o.Metadata != nil {
 		toSerialize["metadata"] = o.Metadata
 	}
+
 	if o.Properties != nil {
 		toSerialize["properties"] = o.Properties
 	}
+
 	if o.Entities != nil {
 		toSerialize["entities"] = o.Entities
 	}
+
 	return json.Marshal(toSerialize)
 }
 

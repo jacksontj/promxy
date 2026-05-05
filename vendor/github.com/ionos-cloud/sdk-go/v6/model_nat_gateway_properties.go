@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -46,7 +46,7 @@ func NewNatGatewayPropertiesWithDefaults() *NatGatewayProperties {
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NatGatewayProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -84,7 +84,7 @@ func (o *NatGatewayProperties) HasName() bool {
 }
 
 // GetPublicIps returns the PublicIps field value
-// If the value is explicit nil, the zero value for []string will be returned
+// If the value is explicit nil, nil is returned
 func (o *NatGatewayProperties) GetPublicIps() *[]string {
 	if o == nil {
 		return nil
@@ -122,7 +122,7 @@ func (o *NatGatewayProperties) HasPublicIps() bool {
 }
 
 // GetLans returns the Lans field value
-// If the value is explicit nil, the zero value for []NatGatewayLanProperties will be returned
+// If the value is explicit nil, nil is returned
 func (o *NatGatewayProperties) GetLans() *[]NatGatewayLanProperties {
 	if o == nil {
 		return nil
@@ -164,12 +164,15 @@ func (o NatGatewayProperties) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.PublicIps != nil {
 		toSerialize["publicIps"] = o.PublicIps
 	}
+
 	if o.Lans != nil {
 		toSerialize["lans"] = o.Lans
 	}
+
 	return json.Marshal(toSerialize)
 }
 

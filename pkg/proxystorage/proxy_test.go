@@ -114,7 +114,7 @@ func TestNodeReplacer(t *testing.T) {
 		// count_values is both a query downstream *AND* a tree replacement
 		{
 			in:  "count_values(\"label\", foo)",
-			out: "sum by(label) ()",
+			out: "sum by (label) ()",
 			queries: []string{
 				"count_values(\"label\", foo) @ 10000",
 			},

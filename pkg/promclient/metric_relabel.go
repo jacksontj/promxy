@@ -197,17 +197,20 @@ func (c *MetricsRelabelClient) LabelNames(ctx context.Context, matchers []string
 	}
 
 	// Now that we have the result; we need to run the relabel on the lbls
-	lbls := make(labels.Labels, len(labelNames))
-	for i, lName := range labelNames {
-		lbls[i] = labels.Label{Name: lName, Value: "placeholder"}
+	lb := labels.NewScratchBuilder(len(labelNames))
+	for _, lName := range labelNames {
+		lb.Add(lName, "placeholder")
+	}
+	lb.Sort()
+	lbls, keep := relabel.Process(lb.Labels(), c.RelabelConfigs...)
+	if !keep {
+		return nil, w, err
 	}
 
-	lbls = relabel.Process(lbls, c.RelabelConfigs...)
-
-	newLabelNames := make([]string, len(lbls))
-	for i, lbl := range lbls {
-		newLabelNames[i] = lbl.Name
-	}
+	newLabelNames := make([]string, 0, lbls.Len())
+	lbls.Range(func(lbl labels.Label) {
+		newLabelNames = append(newLabelNames, lbl.Name)
+	})
 
 	return newLabelNames, w, err
 }
@@ -299,16 +302,20 @@ func (c *MetricsRelabelClient) Series(ctx context.Context, matchers []string, st
 
 	labelsets, w, err := c.API.Series(ctx, newMatchers, startTime, endTime)
 	for i, labelset := range labelsets {
-		lbls := make(labels.Labels, 0, len(labelset))
+		lb := labels.NewScratchBuilder(len(labelset))
 		for k, v := range labelset {
-			lbls = append(lbls, labels.Label{Name: string(k), Value: string(v)})
+			lb.Add(string(k), string(v))
 		}
-
-		lbls = relabel.Process(lbls, c.RelabelConfigs...)
-		newLabelset := make(model.LabelSet, len(lbls))
-		for _, lbl := range lbls {
+		lb.Sort()
+		lbls, keep := relabel.Process(lb.Labels(), c.RelabelConfigs...)
+		if !keep {
+			labelsets[i] = nil
+			continue
+		}
+		newLabelset := make(model.LabelSet, lbls.Len())
+		lbls.Range(func(lbl labels.Label) {
 			newLabelset[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
-		}
+		})
 		labelsets[i] = newLabelset
 	}
 	return labelsets, w, err
@@ -342,11 +349,15 @@ func (c *MetricsRelabelClient) replaceValueLabels(a model.Value) error {
 				labelStrings = append(labelStrings, string(k), string(v))
 			}
 
-			lbls := relabel.Process(labels.FromStrings(labelStrings...), c.RelabelConfigs...)
-			item.Metric = make(map[model.LabelName]model.LabelValue)
-			for _, lbl := range lbls {
-				item.Metric[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
+			lbls, keep := relabel.Process(labels.FromStrings(labelStrings...), c.RelabelConfigs...)
+			if !keep {
+				item.Metric = make(map[model.LabelName]model.LabelValue)
+				continue
 			}
+			item.Metric = make(map[model.LabelName]model.LabelValue)
+			lbls.Range(func(lbl labels.Label) {
+				item.Metric[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
+			})
 		}
 
 	case model.Matrix:
@@ -356,10 +367,14 @@ func (c *MetricsRelabelClient) replaceValueLabels(a model.Value) error {
 				labelStrings = append(labelStrings, string(k), string(v))
 			}
 
+			lbls, keep := relabel.Process(labels.FromStrings(labelStrings...), c.RelabelConfigs...)
 			item.Metric = make(map[model.LabelName]model.LabelValue)
-			for _, lbl := range relabel.Process(labels.FromStrings(labelStrings...), c.RelabelConfigs...) {
-				item.Metric[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
+			if !keep {
+				continue
 			}
+			lbls.Range(func(lbl labels.Label) {
+				item.Metric[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
+			})
 		}
 	}
 

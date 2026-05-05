@@ -42,7 +42,7 @@ func TestExternalLabelsQuerierSelect(t *testing.T) {
 		externalLabels: model.LabelSet{"region": "europe"},
 	}
 	want := newSeriesSetFilter(mockSeriesSet{}, q.externalLabels)
-	have := q.Select(false, nil, matchers...)
+	have := q.Select(context.Background(), false, nil, matchers...)
 	if err := have.Err(); err != nil {
 		t.Error(err)
 	}
@@ -164,7 +164,7 @@ func (m mockSeriesSet) Err() error {
 	return nil
 }
 
-func (mockQuerier) Select(bool, *storage.SelectHints, ...*labels.Matcher) storage.SeriesSet {
+func (mockQuerier) Select(_ context.Context, _ bool, _ *storage.SelectHints, _ ...*labels.Matcher) storage.SeriesSet {
 	return mockSeriesSet{}
 }
 
@@ -197,15 +197,16 @@ func TestPreferLocalStorageFilter(t *testing.T) {
 		},
 	}
 
+	ctxBg := context.Background()
 	for i, test := range tests {
 		f := PreferLocalStorageFilter(
-			storage.QueryableFunc(func(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
-				return mockQuerier{ctx: ctx, mint: mint, maxt: maxt}, nil
+			storage.QueryableFunc(func(mint, maxt int64) (storage.Querier, error) {
+				return mockQuerier{ctx: ctxBg, mint: mint, maxt: maxt}, nil
 			}),
 			func() (int64, error) { return test.localStartTime, nil },
 		)
 
-		q, err := f.Querier(ctx, test.mint, test.maxt)
+		q, err := f.Querier(test.mint, test.maxt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -214,13 +215,14 @@ func TestPreferLocalStorageFilter(t *testing.T) {
 			t.Errorf("%d. expected quierer %+v, got %+v", i, test.querier, q)
 		}
 	}
+	_ = ctx
 }
 
 func TestRequiredMatchersFilter(t *testing.T) {
 	ctx := context.Background()
 
 	f := RequiredMatchersFilter(
-		storage.QueryableFunc(func(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+		storage.QueryableFunc(func(mint, maxt int64) (storage.Querier, error) {
 			return mockQuerier{ctx: ctx, mint: mint, maxt: maxt}, nil
 		}),
 		[]*labels.Matcher{mustNewLabelMatcher(labels.MatchEqual, "special", "label")},
@@ -230,7 +232,7 @@ func TestRequiredMatchersFilter(t *testing.T) {
 		Querier:          mockQuerier{ctx: ctx, mint: 0, maxt: 50},
 		requiredMatchers: []*labels.Matcher{mustNewLabelMatcher(labels.MatchEqual, "special", "label")},
 	}
-	have, err := f.Querier(ctx, 0, 50)
+	have, err := f.Querier(0, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +322,7 @@ func TestRequiredLabelsQuerierSelect(t *testing.T) {
 			requiredMatchers: test.requiredMatchers,
 		}
 
-		have := q.Select(false, nil, test.matchers...)
+		have := q.Select(context.Background(), false, nil, test.matchers...)
 		if err := have.Err(); err != nil {
 			t.Error(err)
 		}

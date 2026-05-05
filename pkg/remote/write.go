@@ -14,20 +14,23 @@
 package remote
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/exemplar"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/storage"
 )
 
 // Appender implements scrape.Appendable.
-func (s *Storage) Appender() (storage.Appender, error) {
-	return s, nil
+func (s *Storage) Appender(_ context.Context) storage.Appender {
+	return s
 }
 
-// Add implements storage.Appender.
+// Append implements storage.Appender.
 func (s *Storage) Append(ref storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
@@ -43,9 +46,33 @@ func (s *Storage) Append(ref storage.SeriesRef, l labels.Labels, t int64, v floa
 	return 0, nil
 }
 
-func (s *Storage) AppendExemplar(ref storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
+func (s *Storage) AppendExemplar(_ storage.SeriesRef, _ labels.Labels, _ exemplar.Exemplar) (storage.SeriesRef, error) {
 	return 0, fmt.Errorf("not supported")
 }
+
+// AppendHistogram is a stub: native histograms are not supported in promxy yet.
+// TODO: native histogram support — see follow-up.
+func (s *Storage) AppendHistogram(_ storage.SeriesRef, _ labels.Labels, _ int64, _ *histogram.Histogram, _ *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, fmt.Errorf("native histogram append not supported")
+}
+
+// AppendHistogramCTZeroSample is a stub.
+func (s *Storage) AppendHistogramCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64, _ *histogram.Histogram, _ *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, fmt.Errorf("native histogram CT-zero append not supported")
+}
+
+// AppendCTZeroSample is a stub: created-timestamp tracking is not modeled in promxy.
+func (s *Storage) AppendCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64) (storage.SeriesRef, error) {
+	return 0, nil
+}
+
+// UpdateMetadata is a stub: per-series metadata is not modeled in promxy's remote-write path.
+func (s *Storage) UpdateMetadata(_ storage.SeriesRef, _ labels.Labels, _ metadata.Metadata) (storage.SeriesRef, error) {
+	return 0, nil
+}
+
+// SetOptions is a stub.
+func (s *Storage) SetOptions(_ *storage.AppendOptions) {}
 
 // Commit implements storage.Appender.
 func (*Storage) Commit() error {

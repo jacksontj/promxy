@@ -117,8 +117,8 @@ type SwappableStorage struct {
 	s storage.Storage
 }
 
-func (p *SwappableStorage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
-	return p.s.Querier(ctx, mint, maxt)
+func (p *SwappableStorage) Querier(mint, maxt int64) (storage.Querier, error) {
+	return p.s.Querier(mint, maxt)
 }
 func (p *SwappableStorage) StartTime() (int64, error) {
 	return p.s.StartTime()
@@ -129,6 +129,6 @@ func (p *SwappableStorage) Appender(ctx context.Context) storage.Appender {
 func (p *SwappableStorage) Close() error {
 	return p.s.Close()
 }
-func (p *SwappableStorage) ChunkQuerier(ctx context.Context, mint, maxt int64) (storage.ChunkQuerier, error) {
-	return p.s.ChunkQuerier(ctx, mint, maxt)
+func (p *SwappableStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
+	return p.s.ChunkQuerier(mint, maxt)
 }

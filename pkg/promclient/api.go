@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/storage/remote"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 )
@@ -108,32 +109,53 @@ func (p *PromAPIRemoteRead) GetValue(ctx context.Context, start, end time.Time, 
 	if err != nil {
 		return nil, nil, err
 	}
-	result, err := p.ReadClient.Read(ctx, query)
+	ss, err := p.ReadClient.Read(ctx, query, false)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// convert result (timeseries) to SampleStream
-	matrix := make(model.Matrix, len(result.Timeseries))
-	for i, ts := range result.Timeseries {
-		metric := make(model.Metric)
-		for _, label := range ts.Labels {
-			metric[model.LabelName(label.Name)] = model.LabelValue(label.Value)
-		}
+	// Convert the SeriesSet to a model.Matrix.
+	matrix := make(model.Matrix, 0)
+	for ss.Next() {
+		s := ss.At()
 
-		samples := make([]model.SamplePair, len(ts.Samples))
-		for x, sample := range ts.Samples {
-			samples[x] = model.SamplePair{
-				Timestamp: model.Time(sample.Timestamp),
-				Value:     model.SampleValue(sample.Value),
+		metric := make(model.Metric)
+		s.Labels().Range(func(label labels.Label) {
+			metric[model.LabelName(label.Name)] = model.LabelValue(label.Value)
+		})
+
+		samples := []model.SamplePair{}
+		var histograms []model.SampleHistogramPair
+		it := s.Iterator(nil)
+		for vt := it.Next(); vt != chunkenc.ValNone; vt = it.Next() {
+			switch vt {
+			case chunkenc.ValFloat:
+				t, v := it.At()
+				samples = append(samples, model.SamplePair{
+					Timestamp: model.Time(t),
+					Value:     model.SampleValue(v),
+				})
+			case chunkenc.ValHistogram, chunkenc.ValFloatHistogram:
+				t, fh := it.AtFloatHistogram(nil)
+				histograms = append(histograms, model.SampleHistogramPair{
+					Timestamp: model.Time(t),
+					Histogram: floatHistogramToSampleHistogram(fh),
+				})
 			}
 		}
-
-		matrix[i] = &model.SampleStream{
-			Metric: metric,
-			Values: samples,
+		if err := it.Err(); err != nil {
+			return nil, nil, err
 		}
+
+		matrix = append(matrix, &model.SampleStream{
+			Metric:     metric,
+			Values:     samples,
+			Histograms: histograms,
+		})
 	}
 
+	if err := ss.Err(); err != nil {
+		return nil, nil, err
+	}
 	return matrix, nil, nil
 }

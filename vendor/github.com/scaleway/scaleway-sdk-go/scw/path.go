@@ -17,10 +17,8 @@ const (
 	defaultConfigFileName = "config.yaml"
 )
 
-var (
-	// ErrNoHomeDir errors when no user directory is found
-	ErrNoHomeDir = errors.New("user home directory not found")
-)
+// ErrNoHomeDir errors when no user directory is found
+var ErrNoHomeDir = errors.New("user home directory not found")
 
 // GetCacheDirectory returns the default cache directory.
 // Cache directory is based on the following priority order:
@@ -70,15 +68,6 @@ func getConfigV2FilePath() (string, bool) {
 	return filepath.Clean(filepath.Join(configDir, defaultConfigFileName)), true
 }
 
-// getConfigV1FilePath returns the path to the v1 config file
-func getConfigV1FilePath() (string, bool) {
-	path, err := os.UserHomeDir()
-	if err != nil {
-		return "", false
-	}
-	return filepath.Clean(filepath.Join(path, ".scwrc")), true
-}
-
 // GetScwConfigDir returns the path to scw config folder
 func GetScwConfigDir() (string, error) {
 	if xdgPath := os.Getenv(xdgConfigDirEnv); xdgPath != "" {
@@ -90,9 +79,4 @@ func GetScwConfigDir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(homeDir, ".config", "scw"), nil
-}
-
-func fileExist(name string) bool {
-	_, err := os.Stat(name)
-	return err == nil
 }

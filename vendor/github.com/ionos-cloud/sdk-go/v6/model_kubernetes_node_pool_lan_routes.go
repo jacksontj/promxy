@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -41,7 +41,7 @@ func NewKubernetesNodePoolLanRoutesWithDefaults() *KubernetesNodePoolLanRoutes {
 }
 
 // GetNetwork returns the Network field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolLanRoutes) GetNetwork() *string {
 	if o == nil {
 		return nil
@@ -79,7 +79,7 @@ func (o *KubernetesNodePoolLanRoutes) HasNetwork() bool {
 }
 
 // GetGatewayIp returns the GatewayIp field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *KubernetesNodePoolLanRoutes) GetGatewayIp() *string {
 	if o == nil {
 		return nil
@@ -121,9 +121,11 @@ func (o KubernetesNodePoolLanRoutes) MarshalJSON() ([]byte, error) {
 	if o.Network != nil {
 		toSerialize["network"] = o.Network
 	}
+
 	if o.GatewayIp != nil {
 		toSerialize["gatewayIp"] = o.GatewayIp
 	}
+
 	return json.Marshal(toSerialize)
 }
 

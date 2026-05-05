@@ -3,7 +3,6 @@ package linodego
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/linode/linodego/internal/parseabletime"
@@ -29,15 +28,16 @@ type RestoreInstanceOptions struct {
 
 // InstanceSnapshot represents a linode backup snapshot
 type InstanceSnapshot struct {
-	ID       int                     `json:"id"`
-	Label    string                  `json:"label"`
-	Status   InstanceSnapshotStatus  `json:"status"`
-	Type     string                  `json:"type"`
-	Created  *time.Time              `json:"-"`
-	Updated  *time.Time              `json:"-"`
-	Finished *time.Time              `json:"-"`
-	Configs  []string                `json:"configs"`
-	Disks    []*InstanceSnapshotDisk `json:"disks"`
+	ID        int                     `json:"id"`
+	Label     string                  `json:"label"`
+	Status    InstanceSnapshotStatus  `json:"status"`
+	Type      string                  `json:"type"`
+	Created   *time.Time              `json:"-"`
+	Updated   *time.Time              `json:"-"`
+	Finished  *time.Time              `json:"-"`
+	Configs   []string                `json:"configs"`
+	Disks     []*InstanceSnapshotDisk `json:"disks"`
+	Available bool                    `json:"available"`
 }
 
 // InstanceSnapshotDisk fields represent the source disk of a Snapshot
@@ -87,95 +87,39 @@ func (i *InstanceSnapshot) UnmarshalJSON(b []byte) error {
 
 // GetInstanceSnapshot gets the snapshot with the provided ID
 func (c *Client) GetInstanceSnapshot(ctx context.Context, linodeID int, snapshotID int) (*InstanceSnapshot, error) {
-	e, err := c.InstanceSnapshots.endpointWithParams(linodeID)
-	if err != nil {
-		return nil, err
-	}
-	e = fmt.Sprintf("%s/%d", e, snapshotID)
-	r, err := coupleAPIErrors(c.R(ctx).SetResult(&InstanceSnapshot{}).Get(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*InstanceSnapshot), nil
+	e := formatAPIPath("linode/instances/%d/backups/%d", linodeID, snapshotID)
+	return doGETRequest[InstanceSnapshot](ctx, c, e)
 }
 
 // CreateInstanceSnapshot Creates or Replaces the snapshot Backup of a Linode. If a previous snapshot exists for this Linode, it will be deleted.
 func (c *Client) CreateInstanceSnapshot(ctx context.Context, linodeID int, label string) (*InstanceSnapshot, error) {
-	o, err := json.Marshal(map[string]string{"label": label})
-	if err != nil {
-		return nil, err
-	}
-	body := string(o)
-	e, err := c.InstanceSnapshots.endpointWithParams(linodeID)
-	if err != nil {
-		return nil, err
-	}
+	opts := map[string]string{"label": label}
 
-	r, err := coupleAPIErrors(c.R(ctx).
-		SetBody(body).
-		SetResult(&InstanceSnapshot{}).
-		Post(e))
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Result().(*InstanceSnapshot), nil
+	e := formatAPIPath("linode/instances/%d/backups", linodeID)
+	return doPOSTRequest[InstanceSnapshot](ctx, c, e, opts)
 }
 
 // GetInstanceBackups gets the Instance's available Backups.
 // This is not called ListInstanceBackups because a single object is returned, matching the API response.
 func (c *Client) GetInstanceBackups(ctx context.Context, linodeID int) (*InstanceBackupsResponse, error) {
-	e, err := c.InstanceSnapshots.endpointWithParams(linodeID)
-	if err != nil {
-		return nil, err
-	}
-	r, err := coupleAPIErrors(c.R(ctx).
-		SetResult(&InstanceBackupsResponse{}).
-		Get(e))
-	if err != nil {
-		return nil, err
-	}
-	return r.Result().(*InstanceBackupsResponse), nil
+	e := formatAPIPath("linode/instances/%d/backups", linodeID)
+	return doGETRequest[InstanceBackupsResponse](ctx, c, e)
 }
 
 // EnableInstanceBackups Enables backups for the specified Linode.
 func (c *Client) EnableInstanceBackups(ctx context.Context, linodeID int) error {
-	e, err := c.InstanceSnapshots.endpointWithParams(linodeID)
-	if err != nil {
-		return err
-	}
-	e = fmt.Sprintf("%s/enable", e)
-
-	_, err = coupleAPIErrors(c.R(ctx).Post(e))
-	return err
+	e := formatAPIPath("linode/instances/%d/backups/enable", linodeID)
+	return doPOSTRequestNoRequestResponseBody(ctx, c, e)
 }
 
 // CancelInstanceBackups Cancels backups for the specified Linode.
 func (c *Client) CancelInstanceBackups(ctx context.Context, linodeID int) error {
-	e, err := c.InstanceSnapshots.endpointWithParams(linodeID)
-	if err != nil {
-		return err
-	}
-	e = fmt.Sprintf("%s/cancel", e)
-
-	_, err = coupleAPIErrors(c.R(ctx).Post(e))
-	return err
+	e := formatAPIPath("linode/instances/%d/backups/cancel", linodeID)
+	return doPOSTRequestNoRequestResponseBody(ctx, c, e)
 }
 
 // RestoreInstanceBackup Restores a Linode's Backup to the specified Linode.
 func (c *Client) RestoreInstanceBackup(ctx context.Context, linodeID int, backupID int, opts RestoreInstanceOptions) error {
-	o, err := json.Marshal(opts)
-	if err != nil {
-		return NewError(err)
-	}
-	body := string(o)
-	e, err := c.InstanceSnapshots.endpointWithParams(linodeID)
-	if err != nil {
-		return err
-	}
-	e = fmt.Sprintf("%s/%d/restore", e, backupID)
-
-	_, err = coupleAPIErrors(c.R(ctx).SetBody(body).Post(e))
-
-	return err
+	e := formatAPIPath("linode/instances/%d/backups/%d/restore", linodeID, backupID)
+	return doPOSTRequestNoResponseBody(ctx, c, e, opts)
 }

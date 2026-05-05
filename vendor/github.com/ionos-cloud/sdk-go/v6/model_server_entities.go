@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,9 +16,10 @@ import (
 
 // ServerEntities struct for ServerEntities
 type ServerEntities struct {
-	Cdroms  *Cdroms          `json:"cdroms,omitempty"`
-	Volumes *AttachedVolumes `json:"volumes,omitempty"`
-	Nics    *Nics            `json:"nics,omitempty"`
+	Cdroms         *Cdroms          `json:"cdroms,omitempty"`
+	Volumes        *AttachedVolumes `json:"volumes,omitempty"`
+	Nics           *Nics            `json:"nics,omitempty"`
+	Securitygroups *SecurityGroups  `json:"securitygroups,omitempty"`
 }
 
 // NewServerEntities instantiates a new ServerEntities object
@@ -40,7 +41,7 @@ func NewServerEntitiesWithDefaults() *ServerEntities {
 }
 
 // GetCdroms returns the Cdroms field value
-// If the value is explicit nil, the zero value for Cdroms will be returned
+// If the value is explicit nil, nil is returned
 func (o *ServerEntities) GetCdroms() *Cdroms {
 	if o == nil {
 		return nil
@@ -78,7 +79,7 @@ func (o *ServerEntities) HasCdroms() bool {
 }
 
 // GetVolumes returns the Volumes field value
-// If the value is explicit nil, the zero value for AttachedVolumes will be returned
+// If the value is explicit nil, nil is returned
 func (o *ServerEntities) GetVolumes() *AttachedVolumes {
 	if o == nil {
 		return nil
@@ -116,7 +117,7 @@ func (o *ServerEntities) HasVolumes() bool {
 }
 
 // GetNics returns the Nics field value
-// If the value is explicit nil, the zero value for Nics will be returned
+// If the value is explicit nil, nil is returned
 func (o *ServerEntities) GetNics() *Nics {
 	if o == nil {
 		return nil
@@ -153,17 +154,62 @@ func (o *ServerEntities) HasNics() bool {
 	return false
 }
 
+// GetSecuritygroups returns the Securitygroups field value
+// If the value is explicit nil, nil is returned
+func (o *ServerEntities) GetSecuritygroups() *SecurityGroups {
+	if o == nil {
+		return nil
+	}
+
+	return o.Securitygroups
+
+}
+
+// GetSecuritygroupsOk returns a tuple with the Securitygroups field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *ServerEntities) GetSecuritygroupsOk() (*SecurityGroups, bool) {
+	if o == nil {
+		return nil, false
+	}
+
+	return o.Securitygroups, true
+}
+
+// SetSecuritygroups sets field value
+func (o *ServerEntities) SetSecuritygroups(v SecurityGroups) {
+
+	o.Securitygroups = &v
+
+}
+
+// HasSecuritygroups returns a boolean if a field has been set.
+func (o *ServerEntities) HasSecuritygroups() bool {
+	if o != nil && o.Securitygroups != nil {
+		return true
+	}
+
+	return false
+}
+
 func (o ServerEntities) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Cdroms != nil {
 		toSerialize["cdroms"] = o.Cdroms
 	}
+
 	if o.Volumes != nil {
 		toSerialize["volumes"] = o.Volumes
 	}
+
 	if o.Nics != nil {
 		toSerialize["nics"] = o.Nics
 	}
+
+	if o.Securitygroups != nil {
+		toSerialize["securitygroups"] = o.Securitygroups
+	}
+
 	return json.Marshal(toSerialize)
 }
 

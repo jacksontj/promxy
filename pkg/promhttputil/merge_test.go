@@ -1147,3 +1147,108 @@ func TestMergeValues(t *testing.T) {
 	}
 
 }
+
+// hist returns a tiny SampleHistogramPair whose Histogram value encodes the
+// supplied "tag" so test assertions can identify which side of the merge
+// produced it. Bucket structure is intentionally trivial — the merge logic
+// dedups by timestamp only.
+func hist(t int64, tag float64) model.SampleHistogramPair {
+	return model.SampleHistogramPair{
+		Timestamp: model.Time(t),
+		Histogram: &model.SampleHistogram{
+			Count: model.FloatString(tag),
+			Sum:   model.FloatString(tag),
+		},
+	}
+}
+
+func TestMergeValuesHistograms(t *testing.T) {
+	metric := model.Metric(model.LabelSet{model.MetricNameLabel: model.LabelValue("hosta")})
+
+	tests := []struct {
+		name         string
+		a, b, r      model.Matrix
+		antiAffinity model.Time
+	}{
+		{
+			name: "histograms only on side A",
+			a: model.Matrix{{
+				Metric:     metric,
+				Histograms: []model.SampleHistogramPair{hist(100, 1), hist(200, 1)},
+			}},
+			b: model.Matrix{{
+				Metric: metric,
+			}},
+			r: model.Matrix{{
+				Metric:     metric,
+				Histograms: []model.SampleHistogramPair{hist(100, 1), hist(200, 1)},
+			}},
+		},
+		{
+			name: "histogram fill across hole",
+			a: model.Matrix{{
+				Metric:     metric,
+				Histograms: []model.SampleHistogramPair{hist(100, 1), hist(500, 1)},
+			}},
+			b: model.Matrix{{
+				Metric:     metric,
+				Histograms: []model.SampleHistogramPair{hist(100, 2), hist(300, 2), hist(500, 2)},
+			}},
+			r: model.Matrix{{
+				Metric:     metric,
+				Histograms: []model.SampleHistogramPair{hist(100, 2), hist(300, 2), hist(500, 2)},
+			}},
+			antiAffinity: model.Time(20),
+		},
+		{
+			name: "anti-affinity drops near-duplicate histogram",
+			a: model.Matrix{{
+				Metric:     metric,
+				Histograms: []model.SampleHistogramPair{hist(100, 1)},
+			}},
+			b: model.Matrix{{
+				Metric:     metric,
+				Histograms: []model.SampleHistogramPair{hist(101, 2)},
+			}},
+			r: model.Matrix{{
+				Metric:     metric,
+				Histograms: []model.SampleHistogramPair{hist(100, 1)},
+			}},
+			antiAffinity: model.Time(2),
+		},
+		{
+			// Float and histogram sequences are deduped independently. Side
+			// `b` has more histograms, so the histogram merge picks it as
+			// the base; the float merge sees an equal count and keeps `a`.
+			name: "mixed float + histogram series merges both sequences",
+			a: model.Matrix{{
+				Metric:     metric,
+				Values:     []model.SamplePair{{Timestamp: 100, Value: 1}, {Timestamp: 200, Value: 1}},
+				Histograms: []model.SampleHistogramPair{hist(150, 1)},
+			}},
+			b: model.Matrix{{
+				Metric:     metric,
+				Values:     []model.SamplePair{{Timestamp: 100, Value: 2}, {Timestamp: 200, Value: 2}},
+				Histograms: []model.SampleHistogramPair{hist(150, 2), hist(250, 2)},
+			}},
+			r: model.Matrix{{
+				Metric:     metric,
+				Values:     []model.SamplePair{{Timestamp: 100, Value: 1}, {Timestamp: 200, Value: 1}},
+				Histograms: []model.SampleHistogramPair{hist(150, 2), hist(250, 2)},
+			}},
+			antiAffinity: model.Time(20),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := MergeValues(test.antiAffinity, test.a, test.b, false)
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
+			}
+			if !reflect.DeepEqual(result, test.r) {
+				t.Fatalf("mismatch in %s\nexpected=%v\nactual=%v", test.name, test.r, result)
+			}
+		})
+	}
+}

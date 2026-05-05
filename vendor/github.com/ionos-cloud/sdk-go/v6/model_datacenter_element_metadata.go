@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -31,7 +31,7 @@ type DatacenterElementMetadata struct {
 	LastModifiedBy *string `json:"lastModifiedBy,omitempty"`
 	// The unique ID of the user who last modified the resource.
 	LastModifiedByUserId *string `json:"lastModifiedByUserId,omitempty"`
-	// State of the resource. *AVAILABLE* There are no pending modification requests for this item; *BUSY* There is at least one modification request pending and all following requests will be queued; *INACTIVE* Resource has been de-provisioned; *DEPLOYING* Resource state DEPLOYING - relevant for Kubernetes cluster/nodepool; *ACTIVE* Resource state ACTIVE - relevant for Kubernetes cluster/nodepool; *FAILED* Resource state FAILED - relevant for Kubernetes cluster/nodepool; *SUSPENDED* Resource state SUSPENDED - relevant for Kubernetes cluster/nodepool; *FAILED_SUSPENDED* Resource state FAILED_SUSPENDED - relevant for Kubernetes cluster; *UPDATING* Resource state UPDATING - relevant for Kubernetes cluster/nodepool; *FAILED_UPDATING* Resource state FAILED_UPDATING - relevant for Kubernetes cluster/nodepool; *DESTROYING* Resource state DESTROYING - relevant for Kubernetes cluster; *FAILED_DESTROYING* Resource state FAILED_DESTROYING - relevant for Kubernetes cluster/nodepool; *TERMINATED* Resource state TERMINATED - relevant for Kubernetes cluster/nodepool.
+	// State of the resource. *AVAILABLE* There are no pending modification requests for this item; *BUSY* There is at least one modification request pending and all following requests will be queued; *INACTIVE* Resource has been de-provisioned; *DEPLOYING* Resource state DEPLOYING - relevant for Kubernetes cluster/nodepool; *ACTIVE* Resource state ACTIVE - relevant for Kubernetes cluster/nodepool; *FAILED* Resource state FAILED - relevant for Kubernetes cluster/nodepool; *SUSPENDED* Resource state SUSPENDED - relevant for Kubernetes cluster/nodepool; *FAILED_SUSPENDED* Resource state FAILED_SUSPENDED - relevant for Kubernetes cluster; *UPDATING* Resource state UPDATING - relevant for Kubernetes cluster/nodepool; *FAILED_UPDATING* Resource state FAILED_UPDATING - relevant for Kubernetes cluster/nodepool; *DESTROYING* Resource state DESTROYING - relevant for Kubernetes cluster; *FAILED_DESTROYING* Resource state FAILED_DESTROYING - relevant for Kubernetes cluster/nodepool; *TERMINATED* Resource state TERMINATED - relevant for Kubernetes cluster/nodepool; *HIBERNATING* Resource state HIBERNATING - relevant for Kubernetes cluster/nodepool; *FAILED_HIBERNATING* Resource state FAILED_HIBERNATING - relevant for Kubernetes cluster/nodepool; *MAINTENANCE* Resource state MAINTENANCE - relevant for Kubernetes cluster/nodepool; *FAILED_HIBERNATING* Resource state FAILED_HIBERNATING - relevant for Kubernetes cluster/nodepool.
 	State *string `json:"state,omitempty"`
 }
 
@@ -54,7 +54,7 @@ func NewDatacenterElementMetadataWithDefaults() *DatacenterElementMetadata {
 }
 
 // GetEtag returns the Etag field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterElementMetadata) GetEtag() *string {
 	if o == nil {
 		return nil
@@ -92,7 +92,7 @@ func (o *DatacenterElementMetadata) HasEtag() bool {
 }
 
 // GetCreatedDate returns the CreatedDate field value
-// If the value is explicit nil, the zero value for time.Time will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterElementMetadata) GetCreatedDate() *time.Time {
 	if o == nil {
 		return nil
@@ -137,7 +137,7 @@ func (o *DatacenterElementMetadata) HasCreatedDate() bool {
 }
 
 // GetCreatedBy returns the CreatedBy field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterElementMetadata) GetCreatedBy() *string {
 	if o == nil {
 		return nil
@@ -175,7 +175,7 @@ func (o *DatacenterElementMetadata) HasCreatedBy() bool {
 }
 
 // GetCreatedByUserId returns the CreatedByUserId field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterElementMetadata) GetCreatedByUserId() *string {
 	if o == nil {
 		return nil
@@ -213,7 +213,7 @@ func (o *DatacenterElementMetadata) HasCreatedByUserId() bool {
 }
 
 // GetLastModifiedDate returns the LastModifiedDate field value
-// If the value is explicit nil, the zero value for time.Time will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterElementMetadata) GetLastModifiedDate() *time.Time {
 	if o == nil {
 		return nil
@@ -258,7 +258,7 @@ func (o *DatacenterElementMetadata) HasLastModifiedDate() bool {
 }
 
 // GetLastModifiedBy returns the LastModifiedBy field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterElementMetadata) GetLastModifiedBy() *string {
 	if o == nil {
 		return nil
@@ -296,7 +296,7 @@ func (o *DatacenterElementMetadata) HasLastModifiedBy() bool {
 }
 
 // GetLastModifiedByUserId returns the LastModifiedByUserId field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterElementMetadata) GetLastModifiedByUserId() *string {
 	if o == nil {
 		return nil
@@ -334,7 +334,7 @@ func (o *DatacenterElementMetadata) HasLastModifiedByUserId() bool {
 }
 
 // GetState returns the State field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *DatacenterElementMetadata) GetState() *string {
 	if o == nil {
 		return nil
@@ -376,27 +376,35 @@ func (o DatacenterElementMetadata) MarshalJSON() ([]byte, error) {
 	if o.Etag != nil {
 		toSerialize["etag"] = o.Etag
 	}
+
 	if o.CreatedDate != nil {
 		toSerialize["createdDate"] = o.CreatedDate
 	}
+
 	if o.CreatedBy != nil {
 		toSerialize["createdBy"] = o.CreatedBy
 	}
+
 	if o.CreatedByUserId != nil {
 		toSerialize["createdByUserId"] = o.CreatedByUserId
 	}
+
 	if o.LastModifiedDate != nil {
 		toSerialize["lastModifiedDate"] = o.LastModifiedDate
 	}
+
 	if o.LastModifiedBy != nil {
 		toSerialize["lastModifiedBy"] = o.LastModifiedBy
 	}
+
 	if o.LastModifiedByUserId != nil {
 		toSerialize["lastModifiedByUserId"] = o.LastModifiedByUserId
 	}
+
 	if o.State != nil {
 		toSerialize["state"] = o.State
 	}
+
 	return json.Marshal(toSerialize)
 }
 

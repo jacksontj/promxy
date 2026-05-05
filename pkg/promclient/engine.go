@@ -11,17 +11,19 @@ import (
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
-// StorageWarningsToAPIWarnings simply converts `storage.Warnings` to `v1.Warnings`
-// which is simply converting a []error -> []string
+// AnnotationsToAPIWarnings converts annotations.Annotations to v1.Warnings.
 // TODO: move to a util package?
-func StorageWarningsToAPIWarnings(warnings storage.Warnings) v1.Warnings {
-	ret := make(v1.Warnings, len(warnings))
-	for i, w := range warnings {
-		ret[i] = w.Error()
+func AnnotationsToAPIWarnings(anns annotations.Annotations) v1.Warnings {
+	if len(anns) == 0 {
+		return nil
 	}
-
+	ret := make(v1.Warnings, 0, len(anns))
+	for _, w := range anns {
+		ret = append(ret, w.Error())
+	}
 	return ret
 }
 
@@ -32,21 +34,33 @@ func ParserValueToModelValue(value parser.Value) (model.Value, error) {
 		matrix := make(model.Matrix, v.Len())
 		for i, item := range v {
 			metric := make(model.Metric)
-			for _, label := range item.Metric {
+			item.Metric.Range(func(label labels.Label) {
 				metric[model.LabelName(label.Name)] = model.LabelValue(label.Value)
-			}
+			})
 
-			samples := make([]model.SamplePair, len(item.Points))
-			for x, sample := range item.Points {
+			samples := make([]model.SamplePair, len(item.Floats))
+			for x, sample := range item.Floats {
 				samples[x] = model.SamplePair{
 					Timestamp: model.Time(sample.T),
-					Value:     model.SampleValue(sample.V),
+					Value:     model.SampleValue(sample.F),
+				}
+			}
+
+			var histograms []model.SampleHistogramPair
+			if len(item.Histograms) > 0 {
+				histograms = make([]model.SampleHistogramPair, len(item.Histograms))
+				for x, p := range item.Histograms {
+					histograms[x] = model.SampleHistogramPair{
+						Timestamp: model.Time(p.T),
+						Histogram: floatHistogramToSampleHistogram(p.H),
+					}
 				}
 			}
 
 			matrix[i] = &model.SampleStream{
-				Metric: metric,
-				Values: samples,
+				Metric:     metric,
+				Values:     samples,
+				Histograms: histograms,
 			}
 		}
 		return matrix, nil
@@ -86,14 +100,14 @@ func (a *EngineAPI) Query(ctx context.Context, query string, ts time.Time) (mode
 
 // QueryRange performs a query for the given range.
 func (a *EngineAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
-	engineQuery, err := a.e.NewRangeQuery(a.q, &promql.QueryOpts{false}, query, r.Start, r.End, r.Step)
+	engineQuery, err := a.e.NewRangeQuery(ctx, a.q, promql.NewPrometheusQueryOpts(false, 0), query, r.Start, r.End, r.Step)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	result := engineQuery.Exec(ctx)
 	if result.Err != nil {
-		return nil, StorageWarningsToAPIWarnings(result.Warnings), result.Err
+		return nil, AnnotationsToAPIWarnings(result.Warnings), result.Err
 	}
 
 	val, err := ParserValueToModelValue(result.Value)
@@ -101,7 +115,7 @@ func (a *EngineAPI) QueryRange(ctx context.Context, query string, r v1.Range) (m
 		return nil, nil, err
 	}
 
-	return val, StorageWarningsToAPIWarnings(result.Warnings), nil
+	return val, AnnotationsToAPIWarnings(result.Warnings), nil
 }
 
 // Series finds series by label matchers.

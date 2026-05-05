@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -39,7 +39,7 @@ func NewGroupEntitiesWithDefaults() *GroupEntities {
 }
 
 // GetUsers returns the Users field value
-// If the value is explicit nil, the zero value for GroupMembers will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupEntities) GetUsers() *GroupMembers {
 	if o == nil {
 		return nil
@@ -77,7 +77,7 @@ func (o *GroupEntities) HasUsers() bool {
 }
 
 // GetResources returns the Resources field value
-// If the value is explicit nil, the zero value for ResourceGroups will be returned
+// If the value is explicit nil, nil is returned
 func (o *GroupEntities) GetResources() *ResourceGroups {
 	if o == nil {
 		return nil
@@ -119,9 +119,11 @@ func (o GroupEntities) MarshalJSON() ([]byte, error) {
 	if o.Users != nil {
 		toSerialize["users"] = o.Users
 	}
+
 	if o.Resources != nil {
 		toSerialize["resources"] = o.Resources
 	}
+
 	return json.Marshal(toSerialize)
 }
 

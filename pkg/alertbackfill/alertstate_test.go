@@ -58,10 +58,8 @@ func TestGenerateAlertStateMatrix(t *testing.T) {
 				labels.MustNewMatcher(labels.MatchEqual, model.AlertNameLabel, "testalert"),
 				labels.MustNewMatcher(labels.MatchEqual, "replica", "a"),
 			},
-			alertLabels: labels.Labels{
-				labels.Label{"severity", "page"},
-			},
-			step: time.Minute,
+			alertLabels: labels.FromStrings("severity", "page"),
+			step:        time.Minute,
 			out: model.Matrix{
 				&model.SampleStream{
 					Metric: model.Metric{
@@ -137,10 +135,8 @@ func TestGenerateAlertStateMatrix(t *testing.T) {
 				labels.MustNewMatcher(labels.MatchEqual, "severity", "pageMORE"),
 				labels.MustNewMatcher(labels.MatchEqual, "version", "2.27.0"),
 			},
-			alertLabels: labels.Labels{
-				labels.Label{"severity", "pageMORE"},
-			},
-			step: time.Second * 5,
+			alertLabels: labels.FromStrings("severity", "pageMORE"),
+			step:        time.Second * 5,
 			out: model.Matrix{
 				&model.SampleStream{
 					Metric: model.Metric{

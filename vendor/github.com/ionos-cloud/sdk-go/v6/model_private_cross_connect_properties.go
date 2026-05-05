@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,13 +16,13 @@ import (
 
 // PrivateCrossConnectProperties struct for PrivateCrossConnectProperties
 type PrivateCrossConnectProperties struct {
-	// The name of the  resource.
+	// The name of the Cross Connect.
 	Name *string `json:"name,omitempty"`
-	// Human-readable description.
+	// Human-readable description of the Cross Connect.
 	Description *string `json:"description,omitempty"`
-	// Read-Only attribute. Lists LAN's joined to this private Cross-Connect.
+	// Read-Only attribute. Lists LAN's connected to this Cross Connect.
 	Peers *[]Peer `json:"peers,omitempty"`
-	// Read-Only attribute. Lists data centers that can be joined to this private Cross-Connect.
+	// Read-Only attribute. Lists data centers that can be connected to this Cross Connect. If the Cross Connect is not connected to any LANs it lists all VDCs the user has access to. If the Cross Connect is connected to at least 1 LAN it lists all VDCs the user has access to in the location of the connected LAN.
 	ConnectableDatacenters *[]ConnectableDatacenter `json:"connectableDatacenters,omitempty"`
 }
 
@@ -45,7 +45,7 @@ func NewPrivateCrossConnectPropertiesWithDefaults() *PrivateCrossConnectProperti
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *PrivateCrossConnectProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -83,7 +83,7 @@ func (o *PrivateCrossConnectProperties) HasName() bool {
 }
 
 // GetDescription returns the Description field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *PrivateCrossConnectProperties) GetDescription() *string {
 	if o == nil {
 		return nil
@@ -121,7 +121,7 @@ func (o *PrivateCrossConnectProperties) HasDescription() bool {
 }
 
 // GetPeers returns the Peers field value
-// If the value is explicit nil, the zero value for []Peer will be returned
+// If the value is explicit nil, nil is returned
 func (o *PrivateCrossConnectProperties) GetPeers() *[]Peer {
 	if o == nil {
 		return nil
@@ -159,7 +159,7 @@ func (o *PrivateCrossConnectProperties) HasPeers() bool {
 }
 
 // GetConnectableDatacenters returns the ConnectableDatacenters field value
-// If the value is explicit nil, the zero value for []ConnectableDatacenter will be returned
+// If the value is explicit nil, nil is returned
 func (o *PrivateCrossConnectProperties) GetConnectableDatacenters() *[]ConnectableDatacenter {
 	if o == nil {
 		return nil
@@ -201,15 +201,19 @@ func (o PrivateCrossConnectProperties) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.Description != nil {
 		toSerialize["description"] = o.Description
 	}
+
 	if o.Peers != nil {
 		toSerialize["peers"] = o.Peers
 	}
+
 	if o.ConnectableDatacenters != nil {
 		toSerialize["connectableDatacenters"] = o.ConnectableDatacenters
 	}
+
 	return json.Marshal(toSerialize)
 }
 

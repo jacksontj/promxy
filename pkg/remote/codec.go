@@ -23,10 +23,12 @@ import (
 	"github.com/golang/snappy"
 	"github.com/prometheus/common/model"
 
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
 // decodeReadLimit is the maximum size of a read request body in bytes.
@@ -152,30 +154,59 @@ func ToQueryResult(ss storage.SeriesSet, sampleLimit int) (*prompb.QueryResult, 
 	resp := &prompb.QueryResult{}
 	for ss.Next() {
 		series := ss.At()
-		iter := series.Iterator()
+		iter := series.Iterator(nil)
 		samples := []prompb.Sample{}
+		var histograms []prompb.Histogram
 
-		for iter.Next() {
-			numSamples++
-			if sampleLimit > 0 && numSamples > sampleLimit {
-				return nil, HTTPError{
-					msg:    fmt.Sprintf("exceeded sample limit (%d)", sampleLimit),
-					status: http.StatusBadRequest,
+	loop:
+		for {
+			vt := iter.Next()
+			switch vt {
+			case chunkenc.ValNone:
+				break loop
+			case chunkenc.ValFloat:
+				numSamples++
+				if sampleLimit > 0 && numSamples > sampleLimit {
+					return nil, HTTPError{
+						msg:    fmt.Sprintf("exceeded sample limit (%d)", sampleLimit),
+						status: http.StatusBadRequest,
+					}
 				}
+				ts, val := iter.At()
+				samples = append(samples, prompb.Sample{
+					Timestamp: ts,
+					Value:     val,
+				})
+			case chunkenc.ValHistogram:
+				numSamples++
+				if sampleLimit > 0 && numSamples > sampleLimit {
+					return nil, HTTPError{
+						msg:    fmt.Sprintf("exceeded sample limit (%d)", sampleLimit),
+						status: http.StatusBadRequest,
+					}
+				}
+				ts, h := iter.AtHistogram(nil)
+				histograms = append(histograms, prompb.FromIntHistogram(ts, h))
+			case chunkenc.ValFloatHistogram:
+				numSamples++
+				if sampleLimit > 0 && numSamples > sampleLimit {
+					return nil, HTTPError{
+						msg:    fmt.Sprintf("exceeded sample limit (%d)", sampleLimit),
+						status: http.StatusBadRequest,
+					}
+				}
+				ts, fh := iter.AtFloatHistogram(nil)
+				histograms = append(histograms, prompb.FromFloatHistogram(ts, fh))
 			}
-			ts, val := iter.At()
-			samples = append(samples, prompb.Sample{
-				Timestamp: ts,
-				Value:     val,
-			})
 		}
 		if err := iter.Err(); err != nil {
 			return nil, err
 		}
 
 		resp.Timeseries = append(resp.Timeseries, &prompb.TimeSeries{
-			Labels:  labelsToLabelsProto(series.Labels()),
-			Samples: samples,
+			Labels:     labelsToLabelsProto(series.Labels()),
+			Samples:    samples,
+			Histograms: histograms,
 		})
 	}
 	if err := ss.Err(); err != nil {
@@ -194,8 +225,9 @@ func FromQueryResult(sortSeries bool, res *prompb.QueryResult) storage.SeriesSet
 		}
 
 		series = append(series, &concreteSeries{
-			labels:  labels,
-			samples: ts.Samples,
+			labels:     labels,
+			samples:    ts.Samples,
+			histograms: ts.Histograms,
 		})
 	}
 	if sortSeries {
@@ -229,7 +261,7 @@ func (e errSeriesSet) Err() error {
 	return e.err
 }
 
-func (e errSeriesSet) Warnings() storage.Warnings { return nil }
+func (e errSeriesSet) Warnings() annotations.Annotations { return nil }
 
 // concreteSeriesSet implements storage.SeriesSet.
 type concreteSeriesSet struct {
@@ -250,74 +282,135 @@ func (c *concreteSeriesSet) Err() error {
 	return nil
 }
 
-func (c *concreteSeriesSet) Warnings() storage.Warnings { return nil }
+func (c *concreteSeriesSet) Warnings() annotations.Annotations { return nil }
 
 // concreteSeries implements storage.Series.
 type concreteSeries struct {
-	labels  labels.Labels
-	samples []prompb.Sample
+	labels     labels.Labels
+	samples    []prompb.Sample
+	histograms []prompb.Histogram
 }
 
 func (c *concreteSeries) Labels() labels.Labels {
-	return labels.New(c.labels...)
+	return c.labels.Copy()
 }
 
-func (c *concreteSeries) Iterator() chunkenc.Iterator {
+func (c *concreteSeries) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
 	return newConcreteSeriersIterator(c)
 }
 
-// concreteSeriesIterator implements storage.SeriesIterator.
+// concreteSeriesIterator implements chunkenc.Iterator over the parallel
+// float and histogram sample sequences carried in a concreteSeries. Both
+// sequences are timestamp-ordered; Next() advances whichever has the smaller
+// next-timestamp.
 type concreteSeriesIterator struct {
-	cur    int
-	series *concreteSeries
+	floatCur int
+	histCur  int
+	last     chunkenc.ValueType
+	series   *concreteSeries
 }
 
 func newConcreteSeriersIterator(series *concreteSeries) chunkenc.Iterator {
 	return &concreteSeriesIterator{
-		cur:    -1,
-		series: series,
+		floatCur: -1,
+		histCur:  -1,
+		series:   series,
 	}
 }
 
-// Seek implements storage.SeriesIterator.
-func (c *concreteSeriesIterator) Seek(t int64) bool {
-	c.cur = sort.Search(len(c.series.samples), func(n int) bool {
+// Seek implements chunkenc.Iterator.
+func (c *concreteSeriesIterator) Seek(t int64) chunkenc.ValueType {
+	c.floatCur = sort.Search(len(c.series.samples), func(n int) bool {
 		return c.series.samples[n].Timestamp >= t
-	})
-	return c.cur < len(c.series.samples)
+	}) - 1
+	c.histCur = sort.Search(len(c.series.histograms), func(n int) bool {
+		return c.series.histograms[n].Timestamp >= t
+	}) - 1
+	return c.Next()
 }
 
-// At implements storage.SeriesIterator.
+// At implements chunkenc.Iterator.
 func (c *concreteSeriesIterator) At() (t int64, v float64) {
-	s := c.series.samples[c.cur]
+	s := c.series.samples[c.floatCur]
 	return s.Timestamp, s.Value
 }
 
-// Next implements storage.SeriesIterator.
-func (c *concreteSeriesIterator) Next() bool {
-	c.cur++
-	return c.cur < len(c.series.samples)
+// AtHistogram returns the current integer histogram. Only valid after Next/Seek
+// returned ValHistogram.
+func (c *concreteSeriesIterator) AtHistogram(_ *histogram.Histogram) (int64, *histogram.Histogram) {
+	h := c.series.histograms[c.histCur]
+	return h.Timestamp, h.ToIntHistogram()
 }
 
-// Err implements storage.SeriesIterator.
+// AtFloatHistogram returns the current histogram as a FloatHistogram. Valid
+// after Next/Seek returned either ValHistogram or ValFloatHistogram.
+func (c *concreteSeriesIterator) AtFloatHistogram(_ *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
+	h := c.series.histograms[c.histCur]
+	return h.Timestamp, h.ToFloatHistogram()
+}
+
+// AtT implements chunkenc.Iterator.
+func (c *concreteSeriesIterator) AtT() int64 {
+	if c.last == chunkenc.ValHistogram || c.last == chunkenc.ValFloatHistogram {
+		return c.series.histograms[c.histCur].Timestamp
+	}
+	return c.series.samples[c.floatCur].Timestamp
+}
+
+// Next implements chunkenc.Iterator.
+func (c *concreteSeriesIterator) Next() chunkenc.ValueType {
+	hasFloat := c.floatCur+1 < len(c.series.samples)
+	hasHist := c.histCur+1 < len(c.series.histograms)
+
+	switch {
+	case !hasFloat && !hasHist:
+		c.last = chunkenc.ValNone
+		return chunkenc.ValNone
+	case hasFloat && (!hasHist || c.series.samples[c.floatCur+1].Timestamp <= c.series.histograms[c.histCur+1].Timestamp):
+		c.floatCur++
+		c.last = chunkenc.ValFloat
+		return chunkenc.ValFloat
+	default:
+		c.histCur++
+		if c.series.histograms[c.histCur].IsFloatHistogram() {
+			c.last = chunkenc.ValFloatHistogram
+		} else {
+			c.last = chunkenc.ValHistogram
+		}
+		return c.last
+	}
+}
+
+// Err implements chunkenc.Iterator.
 func (c *concreteSeriesIterator) Err() error {
 	return nil
 }
 
-// validateLabelsAndMetricName validates the label names/values and metric names returned from remote read.
+// validateLabelsAndMetricName validates the label names/values and metric
+// names returned from remote read using the legacy (pre-UTF8) Prometheus
+// rules. We deliberately don't honour model.NameValidationScheme here:
+// promxy runs as a gateway across heterogeneous downstreams and we want
+// rejection to be predictable regardless of whichever validation scheme
+// happens to be globally configured at runtime.
 func validateLabelsAndMetricName(ls labels.Labels) error {
-	for _, l := range ls {
-		if l.Name == labels.MetricName && !model.IsValidMetricName(model.LabelValue(l.Value)) {
-			return fmt.Errorf("invalid metric name: %v", l.Value)
+	var validateErr error
+	ls.Range(func(l labels.Label) {
+		if validateErr != nil {
+			return
 		}
-		if !model.LabelName(l.Name).IsValid() {
-			return fmt.Errorf("invalid label name: %v", l.Name)
+		if l.Name == labels.MetricName && !model.IsValidLegacyMetricName(l.Value) {
+			validateErr = fmt.Errorf("invalid metric name: %v", l.Value)
+			return
+		}
+		if !model.LabelName(l.Name).IsValidLegacy() {
+			validateErr = fmt.Errorf("invalid label name: %v", l.Name)
+			return
 		}
 		if !model.LabelValue(l.Value).IsValid() {
-			return fmt.Errorf("invalid label value: %v", l.Value)
+			validateErr = fmt.Errorf("invalid label value: %v", l.Value)
 		}
-	}
-	return nil
+	})
+	return validateErr
 }
 
 func toLabelMatchers(matchers []*labels.Matcher) ([]*prompb.LabelMatcher, error) {
@@ -395,32 +488,29 @@ func LabelProtosToMetric(labelPairs []*prompb.Label) model.Metric {
 }
 
 func labelProtosToLabels(labelPairs []prompb.Label) labels.Labels {
-	result := make(labels.Labels, 0, len(labelPairs))
+	b := labels.NewScratchBuilder(len(labelPairs))
 	for _, l := range labelPairs {
-		result = append(result, labels.Label{
-			Name:  l.Name,
-			Value: l.Value,
-		})
+		b.Add(l.Name, l.Value)
 	}
-	sort.Sort(result)
-	return result
+	b.Sort()
+	return b.Labels()
 }
 
-func labelsToLabelsProto(labels labels.Labels) []prompb.Label {
-	result := make([]prompb.Label, 0, len(labels))
-	for _, l := range labels {
+func labelsToLabelsProto(ls labels.Labels) []prompb.Label {
+	result := make([]prompb.Label, 0, ls.Len())
+	ls.Range(func(l labels.Label) {
 		result = append(result, prompb.Label{
 			Name:  l.Name,
 			Value: l.Value,
 		})
-	}
+	})
 	return result
 }
 
 func labelsToMetric(ls labels.Labels) model.Metric {
-	metric := make(model.Metric, len(ls))
-	for _, l := range ls {
+	metric := make(model.Metric, ls.Len())
+	ls.Range(func(l labels.Label) {
 		metric[model.LabelName(l.Name)] = model.LabelValue(l.Value)
-	}
+	})
 	return metric
 }

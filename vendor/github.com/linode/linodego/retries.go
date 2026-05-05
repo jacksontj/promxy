@@ -1,17 +1,21 @@
 package linodego
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"golang.org/x/net/http2"
 )
 
 const (
 	retryAfterHeaderName      = "Retry-After"
 	maintenanceModeHeaderName = "X-Maintenance-Mode"
+
+	defaultRetryCount = 1000
 )
 
 // type RetryConditional func(r *resty.Response) (shouldRetry bool)
@@ -25,7 +29,7 @@ type RetryAfter resty.RetryAfterFunc
 // If the Retry-After header is not set, we fall back to value of SetPollDelay.
 func configureRetries(c *Client) {
 	c.resty.
-		SetRetryCount(1000).
+		SetRetryCount(defaultRetryCount).
 		AddRetryCondition(checkRetryConditionals(c)).
 		SetRetryAfter(respectRetryAfter)
 }
@@ -72,6 +76,16 @@ func serviceUnavailableRetryCondition(r *resty.Response, _ error) bool {
 
 func requestTimeoutRetryCondition(r *resty.Response, _ error) bool {
 	return r.StatusCode() == http.StatusRequestTimeout
+}
+
+func requestGOAWAYRetryCondition(_ *resty.Response, e error) bool {
+	return errors.As(e, &http2.GoAwayError{})
+}
+
+func requestNGINXRetryCondition(r *resty.Response, _ error) bool {
+	return r.StatusCode() == http.StatusBadRequest &&
+		r.Header().Get("Server") == "nginx" &&
+		r.Header().Get("Content-Type") == "text/html"
 }
 
 func respectRetryAfter(client *resty.Client, resp *resty.Response) (time.Duration, error) {

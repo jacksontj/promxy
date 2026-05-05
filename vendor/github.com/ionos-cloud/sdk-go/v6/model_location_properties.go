@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -16,13 +16,13 @@ import (
 
 // LocationProperties struct for LocationProperties
 type LocationProperties struct {
-	// The name of the  resource.
+	// The location name.
 	Name *string `json:"name,omitempty"`
-	// List of features supported by the location
+	// A list of available features in the location.
 	Features *[]string `json:"features,omitempty"`
-	// List of image aliases available for the location
+	// A list of image aliases available in the location.
 	ImageAliases *[]string `json:"imageAliases,omitempty"`
-	// Array of features and CPU families available in a location
+	// A list of available CPU types and related resources available in the location.
 	CpuArchitecture *[]CpuArchitectureProperties `json:"cpuArchitecture,omitempty"`
 }
 
@@ -45,7 +45,7 @@ func NewLocationPropertiesWithDefaults() *LocationProperties {
 }
 
 // GetName returns the Name field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *LocationProperties) GetName() *string {
 	if o == nil {
 		return nil
@@ -83,7 +83,7 @@ func (o *LocationProperties) HasName() bool {
 }
 
 // GetFeatures returns the Features field value
-// If the value is explicit nil, the zero value for []string will be returned
+// If the value is explicit nil, nil is returned
 func (o *LocationProperties) GetFeatures() *[]string {
 	if o == nil {
 		return nil
@@ -121,7 +121,7 @@ func (o *LocationProperties) HasFeatures() bool {
 }
 
 // GetImageAliases returns the ImageAliases field value
-// If the value is explicit nil, the zero value for []string will be returned
+// If the value is explicit nil, nil is returned
 func (o *LocationProperties) GetImageAliases() *[]string {
 	if o == nil {
 		return nil
@@ -159,7 +159,7 @@ func (o *LocationProperties) HasImageAliases() bool {
 }
 
 // GetCpuArchitecture returns the CpuArchitecture field value
-// If the value is explicit nil, the zero value for []CpuArchitectureProperties will be returned
+// If the value is explicit nil, nil is returned
 func (o *LocationProperties) GetCpuArchitecture() *[]CpuArchitectureProperties {
 	if o == nil {
 		return nil
@@ -201,15 +201,19 @@ func (o LocationProperties) MarshalJSON() ([]byte, error) {
 	if o.Name != nil {
 		toSerialize["name"] = o.Name
 	}
+
 	if o.Features != nil {
 		toSerialize["features"] = o.Features
 	}
+
 	if o.ImageAliases != nil {
 		toSerialize["imageAliases"] = o.ImageAliases
 	}
+
 	if o.CpuArchitecture != nil {
 		toSerialize["cpuArchitecture"] = o.CpuArchitecture
 	}
+
 	return json.Marshal(toSerialize)
 }
 

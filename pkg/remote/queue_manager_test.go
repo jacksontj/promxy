@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/prompb"
 )
 
@@ -76,10 +77,10 @@ func (c *TestStorageClient) Store(_ context.Context, req *prompb.WriteRequest) e
 	defer c.mtx.Unlock()
 	count := 0
 	for _, ts := range req.Timeseries {
-		labels := labelProtosToLabels(ts.Labels).String()
+		key := labelProtosToLabels(ts.Labels).String()
 		for _, sample := range ts.Samples {
 			count++
-			c.receivedSamples[labels] = append(c.receivedSamples[labels], sample)
+			c.receivedSamples[key] = append(c.receivedSamples[key], sample)
 		}
 	}
 	c.wg.Add(-count)
@@ -111,7 +112,7 @@ func TestSampleDelivery(t *testing.T) {
 
 	cfg := DefaultQueueConfig
 	cfg.MaxShards = 1
-	m := NewQueueManager(nil, cfg, nil, nil, c, defaultFlushDeadline)
+	m := NewQueueManager(nil, cfg, labels.EmptyLabels(), nil, c, defaultFlushDeadline)
 
 	// These should be received by the client.
 	for _, s := range samples[:len(samples)/2] {
@@ -147,7 +148,7 @@ func TestSampleDeliveryTimeout(t *testing.T) {
 	cfg := DefaultQueueConfig
 	cfg.MaxShards = 1
 	cfg.BatchSendDeadline = model.Duration(100 * time.Millisecond)
-	m := NewQueueManager(nil, cfg, nil, nil, c, defaultFlushDeadline)
+	m := NewQueueManager(nil, cfg, labels.EmptyLabels(), nil, c, defaultFlushDeadline)
 	m.Start()
 	defer m.Stop()
 
@@ -183,7 +184,7 @@ func TestSampleDeliveryOrder(t *testing.T) {
 
 	c := NewTestStorageClient()
 	c.expectSamples(samples)
-	m := NewQueueManager(nil, DefaultQueueConfig, nil, nil, c, defaultFlushDeadline)
+	m := NewQueueManager(nil, DefaultQueueConfig, labels.EmptyLabels(), nil, c, defaultFlushDeadline)
 
 	// These should be received by the client.
 	for _, s := range samples {
@@ -264,7 +265,7 @@ func TestSpawnNotMoreThanMaxConcurrentSendsGoroutines(t *testing.T) {
 	cfg := DefaultQueueConfig
 	cfg.MaxShards = 1
 	cfg.Capacity = n
-	m := NewQueueManager(nil, cfg, nil, nil, c, defaultFlushDeadline)
+	m := NewQueueManager(nil, cfg, labels.EmptyLabels(), nil, c, defaultFlushDeadline)
 
 	m.Start()
 
@@ -308,7 +309,7 @@ func TestSpawnNotMoreThanMaxConcurrentSendsGoroutines(t *testing.T) {
 func TestShutdown(t *testing.T) {
 	deadline := 10 * time.Second
 	c := NewTestBlockedStorageClient()
-	m := NewQueueManager(nil, DefaultQueueConfig, nil, nil, c, deadline)
+	m := NewQueueManager(nil, DefaultQueueConfig, labels.EmptyLabels(), nil, c, deadline)
 	for i := 0; i < DefaultQueueConfig.MaxSamplesPerSend; i++ {
 		m.Append(&model.Sample{
 			Metric: model.Metric{

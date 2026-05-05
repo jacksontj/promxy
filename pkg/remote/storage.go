@@ -14,11 +14,11 @@
 package remote
 
 import (
-	"context"
+	"io"
+	"log/slog"
 	"sync"
 	"time"
 
-	"github.com/go-kit/log"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
@@ -31,7 +31,7 @@ type startTimeCallback func() (int64, error)
 // Storage represents all the remote read and write endpoints.  It implements
 // storage.Storage.
 type Storage struct {
-	logger log.Logger
+	logger *slog.Logger
 	mtx    sync.RWMutex
 
 	// For writes
@@ -44,9 +44,9 @@ type Storage struct {
 }
 
 // NewStorage returns a remote.Storage.
-func NewStorage(l log.Logger, stCallback startTimeCallback, flushDeadline time.Duration) *Storage {
+func NewStorage(l *slog.Logger, stCallback startTimeCallback, flushDeadline time.Duration) *Storage {
 	if l == nil {
-		l = log.NewNopLogger()
+		l = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	return &Storage{
 		logger:                 l,
@@ -109,10 +109,10 @@ func (s *Storage) ApplyConfig(conf *config.Config) error {
 
 		q := QueryableClient(c)
 
-		ls := make(model.LabelSet, len(conf.GlobalConfig.ExternalLabels))
-		for _, label := range conf.GlobalConfig.ExternalLabels {
+		ls := make(model.LabelSet, conf.GlobalConfig.ExternalLabels.Len())
+		conf.GlobalConfig.ExternalLabels.Range(func(label labels.Label) {
 			ls[model.LabelName(label.Name)] = model.LabelValue(label.Value)
-		}
+		})
 
 		q = ExternalLabelsHandler(q, ls)
 		if len(rrConf.RequiredMatchers) > 0 {
@@ -134,14 +134,14 @@ func (s *Storage) StartTime() (int64, error) {
 
 // Querier returns a storage.MergeQuerier combining the remote client queriers
 // of each configured remote read endpoint.
-func (s *Storage) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+func (s *Storage) Querier(mint, maxt int64) (storage.Querier, error) {
 	s.mtx.Lock()
 	queryables := s.queryables
 	s.mtx.Unlock()
 
 	queriers := make([]storage.Querier, 0, len(queryables))
 	for _, queryable := range queryables {
-		q, err := queryable.Querier(ctx, mint, maxt)
+		q, err := queryable.Querier(mint, maxt)
 		if err != nil {
 			return nil, err
 		}

@@ -1,7 +1,7 @@
 /*
  * CLOUD API
  *
- * IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
+ *  IONOS Enterprise-grade Infrastructure as a Service (IaaS) solutions can be managed through the Cloud API, in addition or as an alternative to the \"Data Center Designer\" (DCD) browser-based tool.    Both methods employ consistent concepts and features, deliver similar power and flexibility, and can be used to perform a multitude of management tasks, including adding servers, volumes, configuring networks, and so on.
  *
  * API version: 6.0
  */
@@ -46,7 +46,7 @@ func NewIpConsumerWithDefaults() *IpConsumer {
 }
 
 // GetIp returns the Ip field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpConsumer) GetIp() *string {
 	if o == nil {
 		return nil
@@ -84,7 +84,7 @@ func (o *IpConsumer) HasIp() bool {
 }
 
 // GetMac returns the Mac field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpConsumer) GetMac() *string {
 	if o == nil {
 		return nil
@@ -122,7 +122,7 @@ func (o *IpConsumer) HasMac() bool {
 }
 
 // GetNicId returns the NicId field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpConsumer) GetNicId() *string {
 	if o == nil {
 		return nil
@@ -160,7 +160,7 @@ func (o *IpConsumer) HasNicId() bool {
 }
 
 // GetServerId returns the ServerId field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpConsumer) GetServerId() *string {
 	if o == nil {
 		return nil
@@ -198,7 +198,7 @@ func (o *IpConsumer) HasServerId() bool {
 }
 
 // GetServerName returns the ServerName field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpConsumer) GetServerName() *string {
 	if o == nil {
 		return nil
@@ -236,7 +236,7 @@ func (o *IpConsumer) HasServerName() bool {
 }
 
 // GetDatacenterId returns the DatacenterId field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpConsumer) GetDatacenterId() *string {
 	if o == nil {
 		return nil
@@ -274,7 +274,7 @@ func (o *IpConsumer) HasDatacenterId() bool {
 }
 
 // GetDatacenterName returns the DatacenterName field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpConsumer) GetDatacenterName() *string {
 	if o == nil {
 		return nil
@@ -312,7 +312,7 @@ func (o *IpConsumer) HasDatacenterName() bool {
 }
 
 // GetK8sNodePoolUuid returns the K8sNodePoolUuid field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpConsumer) GetK8sNodePoolUuid() *string {
 	if o == nil {
 		return nil
@@ -350,7 +350,7 @@ func (o *IpConsumer) HasK8sNodePoolUuid() bool {
 }
 
 // GetK8sClusterUuid returns the K8sClusterUuid field value
-// If the value is explicit nil, the zero value for string will be returned
+// If the value is explicit nil, nil is returned
 func (o *IpConsumer) GetK8sClusterUuid() *string {
 	if o == nil {
 		return nil
@@ -392,30 +392,39 @@ func (o IpConsumer) MarshalJSON() ([]byte, error) {
 	if o.Ip != nil {
 		toSerialize["ip"] = o.Ip
 	}
+
 	if o.Mac != nil {
 		toSerialize["mac"] = o.Mac
 	}
+
 	if o.NicId != nil {
 		toSerialize["nicId"] = o.NicId
 	}
+
 	if o.ServerId != nil {
 		toSerialize["serverId"] = o.ServerId
 	}
+
 	if o.ServerName != nil {
 		toSerialize["serverName"] = o.ServerName
 	}
+
 	if o.DatacenterId != nil {
 		toSerialize["datacenterId"] = o.DatacenterId
 	}
+
 	if o.DatacenterName != nil {
 		toSerialize["datacenterName"] = o.DatacenterName
 	}
+
 	if o.K8sNodePoolUuid != nil {
 		toSerialize["k8sNodePoolUuid"] = o.K8sNodePoolUuid
 	}
+
 	if o.K8sClusterUuid != nil {
 		toSerialize["k8sClusterUuid"] = o.K8sClusterUuid
 	}
+
 	return json.Marshal(toSerialize)
 }
 
