@@ -97,7 +97,8 @@ type cliOpts struct {
 	QueryMaxSamples     int           `long:"query.max-samples" description:"Maximum number of samples a single query can load into memory. Note that queries will fail if they would load more samples than this into memory, so this also limits the number of samples a query can return." default:"50000000"`
 	QueryLookbackDelta  time.Duration `long:"query.lookback-delta" description:"The maximum lookback duration for retrieving metrics during expression evaluations." default:"5m"`
 	QueryMaxConcurrency int           `long:"query.max-concurrency" default:"-1" description:"Maximum number of queries executed concurrently."`
-	LocalStoragePath    string        `long:"storage.tsdb.path" description:"Base path for metrics storage."`
+	StoragePath         string        `long:"storage.path" description:"Base directory for promxy's local working state (active query tracker file, remote_write WAL)."`
+	LegacyStoragePath   string        `long:"storage.tsdb.path" description:"DEPRECATED: use --storage.path instead. (Promxy has no TSDB; this flag is misnamed.)"`
 
 	RemoteReadMaxConcurrency int `long:"remote-read.max-concurrency" description:"Maximum number of concurrent remote read calls." default:"10"`
 
@@ -178,6 +179,14 @@ func main() {
 		os.Exit(0)
 	}
 
+	if opts.LegacyStoragePath != "" {
+		if opts.StoragePath != "" {
+			logrus.Fatalf("--storage.tsdb.path and --storage.path are mutually exclusive; --storage.tsdb.path is deprecated, use --storage.path")
+		}
+		logrus.Warnf("--storage.tsdb.path is deprecated; use --storage.path instead")
+		opts.StoragePath = opts.LegacyStoragePath
+	}
+
 	// CheckConfig simply will load the config, check for errors, and exit
 	if opts.CheckConfig {
 		if _, err := proxyconfig.ConfigFromFile(opts.ConfigFile); err != nil {
@@ -230,7 +239,7 @@ func main() {
 	// Create the proxy storage
 	var proxyStorage storage.Storage
 
-	ps, err := proxystorage.NewProxyStorage(noStepSubqueryInterval.Get)
+	ps, err := proxystorage.NewProxyStorage(noStepSubqueryInterval.Get, opts.StoragePath)
 	if err != nil {
 		logrus.Fatalf("Error creating proxy: %v", err)
 	}
@@ -258,10 +267,10 @@ func main() {
 	}
 
 	if opts.QueryMaxConcurrency != -1 {
-		if opts.LocalStoragePath == "" {
-			logrus.Fatalf("local storage path must be defined if you wish to enable max query concurrency limits")
+		if opts.StoragePath == "" {
+			logrus.Fatalf("--storage.path must be set if you wish to enable max query concurrency limits")
 		}
-		engineOpts.ActiveQueryTracker = promql.NewActiveQueryTracker(opts.LocalStoragePath, opts.QueryMaxConcurrency, logger.With("component", "activeQueryTracker"))
+		engineOpts.ActiveQueryTracker = promql.NewActiveQueryTracker(opts.StoragePath, opts.QueryMaxConcurrency, logger.With("component", "activeQueryTracker"))
 	}
 
 	engine := promql.NewEngine(engineOpts)
