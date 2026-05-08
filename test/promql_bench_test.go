@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -31,11 +32,11 @@ func BenchmarkEvaluations(b *testing.B) {
 		storageA := &SwappableStorage{}
 		storageB := &SwappableStorage{}
 
-		// Create API for the storage engine
-		srv, stopChan := startAPIForTest(storageA, ":8083")
-		srv2, stopChan2 := startAPIForTest(storageB, ":8084")
-		ps := getProxyStorage(rawDoublePSConfig)
-		psRemoteRead := getProxyStorage(rawDoublePSConfigRR)
+		// Create API for the storage engine on OS-assigned ports.
+		srv, addr, stopChan := startAPIForTest(storageA)
+		srv2, addr2, stopChan2 := startAPIForTest(storageB)
+		ps := getProxyStorage(fmt.Sprintf(rawDoublePSConfig, addr, addr2))
+		psRemoteRead := getProxyStorage(fmt.Sprintf(rawDoublePSConfigRR, addr, addr2))
 
 		b.Run(fn, func(b *testing.B) {
 			test, err := newTestFromFile(b, fn)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -35,6 +36,9 @@ func init() {
 	}()
 }
 
+// Config templates take the bound API address(es) as %s. We pick ports
+// dynamically per subtest so concurrent / back-to-back tests don't collide on
+// the same TCP port (TIME_WAIT, OS bind races).
 const rawPSConfig = `
 promxy:
   http_client:
@@ -43,7 +47,7 @@ promxy:
   server_groups:
     - static_configs:
         - targets:
-          - localhost:8083
+          - %s
 `
 
 const rawPSRemoteReadConfig = `
@@ -51,7 +55,7 @@ promxy:
   server_groups:
     - static_configs:
         - targets:
-          - localhost:8083
+          - %s
       remote_read: true
       http_client:
         tls_config:
@@ -63,12 +67,12 @@ promxy:
   server_groups:
     - static_configs:
         - targets:
-          - localhost:8083
+          - %s
       labels:
         az: a
     - static_configs:
         - targets:
-          - localhost:8085
+          - %s
       labels:
         az: b
 `
@@ -78,13 +82,13 @@ promxy:
   server_groups:
     - static_configs:
         - targets:
-          - localhost:8083
+          - %s
       labels:
         az: a
       remote_read: true
     - static_configs:
         - targets:
-          - localhost:8085
+          - %s
       labels:
         az: b
       remote_read: true
@@ -110,10 +114,19 @@ func getProxyStorage(cfg string) *proxystorage.ProxyStorage {
 	return ps
 }
 
-func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struct{}) {
-	// Start up API server for engine
+// startAPIForTest binds an OS-assigned localhost port and starts a v1 API
+// server on it. The listener is bound synchronously before the function
+// returns, so callers can issue requests immediately without racing the
+// server goroutine. Returns the bound "host:port" plus a Shutdown handle and
+// a stop channel that closes once Serve returns.
+func startAPIForTest(s storage.Storage) (*http.Server, string, chan struct{}) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		panic(fmt.Errorf("startAPIForTest: bind: %w", err))
+	}
+	addr := ln.Addr().String()
+
 	cfgFunc := func() config.Config { return config.DefaultConfig }
-	// Return 503 until ready (for us there isn't much startup, so this might not need to be implemented
 	readyFunc := func(f http.HandlerFunc) http.HandlerFunc { return f }
 
 	api := v1.NewAPI(
@@ -134,7 +147,7 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 		cfgFunc,
 		nil, // flagsMap
 		v1.GlobalURLOptions{
-			ListenAddress: listen,
+			ListenAddress: addr,
 			Host:          "localhost",
 			Scheme:        "http",
 		},
@@ -167,21 +180,17 @@ func startAPIForTest(s storage.Storage, listen string) (*http.Server, chan struc
 	apiRouter := route.New()
 	api.Register(apiRouter.WithPrefix("/api/v1"))
 
-	startChan := make(chan struct{})
 	stopChan := make(chan struct{})
-	srv := &http.Server{Addr: listen, Handler: apiRouter}
+	srv := &http.Server{Handler: apiRouter}
 
 	go func() {
 		defer close(stopChan)
-		close(startChan)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Println("Error listening to", listen, err)
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			fmt.Println("Error serving on", addr, err)
 		}
 	}()
 
-	<-startChan
-
-	return srv, stopChan
+	return srv, addr, stopChan
 }
 
 func TestUpstreamEvaluations(t *testing.T) {
@@ -268,10 +277,10 @@ func TestUpstreamEvaluations(t *testing.T) {
 					t.Skipf("error creating test for %s: %s (likely uses syntax not supported by promxy)", fn, err)
 				}
 
-				// Create API for the storage engine
-				srv, stopChan := startAPIForTest(test.Storage(), ":8083")
+				// Create API for the storage engine on an OS-assigned port.
+				srv, addr, stopChan := startAPIForTest(test.Storage())
 
-				ps := getProxyStorage(psConfig)
+				ps := getProxyStorage(fmt.Sprintf(psConfig, addr))
 				lStorage := &LayeredStorage{ps, test.Storage()}
 				// Replace the test storage with the promxy one
 				test.SetStorage(lStorage)
@@ -313,11 +322,11 @@ func TestEvaluations(t *testing.T) {
 					t.Errorf("error creating test for %s: %s", fn, err)
 				}
 
-				// Create API for the storage engine
-				srv, stopChan := startAPIForTest(test.Storage(), ":8083")
-				srv2, stopChan2 := startAPIForTest(test.Storage(), ":8085")
+				// Create API for the storage engine on OS-assigned ports.
+				srv, addr, stopChan := startAPIForTest(test.Storage())
+				srv2, addr2, stopChan2 := startAPIForTest(test.Storage())
 
-				ps := getProxyStorage(psConfig)
+				ps := getProxyStorage(fmt.Sprintf(psConfig, addr, addr2))
 				lStorage := &LayeredStorage{ps, test.Storage()}
 				// Replace the test storage with the promxy one
 				test.SetStorage(lStorage)
