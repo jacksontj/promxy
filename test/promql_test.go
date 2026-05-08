@@ -99,7 +99,7 @@ func getProxyStorage(cfg string) *proxystorage.ProxyStorage {
 
 	ps, err := proxystorage.NewProxyStorage(func(rangeMillis int64) int64 {
 		return int64(config.DefaultGlobalConfig.EvaluationInterval) / int64(time.Millisecond)
-	})
+	}, "")
 	if err != nil {
 		logrus.Fatalf("Error creating proxy: %v", err)
 	}

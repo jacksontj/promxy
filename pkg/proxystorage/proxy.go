@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"sync/atomic"
@@ -12,16 +13,17 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/index"
 	"github.com/sirupsen/logrus"
-
-	"github.com/jacksontj/promxy/pkg/remote"
 
 	"github.com/jacksontj/promxy/pkg/logging"
 	"github.com/jacksontj/promxy/pkg/promhttputil"
@@ -31,6 +33,15 @@ import (
 	"github.com/jacksontj/promxy/pkg/proxyquerier"
 	"github.com/jacksontj/promxy/pkg/servergroup"
 )
+
+// noopScrapeManager satisfies remote.ReadyScrapeManager for promxy, which has
+// no local scrape manager. Returning an error here causes upstream's
+// remote_write to skip metadata sending, which is the behavior we want.
+type noopScrapeManager struct{}
+
+func (noopScrapeManager) Get() (*scrape.Manager, error) {
+	return nil, errors.New("promxy has no scrape manager")
+}
 
 // metricNameWorkaroundLabel is a workaround from https://github.com/jacksontj/promxy/issues/274
 const metricNameWorkaroundLabel = "__name"
@@ -73,14 +84,21 @@ func (p *proxyStorageState) Cancel(n *proxyStorageState) {
 	}
 }
 
-// NewProxyStorage creates a new ProxyStorage
-func NewProxyStorage(NoStepSubqueryIntervalFn func(rangeMillis int64) int64) (*ProxyStorage, error) {
-	return &ProxyStorage{NoStepSubqueryIntervalFn: NoStepSubqueryIntervalFn}, nil
+// NewProxyStorage creates a new ProxyStorage. If localStoragePath is
+// non-empty, it is used as the base directory for the remote_write WAL
+// (durable across restarts); otherwise a temporary directory is created
+// per remote_write configuration and removed on shutdown.
+func NewProxyStorage(NoStepSubqueryIntervalFn func(rangeMillis int64) int64, localStoragePath string) (*ProxyStorage, error) {
+	return &ProxyStorage{
+		NoStepSubqueryIntervalFn: NoStepSubqueryIntervalFn,
+		localStoragePath:         localStoragePath,
+	}, nil
 }
 
 // ProxyStorage implements prometheus' Storage interface
 type ProxyStorage struct {
 	NoStepSubqueryIntervalFn func(rangeMillis int64) int64
+	localStoragePath         string
 	state                    atomic.Value
 }
 
@@ -145,12 +163,37 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 			}
 			newState.remoteStorage = oldState.remoteStorage
 		} else {
-			remote := remote.NewStorage(logging.NewLogger(logrus.WithField("component", "remote_write").Logger), func() (int64, error) { return 0, nil }, 1*time.Second)
-			if err := remote.ApplyConfig(&c.PromConfig); err != nil {
+			walDir := p.localStoragePath
+			ephemeral := walDir == ""
+			if ephemeral {
+				dir, err := os.MkdirTemp("", "promxy-remote-wal-")
+				if err != nil {
+					return fmt.Errorf("creating remote_write WAL dir: %w", err)
+				}
+				walDir = dir
+			}
+			rs := remote.NewStorage(
+				logging.NewLogger(logrus.WithField("component", "remote_write").Logger),
+				prometheus.DefaultRegisterer,
+				func() (int64, error) { return 0, nil },
+				walDir,
+				1*time.Second,
+				noopScrapeManager{},
+			)
+			if err := rs.ApplyConfig(&c.PromConfig); err != nil {
+				if ephemeral {
+					os.RemoveAll(walDir)
+				}
 				return err
 			}
-			newState.remoteStorage = remote
-			newState.appenderCloser = remote.Close
+			newState.remoteStorage = rs
+			newState.appenderCloser = func() error {
+				closeErr := rs.Close()
+				if ephemeral {
+					os.RemoveAll(walDir)
+				}
+				return closeErr
+			}
 		}
 
 		// Whether old or new, update the appender. The remote.Storage Appender
