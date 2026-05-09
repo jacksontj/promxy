@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -37,10 +38,16 @@ var (
 		Name: "server_group_request_duration_seconds",
 		Help: "Summary of calls to servergroup instances",
 	}, []string{"host", "call", "status"})
+
+	serverGroupTargets = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "server_group_targets",
+		Help: "Number of active targets discovered for each server group",
+	}, []string{"ordinal"})
 )
 
 func init() {
 	prometheus.MustRegister(serverGroupSummary)
+	prometheus.MustRegister(serverGroupTargets)
 }
 
 // New creates a new servergroup
@@ -285,6 +292,13 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				apiClients = append(apiClients, &promclient.ErrorWrap{apiClient, "error in target=" + u.String()})
 			}
 		}
+	}
+
+	ordinalStr := strconv.Itoa(s.Cfg.Ordinal)
+	serverGroupTargets.WithLabelValues(ordinalStr).Set(float64(len(targets)))
+
+	if len(targets) == 0 {
+		logrus.Warnf("ServerGroup ord=%d has zero active targets after discovery", s.Cfg.Ordinal)
 	}
 
 	apiClientMetricFunc := func(i int, api, status string, took float64) {

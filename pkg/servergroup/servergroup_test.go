@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/sigv4"
+	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"gopkg.in/yaml.v2"
 )
 
@@ -448,5 +451,48 @@ func TestSigV4RoundTripperErrorHandling(t *testing.T) {
 
 			t.Logf("SigV4 round tripper configured successfully for test: %s", tt.name)
 		})
+	}
+}
+
+func TestZeroTargetsMetric(t *testing.T) {
+	sg, err := NewServerGroup()
+	if err != nil {
+		t.Fatalf("failed to create servergroup: %v", err)
+	}
+	defer sg.Cancel()
+
+	sg.Cfg = &Config{
+		Ordinal: 42,
+		Scheme:  "http",
+	}
+
+	// Pass an empty target group map to simulate zero discovered targets
+	emptyMap := map[string][]*targetgroup.Group{
+		"test": {},
+	}
+	if err := sg.loadTargetGroupMap(emptyMap); err != nil {
+		t.Fatalf("loadTargetGroupMap returned error: %v", err)
+	}
+
+	// Verify the metric was set to 0
+	gauge, err := serverGroupTargets.GetMetricWithLabelValues("42")
+	if err != nil {
+		t.Fatalf("failed to get metric: %v", err)
+	}
+	m := &dto.Metric{}
+	if err := gauge.(prometheus.Metric).Write(m); err != nil {
+		t.Fatalf("failed to write metric: %v", err)
+	}
+	if got := m.GetGauge().GetValue(); got != 0 {
+		t.Errorf("expected server_group_targets{ordinal=\"42\"} = 0, got %v", got)
+	}
+
+	// Verify that state was stored with zero targets
+	state := sg.State()
+	if state == nil {
+		t.Fatal("expected non-nil state after loadTargetGroupMap")
+	}
+	if len(state.Targets) != 0 {
+		t.Errorf("expected 0 targets, got %d", len(state.Targets))
 	}
 }
