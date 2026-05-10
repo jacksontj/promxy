@@ -50,6 +50,17 @@ promxy:
       # Best practice for this value is to set it to your scrape interval
       anti_affinity: 10s
 
+      # When true, the merge layer infers each series's anti-affinity buffer
+      # from the inter-sample spacing of the data (half the median gap) and
+      # uses `anti_affinity` only as the fallback when too few samples are
+      # available. Set this when a single server_group hosts metrics scraped
+      # at different intervals (e.g. some jobs at 15s, some at 1m) — a
+      # single static `anti_affinity` is too tight for the slow series (gaps
+      # look like missed scrapes and get filled, doubling count_over_time)
+      # or too wide for the fast one (legitimate fresh samples get deduped).
+      # See https://github.com/jacksontj/promxy/issues/734.
+      anti_affinity_dynamic: false
+
       # time to wait for a server's response headers after fully writing the request (including its body, if any).
       # This time does not include the time to read the response body.
       timeout: 5s

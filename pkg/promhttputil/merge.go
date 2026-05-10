@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -106,8 +107,12 @@ func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
 
 }
 
-// MergeValues merges values `a` and `b` with the given antiAffinityBuffer
-func MergeValues(antiAffinityBuffer model.Time, a, b model.Value, preferMax bool) (model.Value, error) {
+// MergeValues merges values `a` and `b` with the given antiAffinityBuffer.
+// When dynamic is true, each merged SampleStream infers its own anti-
+// affinity from the inter-sample spacing of the longer series and uses
+// antiAffinityBuffer only as a fallback when there isn't enough data to
+// estimate. See #734.
+func MergeValues(antiAffinityBuffer model.Time, dynamic bool, a, b model.Value, preferMax bool) (model.Value, error) {
 	if a == nil {
 		return b, nil
 	}
@@ -198,7 +203,7 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value, preferMax bool
 			// If we've seen this fingerPrint before, lets make sure that a value exists
 			if index, ok := fingerPrintMap[finger]; ok {
 				// TODO: check this error? For now the only one is sig collision, which we check
-				newValue[index], _ = MergeSampleStream(antiAffinityBuffer, newValue[index], stream, preferMax)
+				newValue[index], _ = MergeSampleStream(antiAffinityBuffer, dynamic, newValue[index], stream, preferMax)
 			} else {
 				newValue = append(newValue, stream)
 				fingerPrintMap[finger] = len(newValue) - 1
@@ -218,18 +223,31 @@ func MergeValues(antiAffinityBuffer model.Time, a, b model.Value, preferMax bool
 	return nil, fmt.Errorf("unknown type! %v", reflect.TypeOf(a))
 }
 
-// MergeSampleStream merges SampleStreams `a` and `b` with the given antiAffinityBuffer
-// When combining series from 2 different prometheus hosts we can run into some problems
-// with clock skew (from a variety of sources). The primary one I've run into is issues
-// with the time that prometheus stores. Since the time associated with the datapoint is
-// the *start* time of the scrape, there can be quite a lot of time (which can vary
-// dramatically between hosts) for the exporter to return. In an attempt to mitigate
-// this problem we're going to *not* merge any datapoint within antiAffinityBuffer of another point
-// we have. This means we can tolerate antiAffinityBuffer/2 on either side (which can be used by either
-// clock skew or from this scrape skew).
-func MergeSampleStream(antiAffinityBuffer model.Time, a, b *model.SampleStream, preferMax bool) (*model.SampleStream, error) {
+// MergeSampleStream merges SampleStreams `a` and `b` with the given
+// antiAffinityBuffer. When combining series from 2 different prometheus
+// hosts we can run into clock-skew / scrape-skew issues (the timestamp
+// prometheus stores is the *start* of the scrape, and exporter response
+// time varies); refusing to merge any datapoint within antiAffinityBuffer
+// of another lets us tolerate antiAffinityBuffer/2 on either side.
+//
+// When dynamic is true the buffer is recomputed per series from the
+// inter-sample spacing of the longer side: half the median gap, modelling
+// "scrape interval / 2" without forcing operators to know the interval up
+// front. antiAffinityBuffer is the floor / fallback when there are too
+// few samples to estimate (< 3 gaps). See #734.
+func MergeSampleStream(antiAffinityBuffer model.Time, dynamic bool, a, b *model.SampleStream, preferMax bool) (*model.SampleStream, error) {
 	if a.Metric.Fingerprint() != b.Metric.Fingerprint() {
 		return nil, fmt.Errorf("cannot merge mismatch fingerprints")
+	}
+
+	// Compute the dynamic buffer up front so both the histogram and float
+	// merges below see the same per-series estimate. (Done here rather
+	// than after the swap-for-longer-side so histograms get the dynamic
+	// treatment even when the stream has no float samples at all.)
+	if dynamic {
+		if dyn, ok := dynamicBufferForStream(a, b); ok {
+			antiAffinityBuffer = dyn
+		}
 	}
 
 	// Float and histogram samples coexist on a SampleStream; merge each
@@ -434,4 +452,87 @@ func mergeHistogramSamples(antiAffinityBuffer model.Time, a, b []model.SampleHis
 	}
 
 	return newValues
+}
+
+// dynamicAntiAffinity infers a per-series anti-affinity buffer from the
+// inter-sample spacing of the longer side. Returns half the median gap and
+// ok=true when at least minDynamicGaps gaps are available; returns ok=false
+// when there isn't enough data, in which case callers should fall back to
+// the configured value.
+//
+// Median rather than mean: a series that lost a single scrape (gap == 2*
+// interval) shouldn't push the estimate toward 1.5*interval. Using half the
+// gap models "scrape interval / 2" — the same value the existing static
+// `anti_affinity` is documented to want.
+func dynamicAntiAffinity(a, b []model.SamplePair) (model.Time, bool) {
+	at := make([]model.Time, len(a))
+	for i, p := range a {
+		at[i] = p.Timestamp
+	}
+	bt := make([]model.Time, len(b))
+	for i, p := range b {
+		bt[i] = p.Timestamp
+	}
+	return dynamicAntiAffinityFromTimes(at, bt)
+}
+
+// dynamicAntiAffinityFromTimes is the timestamp-only worker behind
+// dynamicAntiAffinity. Lets the histogram path (which carries
+// SampleHistogramPair, not SamplePair) share the same estimator.
+func dynamicAntiAffinityFromTimes(a, b []model.Time) (model.Time, bool) {
+	const minDynamicGaps = 3
+
+	gaps := make([]model.Time, 0, len(a))
+	for i := 1; i < len(a); i++ {
+		if d := a[i] - a[i-1]; d > 0 {
+			gaps = append(gaps, d)
+		}
+	}
+	// Borrow gaps from b only when a is too short — keeps the estimate
+	// rooted in the longer series rather than averaging across two
+	// possibly-different scrape rates.
+	if len(gaps) < minDynamicGaps {
+		for i := 1; i < len(b); i++ {
+			if d := b[i] - b[i-1]; d > 0 {
+				gaps = append(gaps, d)
+			}
+		}
+	}
+	if len(gaps) < minDynamicGaps {
+		return 0, false
+	}
+	sort.Slice(gaps, func(i, j int) bool { return gaps[i] < gaps[j] })
+	median := gaps[len(gaps)/2]
+	return median / 2, true
+}
+
+// dynamicBufferForStream picks the dynamic buffer for a SampleStream pair.
+// It first tries to estimate from the float samples (anchored on whichever
+// side has more data); if that's too short, it falls back to estimating
+// from the histogram samples. Returns ok=false when neither sample type
+// provides enough gaps, in which case callers should keep the configured
+// value.
+func dynamicBufferForStream(a, b *model.SampleStream) (model.Time, bool) {
+	fa, fb := a.Values, b.Values
+	if len(fb) > len(fa) {
+		fa, fb = fb, fa
+	}
+	if dyn, ok := dynamicAntiAffinity(fa, fb); ok {
+		return dyn, true
+	}
+
+	ha := histogramTimestamps(a.Histograms)
+	hb := histogramTimestamps(b.Histograms)
+	if len(hb) > len(ha) {
+		ha, hb = hb, ha
+	}
+	return dynamicAntiAffinityFromTimes(ha, hb)
+}
+
+func histogramTimestamps(s []model.SampleHistogramPair) []model.Time {
+	ts := make([]model.Time, len(s))
+	for i, p := range s {
+		ts[i] = p.Timestamp
+	}
+	return ts
 }
