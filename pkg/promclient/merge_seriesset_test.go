@@ -118,13 +118,13 @@ func TestMergeSeriesSetsMatchesMergeValues(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			want, err := promhttputil.MergeValues(tc.antiAffinity, tc.a, tc.b, tc.preferMax)
+			want, err := promhttputil.MergeValues(tc.antiAffinity, false, tc.a, tc.b, tc.preferMax)
 			if err != nil {
 				t.Fatalf("MergeValues: %v", err)
 			}
 			wantDump := dumpMatrix(want.(model.Matrix))
 
-			got := MergeSeriesSets(tc.antiAffinity, tc.preferMax, matrixToSeriesSet(tc.a), matrixToSeriesSet(tc.b))
+			got := MergeSeriesSets(tc.antiAffinity, false, tc.preferMax, matrixToSeriesSet(tc.a), matrixToSeriesSet(tc.b))
 			gotDump := dumpSS(t, got)
 
 			if len(gotDump) != len(wantDump) {
@@ -144,7 +144,7 @@ func TestMergeSeriesSetsMatchesMergeValues(t *testing.T) {
 // preserve its warnings and data unchanged).
 func TestMergeSeriesSetsEdgeCases(t *testing.T) {
 	t.Run("no_sets", func(t *testing.T) {
-		ss := MergeSeriesSets(0, false)
+		ss := MergeSeriesSets(0, false, false)
 		if ss.Next() {
 			t.Fatal("expected empty result")
 		}
@@ -158,7 +158,7 @@ func TestMergeSeriesSetsEdgeCases(t *testing.T) {
 		single := matrixToSeriesSet(model.Matrix{stream("m", 0, 1, 10, 2)})
 		single = WithWarnings(single, warn)
 
-		got := MergeSeriesSets(0, false, single)
+		got := MergeSeriesSets(0, false, false, single)
 		dump := dumpSS(t, got)
 		if len(dump) != 1 {
 			t.Fatalf("expected 1 series, got %d: %v", len(dump), dump)
@@ -224,5 +224,35 @@ func TestMaterializeSeriesSetDecouplesFromSource(t *testing.T) {
 	})
 	if d := dumpSS(t, dead); d[`{__name__="m"}`] != "" {
 		t.Fatalf("expected canceled source to yield no samples, got %v", d)
+	}
+}
+
+// TestMergeSeriesSetsDynamic_FixesMixedScrapeIntervals proves the dynamic
+// anti-affinity flag (#734) actually takes effect through the live SeriesSet
+// merge path — MergeSeriesSets -> mergeAntiAffinity -> MergeSampleStream — and
+// not just the legacy model.Value MergeValues path the promhttputil tests
+// cover. Mirrors promhttputil.TestMergeValues_FixesMixedScrapeIntervals.
+func TestMergeSeriesSetsDynamic_FixesMixedScrapeIntervals(t *testing.T) {
+	// Two 60s-scrape sides of the same series; b is offset so its samples
+	// land inside a's 60s gaps but outside a tight static buffer — exactly
+	// the case the static algorithm misreads as a missed scrape to fill.
+	a := model.Matrix{stream("slow", 0, 1, 60_000, 1, 120_000, 1)}
+	b := model.Matrix{stream("slow", 30_000, 1, 90_000, 1, 150_000, 1)}
+
+	staticBuffer := model.Time(15_000) // 15s — wrong for a 60s scraper
+	const key = `{__name__="slow"}`
+
+	// Static (dynamic=false): each 60s gap exceeds 2*15s so b splices in →
+	// 6 samples. This is the #734 bug, reproduced through the SeriesSet path.
+	static := dumpSS(t, MergeSeriesSets(staticBuffer, false, false, matrixToSeriesSet(a), matrixToSeriesSet(b)))
+	if got := len(strings.Fields(static[key])); got != 6 {
+		t.Fatalf("static path sanity (expect the bug — 6 samples): got %d (%q)", got, static[key])
+	}
+
+	// Dynamic (dynamic=true): the per-series buffer is estimated (~30s) from
+	// the data, so the 60s gaps no longer trigger a fill → a's 3 samples only.
+	dynamic := dumpSS(t, MergeSeriesSets(staticBuffer, true, false, matrixToSeriesSet(a), matrixToSeriesSet(b)))
+	if want := "0=1 60000=1 120000=1 "; dynamic[key] != want {
+		t.Fatalf("dynamic path through MergeSeriesSets: want %q got %q", want, dynamic[key])
 	}
 }

@@ -230,7 +230,7 @@ func TestMultiAPIMerging(t *testing.T) {
 			a: NewMustMultiAPI([]API{
 				&AddLabelClient{stub, model.LabelSet{"a": "1"}},
 				&AddLabelClient{stub, model.LabelSet{"a": "2"}},
-			}, model.Time(0), nil, 1, false),
+			}, model.Time(0), false, nil, 1, false),
 			labelNames:  []string{"a"},
 			labelValues: []model.LabelValue{"1", "2"},
 			v: model.Vector{
@@ -248,12 +248,12 @@ func TestMultiAPIMerging(t *testing.T) {
 				NewMustMultiAPI([]API{
 					&AddLabelClient{stub, model.LabelSet{"a": "1"}},
 					&AddLabelClient{stub, model.LabelSet{"a": "1"}},
-				}, model.Time(0), nil, 1, false),
+				}, model.Time(0), false, nil, 1, false),
 				NewMustMultiAPI([]API{
 					&AddLabelClient{stub, model.LabelSet{"a": "2"}},
 					&AddLabelClient{stub, model.LabelSet{"a": "2"}},
-				}, model.Time(0), nil, 1, false),
-			}, model.Time(0), nil, 2, false),
+				}, model.Time(0), false, nil, 1, false),
+			}, model.Time(0), false, nil, 2, false),
 			labelNames:  []string{"a"},
 			labelValues: []model.LabelValue{"1", "2"},
 			v: model.Vector{
@@ -272,23 +272,23 @@ func TestMultiAPIMerging(t *testing.T) {
 					NewMustMultiAPI([]API{
 						&AddLabelClient{stub, model.LabelSet{"a": "1"}},
 						&AddLabelClient{stub, model.LabelSet{"a": "1"}},
-					}, model.Time(0), nil, 1, false),
+					}, model.Time(0), false, nil, 1, false),
 					NewMustMultiAPI([]API{
 						&AddLabelClient{stub, model.LabelSet{"a": "2"}},
 						&AddLabelClient{stub, model.LabelSet{"a": "2"}},
-					}, model.Time(0), nil, 1, false),
-				}, model.Time(0), nil, 2, false),
+					}, model.Time(0), false, nil, 1, false),
+				}, model.Time(0), false, nil, 2, false),
 				NewMustMultiAPI([]API{
 					NewMustMultiAPI([]API{
 						&AddLabelClient{stub, model.LabelSet{"b": "1"}},
 						&AddLabelClient{stub, model.LabelSet{"b": "1"}},
-					}, model.Time(0), nil, 1, false),
+					}, model.Time(0), false, nil, 1, false),
 					NewMustMultiAPI([]API{
 						&AddLabelClient{stub, model.LabelSet{"b": "2"}},
 						&AddLabelClient{stub, model.LabelSet{"b": "2"}},
-					}, model.Time(0), nil, 1, false),
-				}, model.Time(0), nil, 2, false),
-			}, model.Time(0), nil, 2, false),
+					}, model.Time(0), false, nil, 1, false),
+				}, model.Time(0), false, nil, 2, false),
+			}, model.Time(0), false, nil, 2, false),
 			labelNames:  []string{"a", "b"},
 			labelValues: []model.LabelValue{"1", "2"},
 			v: model.Vector{
@@ -317,12 +317,12 @@ func TestMultiAPIMerging(t *testing.T) {
 				NewMustMultiAPI([]API{
 					&errorAPI{&AddLabelClient{stub, model.LabelSet{"a": "1"}}, fmt.Errorf("")},
 					&AddLabelClient{stub, model.LabelSet{"a": "1"}},
-				}, model.Time(0), nil, 1, false),
+				}, model.Time(0), false, nil, 1, false),
 				NewMustMultiAPI([]API{
 					&errorAPI{&AddLabelClient{stub, model.LabelSet{"a": "2"}}, fmt.Errorf("")},
 					&AddLabelClient{stub, model.LabelSet{"a": "2"}},
-				}, model.Time(0), nil, 1, false),
-			}, model.Time(0), nil, 2, false),
+				}, model.Time(0), false, nil, 1, false),
+			}, model.Time(0), false, nil, 2, false),
 			labelNames:  []string{"a"},
 			labelValues: []model.LabelValue{"1", "2"},
 			v: model.Vector{
@@ -340,12 +340,12 @@ func TestMultiAPIMerging(t *testing.T) {
 				NewMustMultiAPI([]API{
 					&errorAPI{&AddLabelClient{stub, model.LabelSet{"a": "1"}}, fmt.Errorf("")},
 					&errorAPI{&AddLabelClient{stub, model.LabelSet{"a": "1"}}, fmt.Errorf("")},
-				}, model.Time(0), nil, 1, false),
+				}, model.Time(0), false, nil, 1, false),
 				NewMustMultiAPI([]API{
 					&AddLabelClient{stub, model.LabelSet{"a": "2"}},
 					&AddLabelClient{stub, model.LabelSet{"a": "2"}},
-				}, model.Time(0), nil, 1, false),
-			}, model.Time(0), nil, 2, false),
+				}, model.Time(0), false, nil, 1, false),
+			}, model.Time(0), false, nil, 2, false),
 			err: true,
 		},
 		// if in a multi, all that "match" error, we should error
@@ -353,7 +353,7 @@ func TestMultiAPIMerging(t *testing.T) {
 			a: NewMustMultiAPI([]API{
 				&errorAPI{&AddLabelClient{stub, model.LabelSet{"a": "1"}}, fmt.Errorf("")},
 				&AddLabelClient{stub, model.LabelSet{"a": "2"}},
-			}, model.Time(0), nil, 1, false),
+			}, model.Time(0), false, nil, 1, false),
 			err: true,
 		},
 		// however, in a multi if a single one succeeds for a given "group" then it should pass
@@ -362,7 +362,7 @@ func TestMultiAPIMerging(t *testing.T) {
 				&AddLabelClient{stub, model.LabelSet{"a": "1"}},
 				&errorAPI{&AddLabelClient{stub, model.LabelSet{"a": "1"}}, fmt.Errorf("")},
 				&AddLabelClient{stub, model.LabelSet{"a": "2"}},
-			}, model.Time(0), nil, 1, false),
+			}, model.Time(0), false, nil, 1, false),
 			labelNames:  []string{"a"},
 			labelValues: []model.LabelValue{"1", "2"},
 			v: model.Vector{
@@ -380,7 +380,7 @@ func TestMultiAPIMerging(t *testing.T) {
 				stub,
 				&AddLabelClient{stub, model.LabelSet{"a": "1"}},
 				&AddLabelClient{stub, model.LabelSet{"a": "2"}},
-			}, model.Time(0), nil, 1, false),
+			}, model.Time(0), false, nil, 1, false),
 			labelNames:  []string{"a"},
 			labelValues: []model.LabelValue{"1", "2"},
 			v: model.Vector{
@@ -623,7 +623,7 @@ func TestMultiAPIQueryExemplarsMerging(t *testing.T) {
 				&stubAPI{queryExemplars: func() []v1.ExemplarQueryResult {
 					return []v1.ExemplarQueryResult{mkResult(model.LabelSet{"__name__": "foo"}, "b", 2, 200)}
 				}},
-			}, model.Time(0), nil, 1, false),
+			}, model.Time(0), false, nil, 1, false),
 			wantSeries:    1,
 			wantExemplars: 2,
 		},
@@ -637,7 +637,7 @@ func TestMultiAPIQueryExemplarsMerging(t *testing.T) {
 				&stubAPI{queryExemplars: func() []v1.ExemplarQueryResult {
 					return []v1.ExemplarQueryResult{mkResult(model.LabelSet{"__name__": "bar"}, "b", 2, 200)}
 				}},
-			}, model.Time(0), nil, 1, false),
+			}, model.Time(0), false, nil, 1, false),
 			wantSeries:    2,
 			wantExemplars: 2,
 		},
@@ -649,7 +649,7 @@ func TestMultiAPIQueryExemplarsMerging(t *testing.T) {
 				&stubAPI{queryExemplars: func() []v1.ExemplarQueryResult {
 					return []v1.ExemplarQueryResult{mkResult(model.LabelSet{"__name__": "foo"}, "a", 1, 100)}
 				}},
-			}, model.Time(0), nil, 1, false),
+			}, model.Time(0), false, nil, 1, false),
 			wantSeries:    1,
 			wantExemplars: 1,
 		},
@@ -661,7 +661,7 @@ func TestMultiAPIQueryExemplarsMerging(t *testing.T) {
 				&stubAPI{queryExemplars: func() []v1.ExemplarQueryResult {
 					return []v1.ExemplarQueryResult{mkResult(model.LabelSet{"__name__": "foo"}, "a", 1, 100)}
 				}},
-			}, model.Time(0), nil, 2, false),
+			}, model.Time(0), false, nil, 2, false),
 			wantErr: true,
 		},
 	}

@@ -65,16 +65,21 @@ func NormalizePromError(err error) error {
 type MultiAPIMetricFunc func(i int, api, status string, took float64)
 
 // NewMustMultiAPI returns a MultiAPI
-func NewMustMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricFunc, requiredCount int, preferMax bool) *MultiAPI {
-	a, err := NewMultiAPI(apis, antiAffinity, metricFunc, requiredCount, preferMax)
+func NewMustMultiAPI(apis []API, antiAffinity model.Time, antiAffinityDynamic bool, metricFunc MultiAPIMetricFunc, requiredCount int, preferMax bool) *MultiAPI {
+	a, err := NewMultiAPI(apis, antiAffinity, antiAffinityDynamic, metricFunc, requiredCount, preferMax)
 	if err != nil {
 		panic(err)
 	}
 	return a
 }
 
-// NewMultiAPI returns a MultiAPI
-func NewMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricFunc, requiredCount int, preferMax bool) (*MultiAPI, error) {
+// NewMultiAPI returns a MultiAPI. When antiAffinityDynamic is true,
+// MergeSampleStream infers the per-series anti-affinity from the inter-
+// sample spacing of the data, using antiAffinity only as a fallback when
+// too few samples are present to estimate. This lets a single server-
+// group host series with mixed scrape intervals without forcing one
+// global buffer that's wrong for half the metrics. See #734.
+func NewMultiAPI(apis []API, antiAffinity model.Time, antiAffinityDynamic bool, metricFunc MultiAPIMetricFunc, requiredCount int, preferMax bool) (*MultiAPI, error) {
 	fingerprintCounts := make(map[model.Fingerprint]int)
 	apiFingerprints := make([]model.Fingerprint, len(apis))
 	for i, api := range apis {
@@ -95,23 +100,25 @@ func NewMultiAPI(apis []API, antiAffinity model.Time, metricFunc MultiAPIMetricF
 	}
 
 	return &MultiAPI{
-		apis:            apis,
-		apiFingerprints: apiFingerprints,
-		antiAffinity:    antiAffinity,
-		metricFunc:      metricFunc,
-		requiredCount:   requiredCount,
-		preferMax:       preferMax,
+		apis:                apis,
+		apiFingerprints:     apiFingerprints,
+		antiAffinity:        antiAffinity,
+		antiAffinityDynamic: antiAffinityDynamic,
+		metricFunc:          metricFunc,
+		requiredCount:       requiredCount,
+		preferMax:           preferMax,
 	}, nil
 }
 
 // MultiAPI implements the API interface while merging the results from the apis it wraps
 type MultiAPI struct {
-	apis            []API
-	apiFingerprints []model.Fingerprint
-	antiAffinity    model.Time
-	metricFunc      MultiAPIMetricFunc
-	requiredCount   int // number "per key" that we require to respond
-	preferMax       bool
+	apis                []API
+	apiFingerprints     []model.Fingerprint
+	antiAffinity        model.Time
+	antiAffinityDynamic bool
+	metricFunc          MultiAPIMetricFunc
+	requiredCount       int // number "per key" that we require to respond
+	preferMax           bool
 }
 
 func (m *MultiAPI) recordMetric(i int, api, status string, took float64) {
@@ -340,7 +347,7 @@ func (m *MultiAPI) scatterMerge(ctx context.Context, op string, call func(contex
 		}
 	}
 
-	return WithWarnings(MergeSeriesSets(m.antiAffinity, m.preferMax, sets...), warnings)
+	return WithWarnings(MergeSeriesSets(m.antiAffinity, m.antiAffinityDynamic, m.preferMax, sets...), warnings)
 }
 
 func (m *MultiAPI) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {

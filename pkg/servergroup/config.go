@@ -157,6 +157,18 @@ type Config struct {
 	// come from different points in time. Best practice for this value is to set it to your scrape interval
 	AntiAffinity time.Duration `yaml:"anti_affinity,omitempty"`
 
+	// AntiAffinityDynamic enables per-series anti-affinity inference. When
+	// true, the merge layer infers each series' buffer from the median
+	// inter-sample gap of the longer side and uses AntiAffinity only as the
+	// fallback when there are too few samples to estimate. This is the
+	// right setting when a single server_group hosts series with mixed
+	// scrape intervals (e.g. a 1m-scrape job alongside a 15s-scrape one) —
+	// a single static AntiAffinity is too tight for the slow series (gaps
+	// look like missing data and get gap-filled, doubling count_over_time)
+	// or too wide for the fast one (legitimate fresh samples get deduped).
+	// See https://github.com/jacksontj/promxy/issues/734.
+	AntiAffinityDynamic bool `yaml:"anti_affinity_dynamic,omitempty"`
+
 	// Timeout, if non-zero, specifies the amount of
 	// time to wait for a server's response headers after fully
 	// writing the request (including its body, if any). This

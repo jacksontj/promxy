@@ -138,7 +138,7 @@ func SeriesSetToMatrix(ss storage.SeriesSet) (model.Matrix, error) {
 	return m, ss.Err()
 }
 
-func mergeAntiAffinity(antiAffinity model.Time, preferMax bool) storage.VerticalSeriesMergeFunc {
+func mergeAntiAffinity(antiAffinity model.Time, dynamic bool, preferMax bool) storage.VerticalSeriesMergeFunc {
 	return func(series ...storage.Series) storage.Series {
 		if len(series) == 0 {
 			return nil
@@ -146,7 +146,7 @@ func mergeAntiAffinity(antiAffinity model.Time, preferMax bool) storage.Vertical
 		lbls := series[0].Labels()
 		merged := seriesToSampleStream(series[0])
 		for _, s := range series[1:] {
-			merged, _ = promhttputil.MergeSampleStream(antiAffinity, merged, seriesToSampleStream(s), preferMax)
+			merged, _ = promhttputil.MergeSampleStream(antiAffinity, dynamic, merged, seriesToSampleStream(s), preferMax)
 		}
 		return sampleStreamToSeries(merged, lbls)
 	}
@@ -167,8 +167,10 @@ func sortedSeriesSet(ss storage.SeriesSet) storage.SeriesSet {
 }
 
 // MergeSeriesSets merges HA-member SeriesSets with anti-affinity dedup,
-// preserving promxy's existing merge semantics.
-func MergeSeriesSets(antiAffinity model.Time, preferMax bool, sets ...storage.SeriesSet) storage.SeriesSet {
+// preserving promxy's existing merge semantics. When dynamic is true the
+// anti-affinity buffer is inferred per series from inter-sample spacing (with
+// antiAffinity as the fallback); see promhttputil.MergeSampleStream and #734.
+func MergeSeriesSets(antiAffinity model.Time, dynamic bool, preferMax bool, sets ...storage.SeriesSet) storage.SeriesSet {
 	if len(sets) == 0 {
 		return promapi.NewSeriesSet(nil, annotations.Annotations{}, nil)
 	}
@@ -181,5 +183,5 @@ func MergeSeriesSets(antiAffinity model.Time, preferMax bool, sets ...storage.Se
 	}
 	// limit 0 = unlimited; the merge func applies anti-affinity to same-labeled
 	// series across the sets.
-	return storage.NewMergeSeriesSet(sorted, 0, mergeAntiAffinity(antiAffinity, preferMax))
+	return storage.NewMergeSeriesSet(sorted, 0, mergeAntiAffinity(antiAffinity, dynamic, preferMax))
 }
