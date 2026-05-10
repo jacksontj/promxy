@@ -274,6 +274,40 @@ func (c *LabelFilterClient) Metadata(ctx context.Context, metric, limit string) 
 	return c.API.Metadata(ctx, metric, limit)
 }
 
+// QueryExemplars performs a query for exemplars by the given query and time range.
+// Mirrors the matcher-filter logic used by Series / GetValue: parse the
+// query, extract every vector selector, and skip the downstream call when
+// every selector references labels this server-group can't satisfy. A
+// query that mixes a satisfiable selector with a non-satisfiable one is
+// still forwarded (we can't easily rewrite a PromQL string) — the
+// non-satisfiable side just returns no exemplars.
+func (c *LabelFilterClient) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	expr, err := parser.ParseExpr(query)
+	if err != nil {
+		// Parse error: let the downstream return the canonical error rather
+		// than swallowing it here.
+		return c.API.QueryExemplars(ctx, query, startTime, endTime)
+	}
+	selectors := parser.ExtractSelectors(expr)
+	if len(selectors) == 0 {
+		return c.API.QueryExemplars(ctx, query, startTime, endTime)
+	}
+	for _, ms := range selectors {
+		ok := true
+		for _, matcher := range ms {
+			if !FilterLabelMatchers(c.LabelFilter(), matcher) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return c.API.QueryExemplars(ctx, query, startTime, endTime)
+		}
+	}
+	filteredCount.WithLabelValues("QueryExemplars").Inc()
+	return nil, nil
+}
+
 func NewFilterLabelVisitor(filter map[string]map[string]struct{}) *FilterLabelVisitor {
 	return &FilterLabelVisitor{
 		labelFilter: filter,

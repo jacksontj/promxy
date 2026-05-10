@@ -76,3 +76,13 @@ func (e *ErrorWrap) Metadata(ctx context.Context, metric, limit string) (v map[s
 	}()
 	return e.A.Metadata(ctx, metric, limit)
 }
+
+// QueryExemplars performs a query for exemplars by the given query and time range.
+func (e *ErrorWrap) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) (v []v1.ExemplarQueryResult, err error) {
+	defer func() {
+		if err != nil {
+			err = errors.Wrap(err, e.Msg)
+		}
+	}()
+	return e.A.QueryExemplars(ctx, query, startTime, endTime)
+}

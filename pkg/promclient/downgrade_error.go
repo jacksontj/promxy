@@ -72,3 +72,9 @@ func (n *DowngradeErrorAPI) Metadata(ctx context.Context, metric, limit string) 
 	v, _ := n.A.Metadata(ctx, metric, limit)
 	return v, nil
 }
+
+// QueryExemplars performs a query for exemplars by the given query and time range.
+func (n *DowngradeErrorAPI) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	v, _ := n.A.QueryExemplars(ctx, query, startTime, endTime)
+	return v, nil
+}
