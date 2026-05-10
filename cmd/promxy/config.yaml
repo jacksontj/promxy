@@ -180,7 +180,12 @@ promxy:
 
       # Map of HTTP headers to add to remote read HTTP calls made to this downstream
       # the main use-case for this is to support the X-Scope-OrgID header required by Mimir and Cortex
-      # in multi-tenancy mode
+      # in multi-tenancy mode.
+      # NOTE: a server_group represents a set of endpoints holding the *same* data.
+      # When fanning out to several Mimir/Cortex tenants, model each (backend, tenant)
+      # pair as its own server_group rather than listing multiple tenants in a single
+      # X-Scope-OrgID header -- otherwise label-less aggregations (e.g. `count(up)`)
+      # can be under-counted. See `multi_tenant.conf` for a worked example.
       http_headers:
         X-Scope-OrgID: tenant-A
         X-Promxy-Source: promxy-1
