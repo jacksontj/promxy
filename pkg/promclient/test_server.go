@@ -98,5 +98,5 @@ func CreateTestServer(t *testing.T, path string) (API, func(), error) {
 		return nil, close, err
 	}
 
-	return &PromAPIV1{clientv1.NewAPI(client)}, close, nil
+	return &PromAPIV1{API: clientv1.NewAPI(client), Client: client}, close, nil
 }

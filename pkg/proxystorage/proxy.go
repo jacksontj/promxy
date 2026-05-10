@@ -420,12 +420,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		return nil, nil
 	}
 
-	// If the subtree has an at modifier (e.g. "@ 500") we don't currently support those so we'll skip
-	// this is only enabled in the promql engine for tests, but if we want to support this generally we'll
-	// have to fix this
-	if timestampFinder.Found > 0 {
-		return nil, nil
-	}
+	// subtreeHasAt is true when at least one VectorSelector in this subtree has
+	// an @ modifier. With @ in play we must NOT strip offsets or shift the
+	// downstream request window: the downstream resolves `@ T offset O` into
+	// sample[T-O] internally, so any rewrite that removes the offset or moves
+	// the request range silently changes the lookup time.
+	subtreeHasAt := timestampFinder.Found > 0
 
 	// If the tree below us is not all the same offset, then we can't do anything below -- we'll need
 	// to wait until further in execution where they all match
@@ -438,11 +438,29 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	}
 	offset = offsetFinder.Offset
 
+	// reqOffset is the time-shift applied to downstream request times so that
+	// the engine, after restoring offsets on the synthesized VectorSelector,
+	// looks up samples at the right timestamps. When the subtree has @, the
+	// downstream already resolves @+offset, so we don't shift and the
+	// synthesized node has no offset to re-apply.
+	reqOffset := offset
+	synthOffset := offset
+	if subtreeHasAt {
+		reqOffset = 0
+		synthOffset = 0
+	}
+
 	// Function to recursivelt remove offset. This is needed as we're using
 	// the node API to String() the query to downstreams. Promql's iterators require
 	// that the time be the absolute time, whereas the API returns them based on the
-	// range you ask for (with the offset being implicit)
+	// range you ask for (with the offset being implicit).
+	//
+	// When the subtree has an @ modifier we keep offsets in the string: see
+	// subtreeHasAt comment above.
 	removeOffsetFn := func() error {
+		if subtreeHasAt {
+			return nil
+		}
 		_, err := parser.Walk(ctx, &promclient.OffsetRemover{}, s, node, nil, nil)
 		return err
 	}
@@ -473,12 +491,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 			if s.Interval > 0 {
 				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-offset),
-					End:   s.End.Add(-offset),
+					Start: s.Start.Add(-reqOffset),
+					End:   s.End.Add(-reqOffset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 			}
 
 			if err != nil {
@@ -559,12 +577,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 			if s.Interval > 0 {
 				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-offset),
-					End:   s.End.Add(-offset),
+					Start: s.Start.Add(-reqOffset),
+					End:   s.End.Add(-reqOffset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 			}
 
 			if err != nil {
@@ -578,12 +596,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			// First we must fetch the data into a vectorselector
 			if s.Interval > 0 {
 				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-offset),
-					End:   s.End.Add(-offset),
+					Start: s.Start.Add(-reqOffset),
+					End:   s.End.Add(-reqOffset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 			}
 
 			if err != nil {
@@ -597,7 +615,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 				series[i] = &proxyquerier.Series{iterator}
 			}
 
-			ret := &parser.VectorSelector{OriginalOffset: offset}
+			ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 			if s.Interval > 0 {
 				ret.LookbackDelta = s.Interval - time.Duration(1)
 			}
@@ -635,7 +653,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 				series[i] = &proxyquerier.Series{iterator}
 			}
 
-			ret := &parser.VectorSelector{OriginalOffset: offset}
+			ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 			if s.Interval > 0 {
 				ret.LookbackDelta = s.Interval - time.Duration(1)
 			}
@@ -665,12 +683,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		var err error
 		if s.Interval > 0 {
 			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
-				Start: s.Start.Add(-offset),
-				End:   s.End.Add(-offset),
+				Start: s.Start.Add(-reqOffset),
+				End:   s.End.Add(-reqOffset),
 				Step:  s.Interval,
 			})
 		} else {
-			result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+			result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 		}
 
 		if err != nil {
@@ -683,7 +701,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			series[i] = &proxyquerier.Series{iterator}
 		}
 
-		ret := &parser.VectorSelector{OriginalOffset: offset}
+		ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 		if s.Interval > 0 {
 			ret.LookbackDelta = s.Interval - time.Duration(1)
 		}
@@ -710,9 +728,6 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// If we are simply fetching a Vector then we can fetch the data using the same step that
 	// the query came in as (reducing the amount of data we need to fetch)
 	case *parser.VectorSelector:
-		if n.Timestamp != nil {
-			return nil, nil
-		}
 		// If the vector selector already has the data we can skip
 		if n.UnexpandedSeriesSet != nil {
 			return nil, nil
@@ -736,12 +751,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		if s.Interval > 0 {
 			n.LookbackDelta = s.Interval - time.Duration(1)
 			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
-				Start: s.Start.Add(-offset),
-				End:   s.End.Add(-offset),
+				Start: s.Start.Add(-reqOffset),
+				End:   s.End.Add(-reqOffset),
 				Step:  s.Interval,
 			})
 		} else {
-			result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+			result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 		}
 
 		if err != nil {
@@ -752,6 +767,19 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		series := make([]storage.Series, len(iterators))
 		for i, iterator := range iterators {
 			series[i] = &proxyquerier.Series{iterator}
+		}
+		if n.Timestamp != nil {
+			// Downstream resolved @ T (and any offset) when evaluating
+			// n.String(); the result is step-invariant. Replace with a flat
+			// VectorSelector whose samples sit at the request timestamps so
+			// the engine looks them up by ts directly instead of reapplying
+			// @ T - offset to a sample set that's already pinned.
+			ret := &parser.VectorSelector{OriginalOffset: synthOffset}
+			if s.Interval > 0 {
+				ret.LookbackDelta = s.Interval - time.Duration(1)
+			}
+			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
+			return ret, nil
 		}
 		n.OriginalOffset = offset
 		n.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
@@ -770,8 +798,16 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 		subEvalStmt := *s
 		subEvalStmt.Expr = n.Expr
-		subEvalStmt.End = subEvalStmt.End.Add(-n.Offset)
-		//subEvalStmt.Start = subEvalStmt.End.Add(-n.Range)
+
+		// If the subquery has an @ modifier its evaluation is pinned to that
+		// timestamp and the outer eval window is irrelevant.
+		var subEnd time.Time
+		if n.Timestamp != nil {
+			subEnd = timestamp.Time(*n.Timestamp).Add(-n.Offset)
+		} else {
+			subEnd = s.End.Add(-n.Offset)
+		}
+		subEvalStmt.End = subEnd
 
 		if n.Step == 0 {
 			subEvalStmt.Interval = time.Duration(p.NoStepSubqueryIntervalFn(durationMilliseconds(n.Range))) * time.Millisecond
@@ -779,8 +815,14 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			subEvalStmt.Interval = n.Step
 		}
 
-		subEvalStmt.Start = s.Start.Add(-n.Offset).Add(-n.Range).Truncate(subEvalStmt.Interval)
-		if subEvalStmt.Start.Before(s.Start.Add(-n.Offset).Add(-n.Range)) {
+		var subStart time.Time
+		if n.Timestamp != nil {
+			subStart = subEnd.Add(-n.Range)
+		} else {
+			subStart = s.Start.Add(-n.Offset).Add(-n.Range)
+		}
+		subEvalStmt.Start = subStart.Truncate(subEvalStmt.Interval)
+		if subEvalStmt.Start.Before(subStart) {
 			subEvalStmt.Start = subEvalStmt.Start.Add(subEvalStmt.Interval)
 		}
 
@@ -814,12 +856,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			if s.Interval > 0 {
 				vs.LookbackDelta = s.Interval - time.Duration(1)
 				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-offset),
-					End:   s.End.Add(-offset),
+					Start: s.Start.Add(-reqOffset),
+					End:   s.End.Add(-reqOffset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 			}
 
 			if err != nil {
@@ -832,7 +874,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 				series[i] = &proxyquerier.Series{iterator}
 			}
 
-			ret := &parser.VectorSelector{OriginalOffset: offset}
+			ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 			if s.Interval > 0 {
 				ret.LookbackDelta = s.Interval - time.Duration(1)
 			}
@@ -856,12 +898,12 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 			if s.Interval > 0 {
 				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-offset),
-					End:   s.End.Add(-offset),
+					Start: s.Start.Add(-reqOffset),
+					End:   s.End.Add(-reqOffset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-offset))
+				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 			}
 			if err != nil {
 				return nil, err
@@ -874,7 +916,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 				series[i] = &proxyquerier.Series{iterator}
 			}
 
-			ret := &parser.VectorSelector{OriginalOffset: offset}
+			ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 			if s.Interval > 0 {
 				ret.LookbackDelta = s.Interval - time.Duration(1)
 			}

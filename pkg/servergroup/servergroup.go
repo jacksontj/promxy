@@ -212,7 +212,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				}
 
 				var apiClient promclient.API
-				apiClient = &promclient.PromAPIV1{v1.NewAPI(client)}
+				apiClient = &promclient.PromAPIV1{API: v1.NewAPI(client), Client: client}
 
 				// If debug logging is enabled, wrap the client with a debugAPI client
 				// Since these are called in the reverse order of what we add, we want
