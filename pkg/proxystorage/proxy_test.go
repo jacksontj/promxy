@@ -266,6 +266,86 @@ func TestNodeReplacer(t *testing.T) {
 		{
 			in: "stdvar(foo)",
 		},
+
+		// @ modifier — pushdown contract.
+		//
+		// AggregateExpr SUM/MIN/MAX/TOPK/BOTTOMK/GROUP carries the @ modifier
+		// down to the wire so the downstream resolves it. The synthesized
+		// replacement has no offset and the request range is NOT shifted.
+		{
+			in:  "sum(foo @ 100)",
+			out: "sum()",
+			queries: []string{
+				"sum(foo @ 100.000) @ 10000",
+			},
+		},
+		// @ + offset must travel together — stripping the offset would silently
+		// change the lookup time at the downstream.
+		{
+			in:  "sum(foo @ 100 offset 50s)",
+			out: "sum()",
+			queries: []string{
+				"sum(foo @ 100.000 offset 50s) @ 10000",
+			},
+		},
+		{
+			in:  "min(foo @ 100)",
+			out: "min()",
+			queries: []string{
+				"min(foo @ 100.000) @ 10000",
+			},
+		},
+		// COUNT pushes down under @ — same shape as SUM/MIN/MAX, with the
+		// in-place n.Op = SUM rewrite still applied so the engine
+		// re-aggregates the per-shard counts.
+		{
+			in:  "count(foo @ 100)",
+			out: "sum()",
+			queries: []string{
+				"count(foo @ 100.000) @ 10000",
+			},
+		},
+		// Call (rate, irate, …) under @ pushes down. PromAPIV1's custom
+		// HTTP path parses both `warnings` and `infos` from the response,
+		// and WarningsConvert re-wraps them with the right sentinel so
+		// info-level annotations survive.
+		{
+			in:  "rate(foo[1m] @ 100)",
+			out: "",
+			queries: []string{
+				"rate(foo[1m] @ 100.000) @ 10000",
+			},
+		},
+		{
+			in:  "irate(foo[1m] @ 100)",
+			out: "",
+			queries: []string{
+				"irate(foo[1m] @ 100.000) @ 10000",
+			},
+		},
+		// Bare VectorSelector with @ pushes down. The downstream resolves
+		// @ T (and any offset) when evaluating the selector; we synthesize
+		// a flat VectorSelector whose samples sit at the request
+		// timestamps so the engine looks them up by ts directly instead
+		// of re-applying the @ pin and offset to a sample set that's
+		// already step-invariant.
+		{
+			in:  "foo @ 100",
+			out: "",
+			queries: []string{
+				"foo @ 100.000 @ 10000",
+			},
+		},
+		// BinaryExpr with an aggregate-with-@ + literal: still a valid
+		// pushdown shape since the synthesized aggregate replacement
+		// carries the @-bearing string.
+		{
+			in:  "min(foo @ 100) > 1",
+			out: "min()",
+			queries: []string{
+				"min(foo @ 100.000) > 1 @ 10000",
+			},
+		},
 	}
 
 	api := &stubAPI{}

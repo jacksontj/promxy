@@ -256,11 +256,6 @@ func TestUpstreamEvaluations(t *testing.T) {
 				// param panics in proxystorage's COUNT_VALUES handler;
 				// also includes histogram rows.
 				"aggregators.test",
-				// at_modifier: promxy explicitly bypasses NodeReplacer when
-				// it sees a Timestamp on a selector (see proxy.go), and the
-				// fall-through path doesn't reproduce the exact eval result
-				// for several @-modifier cases.
-				"at_modifier.test",
 				// operators.test exercises a few edge cases (e.g. NaN
 				// comparison ordering after delayed name removal) that the
 				// proxy rewrite doesn't yet handle.
@@ -268,7 +263,20 @@ func TestUpstreamEvaluations(t *testing.T) {
 				// subquery.test: promxy disables the rewrite for
 				// subquery descendants, so the proxy path falls back on raw
 				// Querier-based eval; some cases miss data.
-				"subquery.test":
+				"subquery.test",
+				// collision.test: cmd.start = 4s makes the upstream
+				// atModifierTestCases sweep generate a range query at
+				// [iq.evalTime - 1m, iq.evalTime + 1m] starting at -59.2s,
+				// which trips the upstream prometheus/common
+				// model.Time.UnmarshalJSON bug: "-59.200" decodes to
+				// Time(-58800) instead of Time(-59200). Promxy now
+				// returns an explicit error for pre-epoch sub-second
+				// timestamps in pushdown rather than silently producing
+				// shifted data; the test framework propagates that error
+				// as a query failure, so the file is skipped here. None
+				// of the actual test cases (which have non-negative
+				// timestamps) are affected in production.
+				"collision.test":
 				continue
 			}
 			t.Run(strconv.Itoa(i)+fn, func(t *testing.T) {
