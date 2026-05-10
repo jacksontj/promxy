@@ -171,3 +171,29 @@ func (d *DebugAPI) Metadata(ctx context.Context, metric, limit string) (map[stri
 
 	return v, err
 }
+
+// QueryExemplars performs a query for exemplars by the given query and time range.
+func (d *DebugAPI) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	fields := logrus.Fields{
+		"api":       "QueryExemplars",
+		"query":     query,
+		"startTime": startTime,
+		"endTime":   endTime,
+	}
+
+	logrus.WithFields(fields).Debug(d.PrefixMessage)
+
+	s := time.Now()
+	v, err := d.A.QueryExemplars(ctx, query, startTime, endTime)
+	fields["took"] = time.Since(s)
+
+	if logrus.GetLevel() > logrus.DebugLevel {
+		fields["value"] = v
+		fields["error"] = err
+		logrus.WithFields(fields).Trace(d.PrefixMessage)
+	} else {
+		logrus.WithFields(fields).Debug(d.PrefixMessage)
+	}
+
+	return v, err
+}

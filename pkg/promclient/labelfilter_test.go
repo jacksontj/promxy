@@ -75,6 +75,12 @@ func (s *countAPI) Metadata(ctx context.Context, metric, limit string) (map[stri
 	return s.API.Metadata(ctx, metric, limit)
 }
 
+// QueryExemplars performs a query for exemplars by the given query and time range.
+func (s *countAPI) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	s.callCount["QueryExemplars"]++
+	return s.API.QueryExemplars(ctx, query, startTime, endTime)
+}
+
 func TestLabelFilter(t *testing.T) {
 	/*
 

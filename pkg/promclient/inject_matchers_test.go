@@ -54,6 +54,11 @@ func (a *recordingAPI) Metadata(ctx context.Context, metric, limit string) (map[
 	return nil, nil
 }
 
+func (a *recordingAPI) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	a.query = query
+	return nil, nil
+}
+
 // mustMatchers parses a comma-separated set of bare matchers into label matchers.
 func mustMatchers(t *testing.T, s string) []*labels.Matcher {
 	t.Helper()

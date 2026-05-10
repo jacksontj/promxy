@@ -134,3 +134,8 @@ func (a *EngineAPI) GetValue(ctx context.Context, start, end time.Time, matchers
 func (a *EngineAPI) Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
 	return nil, fmt.Errorf("not implemented")
 }
+
+// QueryExemplars performs a query for exemplars by the given query and time range.
+func (a *EngineAPI) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	return nil, fmt.Errorf("not implemented")
+}
