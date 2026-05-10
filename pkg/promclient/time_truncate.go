@@ -47,3 +47,8 @@ func (t *TimeTruncate) Series(ctx context.Context, matches []string, startTime t
 func (t *TimeTruncate) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
 	return t.API.GetValue(ctx, start.Truncate(truncateDuration), end.Truncate(truncateDuration), matchers)
 }
+
+// QueryExemplars performs a query for exemplars by the given query and time range.
+func (t *TimeTruncate) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	return t.API.QueryExemplars(ctx, query, startTime.Truncate(truncateDuration), endTime.Truncate(truncateDuration))
+}

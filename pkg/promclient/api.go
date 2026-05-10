@@ -96,6 +96,11 @@ func (p *PromAPIV1) GetValue(ctx context.Context, start, end time.Time, matchers
 	return p.API.Query(ctx, query, end)
 }
 
+// QueryExemplars performs a query for exemplars by the given query and time range.
+func (p *PromAPIV1) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	return p.API.QueryExemplars(ctx, query, startTime, endTime)
+}
+
 // PromAPIRemoteRead implements our internal API interface using a combination of
 // the v1 HTTP API and the "experimental" remote_read API
 type PromAPIRemoteRead struct {

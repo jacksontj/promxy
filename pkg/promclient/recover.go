@@ -82,3 +82,13 @@ func (api *recoverAPI) Metadata(ctx context.Context, metric, limit string) (v ma
 	}()
 	return api.A.Metadata(ctx, metric, limit)
 }
+
+// QueryExemplars performs a query for exemplars by the given query and time range.
+func (api *recoverAPI) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) (v []v1.ExemplarQueryResult, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+	return api.A.QueryExemplars(ctx, query, startTime, endTime)
+}

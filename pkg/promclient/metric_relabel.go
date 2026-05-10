@@ -339,6 +339,39 @@ func (c *MetricsRelabelClient) GetValue(ctx context.Context, start, end time.Tim
 	return val, w, err
 }
 
+// QueryExemplars performs a query for exemplars by the given query and time range.
+// We pass the query through unmodified — rewriting selectors inside an arbitrary
+// PromQL expression is non-trivial — and apply the configured relabel rules to
+// each result's SeriesLabels so caller-side labels match the rewritten metric
+// names.
+func (c *MetricsRelabelClient) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	v, err := c.API.QueryExemplars(ctx, query, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	if len(c.RelabelConfigs) == 0 {
+		return v, nil
+	}
+	out := v[:0]
+	for _, qr := range v {
+		labelStrings := make([]string, 0, len(qr.SeriesLabels)*2)
+		for k, lv := range qr.SeriesLabels {
+			labelStrings = append(labelStrings, string(k), string(lv))
+		}
+		lbls, keep := relabel.Process(labels.FromStrings(labelStrings...), c.RelabelConfigs...)
+		if !keep {
+			continue
+		}
+		ns := model.LabelSet{}
+		lbls.Range(func(lbl labels.Label) {
+			ns[model.LabelName(lbl.Name)] = model.LabelValue(lbl.Value)
+		})
+		qr.SeriesLabels = ns
+		out = append(out, qr)
+	}
+	return out, nil
+}
+
 // replaceValueLabels runs the Relabeling across the model.Value passed in
 func (c *MetricsRelabelClient) replaceValueLabels(a model.Value) error {
 	switch aTyped := a.(type) {

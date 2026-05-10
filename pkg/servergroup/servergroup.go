@@ -439,3 +439,8 @@ func (s *ServerGroup) Series(ctx context.Context, matches []string, startTime, e
 func (s *ServerGroup) Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
 	return s.State().apiClient.Metadata(ctx, metric, limit)
 }
+
+// QueryExemplars performs a query for exemplars by the given query and time range.
+func (s *ServerGroup) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	return s.State().apiClient.QueryExemplars(ctx, query, startTime, endTime)
+}
