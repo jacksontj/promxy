@@ -294,13 +294,6 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 		}
 	}
 
-	ordinalStr := strconv.Itoa(s.Cfg.Ordinal)
-	serverGroupTargets.WithLabelValues(ordinalStr).Set(float64(len(targets)))
-
-	if len(targets) == 0 {
-		logrus.Warnf("ServerGroup ord=%d has zero active targets after discovery", s.Cfg.Ordinal)
-	}
-
 	apiClientMetricFunc := func(i int, api, status string, took float64) {
 		serverGroupSummary.WithLabelValues(targets[i], api, status).Observe(took)
 	}
@@ -331,6 +324,13 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 	s.state.Store(newState) // Store new state
 	if oldState != nil {
 		oldState.ctxCancel() // Cancel the old state
+	}
+
+	ordinalStr := strconv.Itoa(s.Cfg.Ordinal)
+	serverGroupTargets.WithLabelValues(ordinalStr).Set(float64(len(targets)))
+
+	if len(targets) == 0 {
+		logrus.Warnf("ServerGroup ord=%d has zero active targets after discovery", s.Cfg.Ordinal)
 	}
 
 	if !s.loaded {
