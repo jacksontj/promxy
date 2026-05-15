@@ -6,18 +6,19 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "chart.labels" . | nindent 4 }}
-    {{- if .Values.extraLabels}}
-    {{ toYaml .Values.extraLabels | nindent 4 }}
-    {{- end}}
+    {{- with .Values.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
   {{- with .Values.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
   replicas: {{ .Values.replicaCount }}
-  {{- if .Values.deployment.strategy }}
+  revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
+  {{- with .Values.deployment.strategy }}
   strategy:
-    {{- toYaml .Values.deployment.strategy | nindent 4 }}
+    {{- toYaml . | nindent 4 }}
   {{- end }}
   selector:
     matchLabels:
@@ -26,94 +27,117 @@ spec:
     metadata:
       labels:
         {{- include "chart.selectorLabels" . | nindent 8 }}
-        {{- if .Values.extraLabels}}
-        {{ toYaml .Values.extraLabels | nindent 8 }}
-        {{- end}}
+        {{- with .Values.extraLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       annotations:
-        {{- range $key, $value := .Values.podAnnotations }}
-        {{ $key }}: {{ $value | quote }}
+        {{- if eq .Values.configMap "" }}
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-    {{- with .Values.imagePullSecrets }}
+      {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
-    {{- end }}
+      {{- end }}
       serviceAccountName: {{ include "chart.serviceAccountName" . }}
-    {{- if .Values.nodeSelector }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
       nodeSelector:
-{{ toYaml .Values.nodeSelector | indent 8 }}
-    {{- end }}
-    {{- with .Values.tolerations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
-    {{- end }}
-    {{- if .Values.affinity }}
+      {{- end }}
+      {{- with .Values.affinity }}
       affinity:
-{{ toYaml .Values.affinity | indent 8 }}
-    {{- end }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
-      - args:
-        - "--config=/etc/promxy/config.yaml"
-        - "--web.enable-lifecycle"
-        {{- range $key, $value := .Values.extraArgs }}
-        - "--{{ $key }}={{ $value }}"
+        - name: promxy
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          args:
+            - "--config=/etc/promxy/config.yaml"
+            - "--web.enable-lifecycle"
+            {{- range $key, $value := .Values.extraArgs }}
+            - "--{{ $key }}={{ $value }}"
+            {{- end }}
+            {{- range .Values.extraFlags }}
+            - "--{{ . }}"
+            {{- end }}
+          {{- with .Values.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - mountPath: /etc/promxy/
+              name: config
+              readOnly: true
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        {{- if .Values.configmapReloader.enabled }}
+        - name: promxy-server-configmap-reload
+          image: "{{ .Values.configmapReloader.image.repository }}:{{ .Values.configmapReloader.image.tag }}"
+          imagePullPolicy: {{ .Values.configmapReloader.image.pullPolicy }}
+          {{- with .Values.configmapReloader.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          args:
+            - "--volume-dir=/etc/promxy"
+            - "--webhook-url=http://localhost:{{ .Values.containerPort }}/-/reload"
+          volumeMounts:
+            - mountPath: /etc/promxy/
+              name: config
+              readOnly: true
+          resources:
+            {{- toYaml .Values.configmapReloader.resources | nindent 12 }}
         {{- end }}
-          {{- if .Values.env }}
-        env:
-{{ toYaml .Values.env | indent 10}}
-        {{- end }}
-        command:
-        - "/bin/promxy"
-        image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
-        name: promxy
-        livenessProbe:
-          failureThreshold: 6
-          httpGet:
-            path: /-/healthy
-            port: http
-            scheme: HTTP
-          periodSeconds: 5
-          successThreshold: 1
-          timeoutSeconds: 3
-        readinessProbe:
-          failureThreshold: 120
-          httpGet:
-            path: /-/ready
-            port: http
-            scheme: HTTP
-          periodSeconds: 5
-          successThreshold: 1
-          timeoutSeconds: 3
-        ports:
-        - containerPort: 8082
-          name: http
-        volumeMounts:
-        - mountPath: "/etc/promxy/"
-          name: config
-          readOnly: true
-        resources:
-          {{- toYaml .Values.resources | nindent 12 }}
-      # container to reload configs on configmap change
-      - name: promxy-server-configmap-reload
-        args:
-        - "--volume-dir=/etc/promxy"
-        - "--webhook-url=http://localhost:8082/-/reload"
-        image: "{{ .Values.configmapReloader.image.repository }}:{{ .Values.configmapReloader.image.tag }}"
-        imagePullPolicy: {{ .Values.configmapReloader.image.pullPolicy }}
-        volumeMounts:
-        - mountPath: "/etc/promxy/"
-          name: config
-          readOnly: true
-        resources:
-          requests:
-            cpu: 0.02
-            memory: 20Mi
-          limits:
-            cpu: 0.02
-            memory: 20Mi
       volumes:
-      - name: config
-        configMap:
-          name: {{ include "chart.configname" .}}
+        - name: config
+          {{- include "chart.configVolume" . | nindent 10 }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
 {{- end }}
