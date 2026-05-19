@@ -421,6 +421,12 @@ func main() {
 
 		EnableLifecycle: opts.EnableLifecycle,
 
+		// Prometheus' web.New() indexes ListenAddresses[0] unconditionally when
+		// constructing GlobalURLOptions; promxy doesn't use the embedded
+		// listeners (it has its own server), but the slice still must be set
+		// or startup panics.
+		ListenAddresses: []string{opts.BindAddr},
+
 		Flags:       opts.ToFlags(),
 		RoutePrefix: opts.RoutePrefix,
 		ExternalURL: externalUrl,
