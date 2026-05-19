@@ -82,7 +82,7 @@ type cliOpts struct {
 	LogFormat        string `long:"log-format" description:"Log format(text|json)" default:"text"`
 	LogMaxFormPrefix int    `long:"log-max-form-prefix" description:"Max prefix for form values in log entries" default:"256"`
 
-	WebConfigFile      string        `long:"web.config.file" description:"[EXPERIMENTAL] Path to configuration file that can enable TLS or authentication."`
+	WebConfigFile      string        `long:"web.config.file" description:"[EXPERIMENTAL] Path to a Prometheus-format web config file (TLS, HTTP headers, basic auth users). See https://prometheus.io/docs/prometheus/latest/configuration/https/ for the schema."`
 	WebCORSOriginRegex string        `long:"web.cors.origin" description:"Regex for CORS origin. It is fully anchored." default:".*"`
 	WebReadTimeout     time.Duration `long:"web.read-timeout" description:"Maximum duration before timing out read of the request, and closing idle connections." default:"5m"`
 

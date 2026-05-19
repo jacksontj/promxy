@@ -1,22 +1,25 @@
 package server
 
 import (
-	"crypto/tls"
+	"context"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/prometheus/exporter-toolkit/web"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 
 	"github.com/jacksontj/promxy/pkg/logging"
 )
 
-func CreateAndStart(bindAddr string, logFormat string, webReadTimeout time.Duration, accessLogOut io.Writer, router http.Handler, tlsConfigFile string) (*http.Server, error) {
+func CreateAndStart(bindAddr string, logFormat string, webReadTimeout time.Duration, accessLogOut io.Writer, router http.Handler, webConfigFile string) (*http.Server, error) {
 	handler := createHandler(accessLogOut, router, logFormat)
+
+	if err := web.Validate(webConfigFile); err != nil {
+		return nil, err
+	}
 
 	ln, err := net.Listen("tcp", bindAddr)
 	if err != nil {
@@ -28,11 +31,20 @@ func CreateAndStart(bindAddr string, logFormat string, webReadTimeout time.Durat
 		ReadTimeout: webReadTimeout,
 	}
 
-	if tlsConfigFile == "" {
-		return createAndStartHTTP(srv, ln)
-	}
+	flags := &web.FlagConfig{WebConfigFile: &webConfigFile}
+	logger := slog.New(&logrusSlogHandler{})
 
-	return createAndStartHTTPS(srv, ln, tlsConfigFile)
+	go func() {
+		if webConfigFile == "" {
+			logrus.Infof("promxy starting with HTTP...")
+		} else {
+			logrus.Infof("promxy starting with web config %s...", webConfigFile)
+		}
+		if err := web.Serve(ln, srv, flags, logger); err != nil && err != http.ErrServerClosed {
+			logrus.Errorf("Error listening: %v", err)
+		}
+	}()
+	return srv, nil
 }
 
 func createHandler(accessLogOut io.Writer, router http.Handler, logFormat string) http.Handler {
@@ -51,60 +63,42 @@ func createHandler(accessLogOut io.Writer, router http.Handler, logFormat string
 	return handler
 }
 
-func createAndStartHTTP(srv *http.Server, ln net.Listener) (*http.Server, error) {
-	srv.TLSConfig = nil
-
-	go func() {
-		logrus.Infof("promxy starting with HTTP...")
-		if err := srv.Serve(ln); err != nil {
-			if err == http.ErrServerClosed {
-				return
-			}
-			logrus.Errorf("Error listening: %v", err)
-		}
-	}()
-	return srv, nil
+// logrusSlogHandler forwards exporter-toolkit's slog output to logrus so promxy
+// has a single log stream.
+type logrusSlogHandler struct {
+	attrs []slog.Attr
 }
 
-func createAndStartHTTPS(srv *http.Server, ln net.Listener, tlsConfigFile string) (*http.Server, error) {
-	tlsConfig, err := parseConfigFile(tlsConfigFile)
-	if err != nil {
-		return nil, err
+func (h *logrusSlogHandler) Enabled(_ context.Context, _ slog.Level) bool { return true }
+
+func (h *logrusSlogHandler) Handle(_ context.Context, r slog.Record) error {
+	fields := logrus.Fields{}
+	for _, a := range h.attrs {
+		fields[a.Key] = a.Value.Any()
 	}
-
-	srv.TLSConfig = tlsConfig
-
-	go func() {
-		logrus.Infof("promxy starting with TLS...")
-		if err := srv.ServeTLS(ln, "", ""); err != nil {
-			if err == http.ErrServerClosed {
-				return
-			}
-			logrus.Errorf("Error listening: %v", err)
-		}
-	}()
-	return srv, nil
+	r.Attrs(func(a slog.Attr) bool {
+		fields[a.Key] = a.Value.Any()
+		return true
+	})
+	entry := logrus.WithFields(fields)
+	switch {
+	case r.Level >= slog.LevelError:
+		entry.Error(r.Message)
+	case r.Level >= slog.LevelWarn:
+		entry.Warn(r.Message)
+	case r.Level >= slog.LevelInfo:
+		entry.Info(r.Message)
+	default:
+		entry.Debug(r.Message)
+	}
+	return nil
 }
 
-func parseConfigFile(tlsConfigFile string) (*tls.Config, error) {
-	content, err := os.ReadFile(tlsConfigFile)
-	if err != nil {
-		return nil, err
-	}
-	tlsStruct := &web.TLSConfig{
-		MinVersion:               tls.VersionTLS12,
-		MaxVersion:               tls.VersionTLS13,
-		PreferServerCipherSuites: true,
-	}
-	err = yaml.UnmarshalStrict(content, tlsStruct)
-	if err != nil {
-		return nil, err
-	}
-
-	tlsConfig, err := web.ConfigToTLSConfig(tlsStruct)
-	if err != nil {
-		return nil, err
-	}
-
-	return tlsConfig, err
+func (h *logrusSlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	merged := make([]slog.Attr, 0, len(h.attrs)+len(attrs))
+	merged = append(merged, h.attrs...)
+	merged = append(merged, attrs...)
+	return &logrusSlogHandler{attrs: merged}
 }
+
+func (h *logrusSlogHandler) WithGroup(_ string) slog.Handler { return h }
