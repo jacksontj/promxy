@@ -55,6 +55,38 @@ func TestUnauthenticatedServerFunctions(t *testing.T) {
 	server.Close()
 }
 
+func TestServerEmitsConfiguredHeaders(t *testing.T) {
+	freePort, err := getFreePort()
+	if err != nil {
+		t.Fatalf("could not get a free port to run test: %s", err.Error())
+	}
+	bindAddr := fmt.Sprintf("localhost:%d", freePort)
+	router := httprouter.New()
+	router.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
+
+	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/http-server-config.yml")
+	if err != nil {
+		t.Fatalf("an error occurred during creation of server: %s", err.Error())
+	}
+	defer server.Close()
+
+	time.Sleep(time.Millisecond * 5)
+	resp, err := (&http.Client{}).Get(fmt.Sprintf("http://%s/metrics", bindAddr))
+	if err != nil {
+		t.Fatalf("could not make request to metrics endpoint: %s", err.Error())
+	}
+
+	want := map[string]string{
+		"Content-Security-Policy": "default-src 'self';",
+		"X-Frame-Options":         "sameorigin",
+	}
+	for k, v := range want {
+		if got := resp.Header.Get(k); got != v {
+			t.Fatalf("header %s: got %q, want %q", k, got, v)
+		}
+	}
+}
+
 func TestAuthenticatedServerDoesNotStartupWithInvalidConfig(t *testing.T) {
 	freePort, err := getFreePort()
 	if err != nil {
