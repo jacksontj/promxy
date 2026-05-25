@@ -46,18 +46,30 @@ func MergeLabelSets(a, b []model.LabelSet) []model.LabelSet {
 	return a
 }
 
-// AddLabelClient proxies a client and adds the given labels to all results
-type AddLabelClient struct {
+func NewAddLabelClient(api API, labels model.LabelSet, externalLabels model.LabelSet) *addLabelClient {
+	allLabels := labels.Clone().Merge(externalLabels)
+	return &addLabelClient{
+		API:            api,
+		Labels:         labels,
+		ExternalLabels: externalLabels,
+		allLabels:      allLabels,
+	}
+}
+
+// addLabelClient proxies a client and adds the given labels to all results
+type addLabelClient struct {
 	API
-	Labels model.LabelSet
+	Labels         model.LabelSet
+	ExternalLabels model.LabelSet
+	allLabels      model.LabelSet // All labels, including Labels and  ExternalLabels
 }
 
 // Key defines the labelset which identifies this client
-func (c *AddLabelClient) Key() model.LabelSet {
-	return c.Labels
+func (c *addLabelClient) Key() model.LabelSet {
+	return c.allLabels
 }
 
-func (c *AddLabelClient) filterMatchers(matchers []string) ([]string, bool, error) {
+func (c *addLabelClient) filterMatchers(matchers []string) ([]string, bool, error) {
 	ret := make([]string, 0, len(matchers))
 	for _, matcher := range matchers {
 		selectors, err := parser.ParseMetricSelector(matcher)
@@ -75,6 +87,8 @@ func (c *AddLabelClient) filterMatchers(matchers []string) ([]string, bool, erro
 				if !s.Matches(string(v)) {
 					return nil, false, nil
 				}
+			} else if v, ok := c.ExternalLabels[model.LabelName(s.Name)]; ok && s.Matches(string(v)) {
+				continue // If the selector matches the external labels, we skip it
 			} else { // Otherwise if the selector isn't part of the `Labels` we add; we pass it along
 				filteredSelectors = append(filteredSelectors, s)
 			}
@@ -93,7 +107,7 @@ func (c *AddLabelClient) filterMatchers(matchers []string) ([]string, bool, erro
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (c *AddLabelClient) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
+func (c *addLabelClient) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
 	matchers, ok, err := c.filterMatchers(matchers)
 	if err != nil {
 		return nil, nil, err
@@ -107,7 +121,7 @@ func (c *AddLabelClient) LabelNames(ctx context.Context, matchers []string, star
 		return nil, nil, err
 	}
 
-	for k := range c.Labels {
+	for k := range c.allLabels {
 		found := false
 		for _, labelName := range l {
 			if labelName == string(k) {
@@ -123,7 +137,7 @@ func (c *AddLabelClient) LabelNames(ctx context.Context, matchers []string, star
 }
 
 // LabelValues performs a query for the values of the given label.
-func (c *AddLabelClient) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
+func (c *addLabelClient) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
 	matchers, ok, err := c.filterMatchers(matchers)
 	if err != nil {
 		return nil, nil, err
@@ -138,14 +152,14 @@ func (c *AddLabelClient) LabelValues(ctx context.Context, label string, matchers
 	}
 
 	// do we have labels that match in our state
-	if value, ok := c.Labels[model.LabelName(label)]; ok {
+	if value, ok := c.allLabels[model.LabelName(label)]; ok {
 		return MergeLabelValues(val, model.LabelValues{value}), w, nil
 	}
 	return val, w, nil
 }
 
 // Query performs a query for the given time.
-func (c *AddLabelClient) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+func (c *addLabelClient) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
 	// Parse out the promql query into expressions etc.
 	e, err := parser.ParseExpr(query)
 	if err != nil {
@@ -153,7 +167,7 @@ func (c *AddLabelClient) Query(ctx context.Context, query string, ts time.Time) 
 	}
 
 	// Walk the expression, to filter out any LabelMatchers that match etc.
-	filterVisitor := NewFilterMatcherVisitor(c.Labels)
+	filterVisitor := NewFilterMatcherVisitor(c.Labels, c.ExternalLabels)
 	if _, err := parser.Walk(ctx, filterVisitor, &parser.EvalStmt{Expr: e}, e, nil, nil); err != nil {
 		return nil, nil, err
 	}
@@ -165,14 +179,14 @@ func (c *AddLabelClient) Query(ctx context.Context, query string, ts time.Time) 
 	if err != nil {
 		return nil, w, err
 	}
-	if err := promhttputil.ValueAddLabelSet(val, c.Labels); err != nil {
+	if err := promhttputil.ValueAddLabelSet(val, c.Labels, c.ExternalLabels); err != nil {
 		return nil, w, err
 	}
 	return val, w, nil
 }
 
 // QueryRange performs a query for the given range.
-func (c *AddLabelClient) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+func (c *addLabelClient) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
 	// Parse out the promql query into expressions etc.
 	e, err := parser.ParseExpr(query)
 	if err != nil {
@@ -180,7 +194,7 @@ func (c *AddLabelClient) QueryRange(ctx context.Context, query string, r v1.Rang
 	}
 
 	// Walk the expression, to filter out any LabelMatchers that match etc.
-	filterVisitor := NewFilterMatcherVisitor(c.Labels)
+	filterVisitor := NewFilterMatcherVisitor(c.Labels, c.ExternalLabels)
 	if _, err := parser.Walk(ctx, filterVisitor, &parser.EvalStmt{Expr: e}, e, nil, nil); err != nil {
 		return nil, nil, err
 	}
@@ -192,14 +206,14 @@ func (c *AddLabelClient) QueryRange(ctx context.Context, query string, r v1.Rang
 	if err != nil {
 		return nil, w, err
 	}
-	if err := promhttputil.ValueAddLabelSet(val, c.Labels); err != nil {
+	if err := promhttputil.ValueAddLabelSet(val, c.Labels, c.ExternalLabels); err != nil {
 		return nil, w, err
 	}
 	return val, w, nil
 }
 
 // Series finds series by label matchers.
-func (c *AddLabelClient) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
+func (c *addLabelClient) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
 	// Now we need to filter the matches sent to us for the labels associated with this
 	// servergroup
 	filteredMatches := make([]string, 0, len(matches))
@@ -211,7 +225,7 @@ func (c *AddLabelClient) Series(ctx context.Context, matches []string, startTime
 		}
 
 		// Walk the expression, to filter out any LabelMatchers that match etc.
-		filterVisitor := NewFilterMatcherVisitor(c.Labels)
+		filterVisitor := NewFilterMatcherVisitor(c.Labels, c.ExternalLabels)
 		if _, err := parser.Walk(ctx, filterVisitor, &parser.EvalStmt{Expr: e}, e, nil, nil); err != nil {
 			return nil, nil, err
 		}
@@ -238,14 +252,19 @@ func (c *AddLabelClient) Series(ctx context.Context, matches []string, startTime
 		for k, v := range c.Labels {
 			lset[k] = v
 		}
+		for k, v := range c.ExternalLabels {
+			if _, ok := lset[k]; !ok {
+				lset[k] = v
+			}
+		}
 	}
 
 	return v, w, nil
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (c *AddLabelClient) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
-	filteredMatchers, ok := FilterMatchers(c.Labels, matchers)
+func (c *addLabelClient) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
+	filteredMatchers, ok := FilterMatchers(c.Labels, c.ExternalLabels, matchers)
 	if !ok {
 		return nil, nil, nil
 	}
@@ -254,7 +273,7 @@ func (c *AddLabelClient) GetValue(ctx context.Context, start, end time.Time, mat
 	if err != nil {
 		return nil, w, err
 	}
-	if err := promhttputil.ValueAddLabelSet(val, c.Labels); err != nil {
+	if err := promhttputil.ValueAddLabelSet(val, c.Labels, c.ExternalLabels); err != nil {
 		return nil, w, err
 	}
 

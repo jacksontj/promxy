@@ -197,11 +197,12 @@ func TestAddLabelClient(t *testing.T) {
 	}
 
 	tests := []struct {
-		labelSet    model.LabelSet
-		err         bool
-		matchers    []string
-		labelValues []string
-		labelNames  []string
+		labelSet         model.LabelSet
+		externalLabelSet model.LabelSet
+		err              bool
+		matchers         []string
+		labelValues      []string
+		labelNames       []string
 	}{
 		{
 			labelSet:    model.LabelSet{"b": "1"},
@@ -235,7 +236,7 @@ func TestAddLabelClient(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		a := &AddLabelClient{stub, test.labelSet}
+		a := NewAddLabelClient(stub, test.labelSet, test.externalLabelSet)
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Run("LabelNames", func(t *testing.T) {
 				v, _, err := a.LabelValues(context.TODO(), "a", test.matchers, time.Time{}, time.Time{})
