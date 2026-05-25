@@ -120,6 +120,24 @@ func (tf *AbsoluteTimeFilter) GetValue(ctx context.Context, start, end time.Time
 	return tf.API.GetValue(ctx, start, end, matchers)
 }
 
+// QueryExemplars performs a query for exemplars by the given query and time range.
+func (tf *AbsoluteTimeFilter) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	if (!tf.Start.IsZero() && endTime.Before(tf.Start)) || (!tf.End.IsZero() && startTime.After(tf.End)) {
+		return nil, nil
+	}
+
+	if tf.Truncate {
+		if !tf.Start.IsZero() && startTime.Before(tf.Start) {
+			startTime = tf.Start
+		}
+		if !tf.End.IsZero() && endTime.After(tf.End) {
+			endTime = tf.End
+		}
+	}
+
+	return tf.API.QueryExemplars(ctx, query, startTime, endTime)
+}
+
 // RelativeTimeFilter will filter queries out (return nil,nil) for all queries outside the given durations relative to time.Now()
 type RelativeTimeFilter struct {
 	API
@@ -249,4 +267,23 @@ func (tf *RelativeTimeFilter) GetValue(ctx context.Context, start, end time.Time
 	}
 
 	return tf.API.GetValue(ctx, start, end, matchers)
+}
+
+// QueryExemplars performs a query for exemplars by the given query and time range.
+func (tf *RelativeTimeFilter) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	tfStart, tfEnd := tf.window()
+	if (!tfStart.IsZero() && endTime.Before(tfStart)) || (!tfEnd.IsZero() && startTime.After(tfEnd)) {
+		return nil, nil
+	}
+
+	if tf.Truncate {
+		if !tfStart.IsZero() && startTime.Before(tfStart) {
+			startTime = tfStart
+		}
+		if !tfEnd.IsZero() && endTime.Before(tfEnd) {
+			endTime = tfEnd
+		}
+	}
+
+	return tf.API.QueryExemplars(ctx, query, startTime, endTime)
 }

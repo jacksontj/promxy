@@ -260,3 +260,41 @@ func (c *AddLabelClient) GetValue(ctx context.Context, start, end time.Time, mat
 
 	return val, w, nil
 }
+
+// QueryExemplars performs a query for exemplars by the given query and time range.
+// Skips the downstream call when every selector in the query is incompatible
+// with this server-group's labels (mirrors the GetValue / Series matcher
+// filtering — without it we'd send a guaranteed-empty query for every
+// `metric{az="other"}` lookup). Tags each surviving result's SeriesLabels
+// with the server-group's labels so callers can attribute exemplars.
+func (c *AddLabelClient) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	expr, err := parser.ParseExpr(query)
+	if err == nil {
+		selectors := parser.ExtractSelectors(expr)
+		if len(selectors) > 0 {
+			anyMatch := false
+			for _, ms := range selectors {
+				if _, ok := FilterMatchers(c.Labels, ms); ok {
+					anyMatch = true
+					break
+				}
+			}
+			if !anyMatch {
+				return nil, nil
+			}
+		}
+	}
+	v, err := c.API.QueryExemplars(ctx, query, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	for i := range v {
+		if v[i].SeriesLabels == nil {
+			v[i].SeriesLabels = model.LabelSet{}
+		}
+		for k, lv := range c.Labels {
+			v[i].SeriesLabels[k] = lv
+		}
+	}
+	return v, nil
+}

@@ -669,3 +669,86 @@ func (m *MultiAPI) Metadata(ctx context.Context, metric, limit string) (map[stri
 
 	return result, nil
 }
+
+// QueryExemplars performs a query for exemplars by the given query and time range.
+// We fan the query out to every server-group and concatenate the per-series
+// exemplar lists, deduplicating by series labels (sum-style merge — the union of
+// exemplars from all server-groups for the same series).
+func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	childContext, childContextCancel := context.WithCancel(ctx)
+	defer childContextCancel()
+
+	type chanResult struct {
+		v   []v1.ExemplarQueryResult
+		err error
+		ls  model.Fingerprint
+	}
+
+	resultChans := make([]chan chanResult, len(m.apis))
+	outstandingRequests := make(map[model.Fingerprint]int)
+
+	for i, api := range m.apis {
+		resultChans[i] = make(chan chanResult, 1)
+		outstandingRequests[m.apiFingerprints[i]]++
+		go func(i int, retChan chan chanResult, api API) {
+			start := time.Now()
+			result, err := api.QueryExemplars(childContext, query, startTime, endTime)
+			took := time.Since(start)
+			if err != nil {
+				m.recordMetric(i, "query_exemplars", "error", took.Seconds())
+			} else {
+				m.recordMetric(i, "query_exemplars", "success", took.Seconds())
+			}
+			retChan <- chanResult{
+				v:   result,
+				err: NormalizePromError(err),
+				ls:  m.apiFingerprints[i],
+			}
+		}(i, resultChans[i], api)
+	}
+
+	// Wait for results, merging by series labels.
+	merged := map[model.Fingerprint]*v1.ExemplarQueryResult{}
+	var lastError error
+	successMap := make(map[model.Fingerprint]int)
+	for i := 0; i < len(m.apis); i++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+
+		case ret := <-resultChans[i]:
+			outstandingRequests[ret.ls]--
+			if ret.err != nil {
+				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
+					return nil, ret.err
+				}
+				lastError = ret.err
+				continue
+			}
+			successMap[ret.ls]++
+			for j := range ret.v {
+				qr := ret.v[j]
+				fp := qr.SeriesLabels.Fingerprint()
+				existing, ok := merged[fp]
+				if !ok {
+					cp := qr
+					merged[fp] = &cp
+					continue
+				}
+				existing.Exemplars = append(existing.Exemplars, qr.Exemplars...)
+			}
+		}
+	}
+
+	for k := range outstandingRequests {
+		if successMap[k] < m.requiredCount {
+			return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+		}
+	}
+
+	out := make([]v1.ExemplarQueryResult, 0, len(merged))
+	for _, qr := range merged {
+		out = append(out, *qr)
+	}
+	return out, nil
+}
