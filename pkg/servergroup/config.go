@@ -40,6 +40,8 @@ const (
 // This is where the vast majority of options exist.
 type Config struct {
 	Ordinal int `yaml:"-"`
+	// Name is an optional human-readable identifier for this server group.
+	Name string `yaml:"name,omitempty"`
 	// RemoteRead directs promxy to load RAW data (meaning matrix selectors such as `foo[1h]`)
 	// through the RemoteRead API on prom.
 	// Pros:
