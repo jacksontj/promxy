@@ -1,80 +1,279 @@
+# -- Number of promxy pod replicas to run.
 replicaCount: 1
 
-# ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
-deployment:
-  enabled: true
-  # ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
-  strategy: {}
-   # rollingUpdate:
-   #  maxSurge: 25%
-   #  maxUnavailable: 25%
-   # type: RollingUpdate
+# -- Override the chart name used in resource names and selectors.
+nameOverride: ""
 
+# -- Override the fully qualified app name.
+fullnameOverride: ""
+
+# -- Extra labels to add to every resource created by the chart.
+extraLabels: {}
+
+# -- Annotations to add to the Deployment object.
+annotations: {}
+
+# -- Annotations to add to every promxy pod.
+podAnnotations: {}
+
+# -- List of image pull secrets used to pull container images.
+imagePullSecrets: []
+
+# -- Pod-level security context applied to the promxy pod.
+podSecurityContext: {}
+  # runAsNonRoot: true
+  # runAsUser: 65534
+  # fsGroup: 65534
+
+# -- Container-level security context applied to the promxy container.
+securityContext: {}
+  # allowPrivilegeEscalation: false
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 65534
+  # capabilities:
+  #   drop:
+  #     - ALL
+
+# -- Node selector for promxy pod scheduling.
+nodeSelector: {}
+
+# -- Tolerations for promxy pod scheduling.
+tolerations: []
+
+# -- Affinity rules for promxy pod scheduling.
+affinity: {}
+
+# -- Topology spread constraints for promxy pods.
+topologySpreadConstraints: []
+
+# -- Priority class name for promxy pods.
+priorityClassName: ""
+
+# -- Environment variables to add to the promxy container.
+env: []
+  # - name: MY_VAR
+  #   value: "some-value"
+
+# -- Sources to populate environment variables in the container, e.g. configMapRef or secretRef.
+extraEnvFrom: []
+  # - secretRef:
+  #     name: my-secret
+  # - configMapRef:
+  #     name: my-configmap
+
+# -- Override the container command. Defaults to the image entrypoint when empty.
+command: []
+  # - /bin/promxy
+
+# -- Extra volumes to add to the pod (in addition to the config volume).
+extraVolumes: []
+  # - name: tls-certs
+  #   secret:
+  #     secretName: my-tls-secret
+
+# -- Extra volume mounts to add to the promxy container.
+extraVolumeMounts: []
+  # - name: tls-certs
+  #   mountPath: /etc/ssl/certs/custom
+  #   readOnly: true
+
+# -- Deployment configuration. ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+deployment:
+  # -- Whether to deploy the Deployment object.
+  enabled: true
+  # -- Number of old ReplicaSets to retain for rollback. ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy
+  revisionHistoryLimit: 10
+  # -- Deployment update strategy. ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
+  strategy: {}
+    # rollingUpdate:
+    #   maxSurge: 25%
+    #   maxUnavailable: 25%
+    # type: RollingUpdate
+
+# -- Promxy container image configuration.
 image:
+  # -- Image repository.
   repository: quay.io/jacksontj/promxy
-  tag: "master" # rewrites Chart.AppVersion
+  # -- Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+  # -- Image pull policy.
   pullPolicy: IfNotPresent
 
+# -- Sidecar that watches the ConfigMap and reloads promxy when it changes.
 configmapReloader:
+  # -- Whether to deploy the configmap-reload sidecar.
+  enabled: true
   image:
+    # -- configmap-reload image repository.
     repository: jimmidyson/configmap-reload
-    tag: "v0.5.0"
+    # -- configmap-reload image tag.
+    tag: "v0.15.0"
+    # -- configmap-reload image pull policy.
     pullPolicy: IfNotPresent
+  # -- Container-level security context for the configmap-reload sidecar.
+  securityContext: {}
+  # -- Resource requests and limits for the configmap-reload sidecar.
+  resources:
+    requests:
+      cpu: 20m
+      memory: 20Mi
+    limits:
+      cpu: 20m
+      memory: 20Mi
 
+# -- PodDisruptionBudget configuration.
 podDisruptionBudget:
+  # -- Whether to create a PodDisruptionBudget for promxy pods.
   enabled: false
+  # -- Minimum number of pods that must remain available. Mutually exclusive with `maxUnavailable`.
   # minAvailable: 1
+  # -- Maximum number of pods that can be unavailable. Mutually exclusive with `minAvailable`.
   # maxUnavailable: 1
+  # -- Extra labels to add to the PodDisruptionBudget.
   labels: {}
 
+# -- ServiceAccount configuration.
 serviceAccount:
-  # Specifies whether a service account should be created
+  # -- Whether a ServiceAccount should be created.
   create: true
-  # Annotations to add to the service account
+  # -- Annotations to add to the ServiceAccount.
   annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- Name of the ServiceAccount to use. If not set and `create` is true, a name is generated using the fullname template.
   name:
 
+# -- HorizontalPodAutoscaler configuration.
 hpa:
+  # -- Whether to create a HorizontalPodAutoscaler for promxy.
   enabled: false
+  # -- Minimum number of replicas the HPA can scale down to.
+  minReplicas: 1
+  # -- Maximum number of replicas the HPA can scale up to.
+  maxReplicas: 10
+  # -- HPA metrics. ref: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+  # -- HPA scaling behavior. ref: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#configurable-scaling-behavior
+  behavior: {}
 
+# -- VerticalPodAutoscaler configuration.
 verticalAutoscaler:
+  # -- Whether to create a VerticalPodAutoscaler for promxy.
   enabled: false
+  # -- VPA update mode. One of: Off, Initial, Recreate, Auto.
   # updateMode: "Auto"
+  # -- VPA per-container resource policies.
   # containerPolicies:
-  # - containerName: 'promxy'
-  #   minAllowed:
-  #     cpu: "250m"
-  #     memory: "100Mi"
-  #   maxAllowed:
-  #     cpu: "2000m"
-  #     memory: "2048Mi"
-  # - containerName: "promxy-server-configmap-reload"
-  #   mode: "Off"
+  #   - containerName: 'promxy'
+  #     minAllowed:
+  #       cpu: "250m"
+  #       memory: "100Mi"
+  #     maxAllowed:
+  #       cpu: "2000m"
+  #       memory: "2048Mi"
+  #   - containerName: "promxy-server-configmap-reload"
+  #     mode: "Off"
 
+# -- Service configuration.
 service:
-  type: ClusterIP
+  # -- Whether to create a Service.
   enabled: true
+  # -- Service type.
+  type: ClusterIP
+  # -- Service port exposed by the Service object.
   servicePort: 8082
+  # -- NodePort to expose when `service.type` is `NodePort`.
+  nodePort: ""
+  # -- Annotations to add to the Service.
   annotations: {}
+  # -- Extra labels to add to the Service.
   extraLabels: {}
+  # -- Static cluster IP for the Service.
   clusterIP: ""
+  # -- External IPs for the Service.
   externalIPs: []
+  # -- Static load-balancer IP (when `service.type` is `LoadBalancer`).
   loadBalancerIP: ""
+  # -- CIDRs allowed to reach the Service when `service.type` is `LoadBalancer`.
   loadBalancerSourceRanges: []
 
+# -- Container port the promxy process listens on.
+containerPort: 8082
+
+# -- Liveness probe for the promxy container.
+livenessProbe:
+  httpGet:
+    path: /-/healthy
+    port: http
+    scheme: HTTP
+  failureThreshold: 6
+  periodSeconds: 5
+  successThreshold: 1
+  timeoutSeconds: 3
+
+# -- Readiness probe for the promxy container.
+readinessProbe:
+  httpGet:
+    path: /-/ready
+    port: http
+    scheme: HTTP
+  failureThreshold: 120
+  periodSeconds: 5
+  successThreshold: 1
+  timeoutSeconds: 3
+
+# -- Ingress configuration.
 ingress:
+  # -- Whether to create an Ingress.
   enabled: false
+  # -- IngressClass that will be used by the Ingress.
   ingressClassName: nginx
+  # -- Annotations to add to the Ingress.
   annotations: {}
+  # -- Extra labels to add to the Ingress.
   extraLabels: {}
+  # -- HTTP path for the Ingress rule.
   path: /
+  # -- Ingress path type.
   pathType: Prefix
+  # -- Hostnames the Ingress will accept traffic for.
   hosts:
     - example.com
+  # -- TLS configuration for the Ingress.
   tls: []
+    # - secretName: promxy-tls
+    #   hosts:
+    #     - example.com
 
+# -- Prometheus Operator ServiceMonitor configuration.
+serviceMonitor:
+  # -- Whether to create a ServiceMonitor (requires the Prometheus Operator CRDs).
+  enabled: false
+  # -- Override namespace where the ServiceMonitor is created.
+  namespace: ""
+  # -- Extra labels to add to the ServiceMonitor (often used by Prometheus Operator selectors).
+  labels: {}
+  # -- HTTP path scraped for metrics.
+  path: /metrics
+  # -- Scheme used for scraping.
+  scheme: http
+  # -- Scrape interval.
+  interval: 30s
+  # -- Scrape timeout.
+  scrapeTimeout: 10s
+  # -- TLS config for scraping.
+  tlsConfig: {}
+  # -- Relabel rules applied to scraped targets.
+  relabelings: []
+  # -- Relabel rules applied to scraped metrics.
+  metricRelabelings: []
+
+# -- Resource requests and limits for the promxy container.
 resources:
   requests:
     cpu: 100m
@@ -83,30 +282,64 @@ resources:
     cpu: 100m
     memory: 128Mi
 
+# -- Extra command-line arguments passed to promxy as `--<key>=<value>`.
 extraArgs:
   log-level: "info"
 
-# use existing configmap if specified
-# otherwise .config values will be used
+# -- Extra bare command-line flags passed to promxy as `--<flag>` (no value).
+extraFlags: []
+  # - web.enable-admin-api
+
+# -- Storage type for the generated promxy configuration. One of `ConfigMap` or `Secret`.
+configStorageType: ConfigMap
+
+# -- Use an existing ConfigMap (or Secret) by name instead of generating one from `.config`. When set, `.config` is ignored.
 configMap: ""
 
+# -- Promxy configuration. Rendered into the generated ConfigMap when `configMap` is empty. ref: https://github.com/jacksontj/promxy
 config:
-    ##
-    ## Regular prometheus configuration
-    ##
-    global:
-      evaluation_interval: 5s
-      external_labels:
-        source: promxy
-    # remote_write configuration is used by promxy as its local Appender, meaning all
-    # metrics promxy would "write" (not export) would be sent to this. Examples
-    # of this include: recording rules, metrics on alerting rules, etc.
-    remote_write:
-      - url: http://localhost:8083/receive
-    ##
-    ### Promxy configuration
-    ##
-    promxy:
-      server_groups:
+  ##
+  ## Regular prometheus configuration
+  ##
+  global:
+    evaluation_interval: 5s
+    external_labels:
+      source: promxy
+  # remote_write configuration is used by promxy as its local Appender, meaning all
+  # metrics promxy would "write" (not export) would be sent to this. Examples
+  # of this include: recording rules, metrics on alerting rules, etc.
+  remote_write:
+    - url: http://localhost:8083/receive
+  ##
+  ### Promxy configuration
+  ##
+  promxy:
+    server_groups:
       - kubernetes_sd_configs:
-        - role: pod
+          - role: pod
+
+# -- Gateway API HTTPRoute configuration. ref: https://gateway-api.sigs.k8s.io/api-types/httproute/
+# Each key under `route.routes` produces a separate HTTPRoute resource.
+route:
+  # -- Whether to create HTTPRoute resources.
+  enabled: false
+  # -- Map of HTTPRoute resources to create. Each key is the HTTPRoute name suffix.
+  routes: {}
+    # default:
+    #   # -- Annotations to add to the HTTPRoute.
+    #   annotations: {}
+    #   # -- Extra labels to add to the HTTPRoute.
+    #   extraLabels: {}
+    #   # -- parentRefs binding the HTTPRoute to a Gateway.
+    #   parentRefs:
+    #     - name: my-gateway
+    #       namespace: gateway-system
+    #   # -- hostnames the HTTPRoute will accept traffic for.
+    #   hostnames:
+    #     - example.com
+    #   # -- HTTPRoute rules. backendRefs default to this chart's Service when omitted.
+    #   rules:
+    #     - matches:
+    #         - path:
+    #             type: PathPrefix
+    #             value: /

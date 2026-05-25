@@ -1,0 +1,49 @@
+replicaCount: 2
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+  fsGroup: 65534
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65534
+  capabilities:
+    drop:
+      - ALL
+
+priorityClassName: ""
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: promxy
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+extraArgs:
+  log-level: "debug"
+
+extraFlags:
+  - web.enable-admin-api
+
+env:
+  - name: TZ
+    value: UTC
+
+extraEnvFrom: []
+
+extraVolumes:
+  - name: tmp
+    emptyDir: {}
+
+extraVolumeMounts:
+  - name: tmp
+    mountPath: /tmp

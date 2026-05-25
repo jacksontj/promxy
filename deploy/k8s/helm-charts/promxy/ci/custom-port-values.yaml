@@ -1,0 +1,3 @@
+service:
+  servicePort: 9090
+containerPort: 9090
