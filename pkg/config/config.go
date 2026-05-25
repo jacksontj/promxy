@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/prometheus/config"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/jacksontj/promxy/pkg/alerttemplate"
 	"github.com/jacksontj/promxy/pkg/servergroup"
 )
 
@@ -60,4 +61,21 @@ func (c *Config) String() string {
 type PromxyConfig struct {
 	// Config for each of the server groups promxy is configured to aggregate
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
+	
+	// Alert template configuration
+	AlertTemplates AlertTemplateConfig `yaml:"alert_templates,omitempty"`
+}
+
+type AlertTemplateConfig struct {
+	// Default template for all alerts
+	Default string `yaml:"default,omitempty"`
+	
+	// Directory containing template files
+	Directory string `yaml:"directory,omitempty"`
+	
+	// Named inline templates
+	Named map[string]string `yaml:"named,omitempty"`
+	
+	// Template selection rules for different alert types
+	Rules []alerttemplate.TemplateRule `yaml:"rules,omitempty"`
 }
