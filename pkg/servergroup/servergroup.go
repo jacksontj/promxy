@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -38,10 +39,20 @@ var (
 		Name: "server_group_request_duration_seconds",
 		Help: "Summary of calls to servergroup instances",
 	}, []string{"host", "call", "status"})
+
+	// serverGroupTargets tracks the number of targets currently discovered for
+	// each server group, so a zero-target group can be alerted on (e.g.
+	// `server_group_targets == 0`). The ordinal is guaranteed unique; the name
+	// label is the optional, human-readable group name (empty when unset).
+	serverGroupTargets = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "server_group_targets",
+		Help: "Number of targets currently discovered for a server group.",
+	}, []string{"ordinal", "name"})
 )
 
 func init() {
 	prometheus.MustRegister(serverGroupSummary)
+	prometheus.MustRegister(serverGroupTargets)
 }
 
 // New creates a new servergroup
@@ -101,32 +112,37 @@ type ServerGroup struct {
 	state atomic.Value
 }
 
+// groupIdentifier returns a human-readable identifier for this server group for
+// use in logs. The ordinal is always included (it is guaranteed unique); the
+// optional, non-unique name is appended when set.
 func (s *ServerGroup) groupIdentifier() string {
-	if s.Cfg != nil {
-		if s.Cfg.Name != "" {
-			return s.Cfg.Name
-		}
-		return fmt.Sprintf("ord=%d", s.Cfg.Ordinal)
+	if s.Cfg == nil {
+		return "unknown"
 	}
-	return "unknown"
+	if s.Cfg.Name != "" {
+		return fmt.Sprintf("ord=%d name=%s", s.Cfg.Ordinal, s.Cfg.Name)
+	}
+	return fmt.Sprintf("ord=%d", s.Cfg.Ordinal)
 }
 
 func (s *ServerGroup) logTargetTransition(oldCount, newCount int, initial bool) {
-	ident := s.groupIdentifier()
 	fields := logrus.Fields{
-		"server_group": ident,
-		"old_targets":  oldCount,
-		"new_targets":  newCount,
+		"old_targets": oldCount,
+		"new_targets": newCount,
 	}
 	if s.Cfg != nil {
 		fields["ordinal"] = s.Cfg.Ordinal
+		if s.Cfg.Name != "" {
+			fields["name"] = s.Cfg.Name
+		}
 	}
 
+	ident := s.groupIdentifier()
 	switch {
 	case initial && newCount == 0:
-		logrus.WithFields(fields).Warnf("ServerGroup '%s' started with zero targets; check service discovery configuration and relabel rules", ident)
+		logrus.WithFields(fields).Warnf("ServerGroup %s started with zero targets; check service discovery configuration and relabel rules", ident)
 	case oldCount > 0 && newCount == 0:
-		logrus.WithFields(fields).Warnf("ServerGroup '%s' transitioned to zero targets; check service discovery configuration and relabel rules", ident)
+		logrus.WithFields(fields).Warnf("ServerGroup %s transitioned to zero targets; check service discovery configuration and relabel rules", ident)
 	}
 }
 
@@ -330,9 +346,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 		serverGroupSummary.WithLabelValues(targets[i], api, status).Observe(took)
 	}
 
-	currentTargetCount := len(targets)
 	logrus.Debugf("Updating targets from discovery manager: %v", targets)
-
 	apiClient, err := promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), apiClientMetricFunc, 1, s.Cfg.GetPreferMax())
 	if err != nil {
 		return err
@@ -354,8 +368,8 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 		newState.apiClient = &promclient.DowngradeErrorAPI{newState.apiClient}
 	}
 
-	initialLoad := !s.loaded
-	s.logTargetTransition(oldCount, currentTargetCount, initialLoad)
+	s.logTargetTransition(oldCount, len(targets), !s.loaded)
+	serverGroupTargets.WithLabelValues(strconv.Itoa(s.Cfg.Ordinal), s.Cfg.Name).Set(float64(len(targets)))
 
 	s.state.Store(newState) // Store new state
 	if oldState != nil {
