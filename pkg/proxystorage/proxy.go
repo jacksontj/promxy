@@ -22,6 +22,7 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/prometheus/prometheus/tsdb"
+	"github.com/prometheus/prometheus/tsdb/agent"
 	"github.com/prometheus/prometheus/tsdb/index"
 	"github.com/sirupsen/logrus"
 
@@ -47,11 +48,16 @@ func (noopScrapeManager) Get() (*scrape.Manager, error) {
 const metricNameWorkaroundLabel = "__name"
 
 type proxyStorageState struct {
-	sgs            []*servergroup.ServerGroup
-	client         promclient.API
-	cfg            *proxyconfig.Config
-	remoteStorage  *remote.Storage
-	appender       storage.Appender
+	sgs           []*servergroup.ServerGroup
+	client        promclient.API
+	cfg           *proxyconfig.Config
+	remoteStorage *remote.Storage
+	// agentDB writes the remote_write WAL that remoteStorage's queue managers
+	// tail. It is nil when no remote_write endpoint is configured.
+	agentDB *agent.DB
+	// appendable hands out appenders for the rule manager. Backed by agentDB
+	// when remote_write is configured, otherwise by a no-op stub.
+	appendable     storage.Appendable
 	appenderCloser func() error
 }
 
@@ -76,11 +82,10 @@ func (p *proxyStorageState) Cancel(n *proxyStorageState) {
 			sg.Cancel()
 		}
 	}
-	// We call close if the new one is nil, or if the appenders don't match
-	if n == nil || p.appender != n.appender {
-		if p.appenderCloser != nil {
-			p.appenderCloser()
-		}
+	// Close the remote_write storage (agent WAL + queue managers) unless the
+	// new state is reusing the same instance.
+	if p.appenderCloser != nil && (n == nil || p.remoteStorage != n.remoteStorage) {
+		p.appenderCloser()
 	}
 }
 
@@ -162,6 +167,9 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 				return err
 			}
 			newState.remoteStorage = oldState.remoteStorage
+			newState.agentDB = oldState.agentDB
+			newState.appendable = oldState.appendable
+			newState.appenderCloser = oldState.appenderCloser
 		} else {
 			walDir := p.localStoragePath
 			ephemeral := walDir == ""
@@ -172,36 +180,53 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 				}
 				walDir = dir
 			}
+			rwLogger := logging.NewLogger(logrus.WithField("component", "remote_write").Logger)
 			rs := remote.NewStorage(
-				logging.NewLogger(logrus.WithField("component", "remote_write").Logger),
+				rwLogger,
 				prometheus.DefaultRegisterer,
 				func() (int64, error) { return 0, nil },
 				walDir,
 				1*time.Second,
 				noopScrapeManager{},
 			)
+			// promxy has no local TSDB writing a WAL, so remote.Storage's queue
+			// managers have nothing to tail. Run an agent-mode WAL-only DB whose
+			// appender writes the WAL that those queue managers consume. Without
+			// this the WAL watcher fails with "error tailing WAL ... no such file
+			// or directory" and no samples are ever shipped (see issue #771).
+			db, err := agent.Open(rwLogger, prometheus.DefaultRegisterer, rs, walDir, agent.DefaultOptions())
+			if err != nil {
+				if ephemeral {
+					os.RemoveAll(walDir)
+				}
+				return fmt.Errorf("creating remote_write WAL: %w", err)
+			}
+			// Wake the queue managers' WAL watchers as soon as samples are committed.
+			db.SetWriteNotified(rs)
 			if err := rs.ApplyConfig(&c.PromConfig); err != nil {
+				db.Close()
 				if ephemeral {
 					os.RemoveAll(walDir)
 				}
 				return err
 			}
 			newState.remoteStorage = rs
+			newState.agentDB = db
+			newState.appendable = db
 			newState.appenderCloser = func() error {
-				closeErr := rs.Close()
+				dbErr := db.Close()
+				rsErr := rs.Close()
 				if ephemeral {
 					os.RemoveAll(walDir)
 				}
-				return closeErr
+				if dbErr != nil {
+					return dbErr
+				}
+				return rsErr
 			}
 		}
-
-		// Whether old or new, update the appender. The remote.Storage Appender
-		// implementation does not actually use the context.
-		newState.appender = newState.remoteStorage.Appender(context.Background())
-
 	} else {
-		newState.appender = &appenderStub{}
+		newState.appendable = appendableStub{}
 	}
 
 	newState.Ready()        // Wait for the newstate to be ready
@@ -313,9 +338,11 @@ func (p *ProxyStorage) StartTime() (int64, error) {
 	return 0, nil
 }
 
-// Appender returns a new appender against the storage.
-func (p *ProxyStorage) Appender(context.Context) storage.Appender {
-	return p.GetState().appender
+// Appender returns a new appender against the storage. When remote_write is
+// configured this is backed by the agent WAL (single-use, pooled appender), so
+// a fresh appender is returned on every call rather than a shared instance.
+func (p *ProxyStorage) Appender(ctx context.Context) storage.Appender {
+	return p.GetState().appendable.Appender(ctx)
 }
 
 // Close releases the resources of the Querier.
