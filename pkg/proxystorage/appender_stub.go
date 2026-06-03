@@ -1,6 +1,7 @@
 package proxystorage
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -12,6 +13,14 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 )
+
+// appendableStub is the storage.Appendable used when no remote_write endpoint
+// is configured. Its appender warns (rate-limited) and discards samples.
+type appendableStub struct{}
+
+func (appendableStub) Appender(context.Context) storage.Appender {
+	return &appenderStub{}
+}
 
 type appenderStub struct{}
 

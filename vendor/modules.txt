@@ -826,6 +826,7 @@ github.com/prometheus/prometheus/storage/remote/googleiam
 github.com/prometheus/prometheus/storage/remote/otlptranslator/prometheusremotewrite
 github.com/prometheus/prometheus/template
 github.com/prometheus/prometheus/tsdb
+github.com/prometheus/prometheus/tsdb/agent
 github.com/prometheus/prometheus/tsdb/chunkenc
 github.com/prometheus/prometheus/tsdb/chunks
 github.com/prometheus/prometheus/tsdb/encoding
