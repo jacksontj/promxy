@@ -30,6 +30,29 @@ remote_write:
 ### Promxy configuration
 ##
 promxy:
+  # Alert template configuration for customizable GeneratorURL
+  alert_templates:
+    # Default template used when no rules match
+    default: "grafana_default"
+    
+    # Named inline templates for different alert destinations
+    named:
+      # Grafana dashboard integration
+      grafana_default: "https://grafana.example.com/alerting/groups?alertname={{.AlertName|urlquery}}&severity={{.Labels.severity|urlquery}}"
+      
+      # Custom monitoring dashboard
+      monitoring_dashboard: "https://monitoring.example.com/alerts/{{.AlertName}}?instance={{.Labels.instance|urlpath}}&job={{.Labels.job|urlpath}}"
+    
+    # Template selection rules (evaluated top-to-bottom, first match wins)
+    rules:
+      - match_labels:
+          severity: "critical"
+        template: "grafana_default"
+      
+      - match_labels:
+          component: "infrastructure"
+        template: "monitoring_dashboard"
+
   server_groups:
     # All upstream prometheus service discovery mechanisms are supported with the same
     # markup, all defined in https://github.com/prometheus/prometheus/blob/master/discovery/config/config.go#L33
