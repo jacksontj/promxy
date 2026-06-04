@@ -172,6 +172,45 @@ func TestMutualTLSClientCanConnectToAuthenticatedServerWithCerts(t *testing.T) {
 	server.Close()
 }
 
+// TestLegacyFlatTLSConfigStillServesTLS ensures the pre-exporter-toolkit web
+// config schema, where TLS keys live at the top level instead of nested under
+// tls_server_config, continues to bring up a working TLS server. See #771.
+func TestLegacyFlatTLSConfigStillServesTLS(t *testing.T) {
+	freePort, err := getFreePort()
+	if err != nil {
+		t.Fatalf("could not get a free port to run test: %s", err.Error())
+	}
+	bindAddr := fmt.Sprintf("localhost:%d", freePort)
+	router := httprouter.New()
+	router.HandlerFunc("GET", "/metrics", promhttp.Handler().ServeHTTP)
+
+	server, err := CreateAndStart(bindAddr, "text", time.Second*5, nil, router, "testdata/legacy-tls-server-config.yml")
+	if err != nil {
+		t.Fatalf("an error occurred during creation of server: %s", err.Error())
+	}
+	defer server.Close()
+
+	client := setupAuthenticatedClient(t)
+
+	resp, err := client.Get(fmt.Sprintf("https://%s/metrics", bindAddr))
+	if err != nil {
+		t.Fatalf("could not make request to metrics endpoint: %s", err.Error())
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("could not read response body: %s", err.Error())
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("authenticated client was unable to make a request to the legacy-config server. Response body: %s", body)
+	}
+
+	if !strings.Contains(string(body), "go_goroutines") {
+		t.Fatalf("could not find metric name 'go_goroutines' in response")
+	}
+}
+
 func getFreePort() (int, error) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 	if err != nil {
