@@ -1,0 +1,7 @@
+# Legacy (pre-exporter-toolkit) flat web config schema, where TLS keys live at
+# the top level instead of nested under tls_server_config. Kept for backward
+# compatibility; see legacyTLSConfig in api.go.
+cert_file: "server.crt"
+key_file: "server.key"
+client_auth_type: "RequireAndVerifyClientCert"
+client_ca_file: "test-ca.crt"
