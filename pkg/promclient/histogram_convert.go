@@ -117,8 +117,23 @@ func sampleHistogramToFloatHistogram(sh *model.SampleHistogram) *histogram.Float
 	if len(sh.Buckets) == 0 {
 		return fh
 	}
-	customValues := make([]float64, 0, len(sh.Buckets))
+	// CustomValues holds the bucket boundaries in strictly-increasing order.
+	// For N contiguous buckets we need N+1 values when the first bucket's
+	// lower bound is finite (the upper bounds give us N, and the very first
+	// lower closes the open end on the left); otherwise N values is correct
+	// (the leftmost bound is -Inf and isn't represented).
+	//
+	// PositiveSpans.Offset shifts where the bucket counts line up against
+	// CustomValues: buckets at idx [offset, offset+length) map to bounds
+	// (CustomValues[idx-1], CustomValues[idx]]. When we include the first
+	// lower we offset by 1 so buckets start at index 1 (the second bound).
+	customValues := make([]float64, 0, len(sh.Buckets)+1)
 	counts := make([]float64, 0, len(sh.Buckets))
+	firstLower := float64(sh.Buckets[0].Lower)
+	includeFirstLower := !math.IsInf(firstLower, -1)
+	if includeFirstLower {
+		customValues = append(customValues, firstLower)
+	}
 	for _, b := range sh.Buckets {
 		upper := float64(b.Upper)
 		// +Inf is the implicit final bucket of a custom-buckets histogram;
@@ -128,9 +143,13 @@ func sampleHistogramToFloatHistogram(sh *model.SampleHistogram) *histogram.Float
 		}
 		counts = append(counts, float64(b.Count))
 	}
+	offset := int32(0)
+	if includeFirstLower {
+		offset = 1
+	}
 	fh.CustomValues = customValues
 	fh.PositiveBuckets = counts
-	fh.PositiveSpans = []histogram.Span{{Offset: 0, Length: uint32(len(counts))}}
+	fh.PositiveSpans = []histogram.Span{{Offset: offset, Length: uint32(len(counts))}}
 	return fh
 }
 

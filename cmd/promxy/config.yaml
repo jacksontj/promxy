@@ -56,6 +56,21 @@ promxy:
       # configures the path to send remote read requests to. The default is "api/v1/read"
       remote_read_path: api/v1/read
 
+      # Per-server-group native histogram routing. The zero-value (no block
+      # at all) is "AST-only detection, fail loud when remote_read can't
+      # preserve fidelity" — the safe default.
+      native_histogram:
+        # metadata_refresh enables a metric-name → type cache so that
+        # queries which touch histogram metrics WITHOUT invoking one of
+        # the histogram-only functions (e.g. rate(my_hist[5m])) are also
+        # routed via remote_read. When unset, detection is pure AST.
+        metadata_refresh: 5m
+        # allow_lossy controls behavior when a histogram-bearing query
+        # hits this group with no remote_read configured. Default false:
+        # error out before fan-out. Set true to accept the JSON-API
+        # fidelity loss and serve the query anyway.
+        allow_lossy: false
+
       # path_prefix defines a prefix to prepend to all queries to hosts in this servergroup
       # This can be relabeled using __path_prefix__
       path_prefix: /example/prefix
