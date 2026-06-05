@@ -418,11 +418,37 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	offsetFinder := &promclient.OffsetFinder{}
 	vecFinder := &promclient.BooleanFinder{Func: isVectorSelector}
 	timestampFinder := &promclient.BooleanFinder{Func: hasTimestamp}
+	// histFinder rides along on the same tree walk to detect histogram-
+	// bearing subtrees: histogram-only function calls (always) plus
+	// VectorSelectors whose metric name is histogram-typed per the
+	// per-server-group metadata cache (when native_histogram.metadata_refresh
+	// is configured).
+	histFinder := &histogramFinder{isHistogramName: p.histogramNamePredicate()}
 
-	visitor := promclient.NewMultiVisitor([]parser.Visitor{aggFinder, offsetFinder, vecFinder, timestampFinder})
+	visitor := promclient.NewMultiVisitor([]parser.Visitor{aggFinder, offsetFinder, vecFinder, timestampFinder, histFinder})
 
 	if _, err := parser.Walk(ctx, visitor, s, node, nil, nil); err != nil {
 		return nil, err
+	}
+
+	// Histogram-bearing queries lose schema fidelity over the HTTP API
+	// (the JSON SampleHistogram shape collapses sparse spans into a flat
+	// bucket list, drops empty buckets, etc.). Two-step handling:
+	//   1. Fail loud if any targeted server group has neither remote_read
+	//      nor native_histogram.allow_lossy — wrong data is worse than no
+	//      data, so the default is to surface the misconfig.
+	//   2. Otherwise opt out of pushdown so the embedded engine evaluates
+	//      locally and fetches raw data through GetValue, which routes
+	//      via remote_read where configured and preserves the original
+	//      FloatHistogram end-to-end.
+	// Ancestor-path inheritance: parser.Walk descends into children even
+	// when NodeReplacer returns nil for the parent, so a histogram-only
+	// call above us still propagates the histogram signal.
+	if pathHasHistogramOnlyCall(path) || histFinder.found.Load() {
+		if missing := p.strictMissingRemoteRead(); len(missing) > 0 {
+			return nil, histogramFidelityError(missing)
+		}
+		return nil, nil
 	}
 
 	if aggFinder.Found > 0 {
@@ -507,6 +533,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 		var result storage.SeriesSet
 		var err error
+		var lossy bool
 
 		// Not all Aggregation functions are composable, so we'll do what we can
 		switch n.Op {
@@ -526,6 +553,10 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 			if err != nil {
 				return nil, err
+			}
+			result, lossy = containsLossyHistogram(result)
+			if lossy {
+				return nil, nil
 			}
 
 		// Convert avg into sum() / count()
@@ -613,6 +644,10 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			if err != nil {
 				return nil, err
 			}
+			result, lossy = containsLossyHistogram(result)
+			if lossy {
+				return nil, nil
+			}
 			n.Op = parser.SUM
 
 			// To aggregate count_values we simply sum(count_values(key, metric)) by (key)
@@ -631,6 +666,10 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 			if err != nil {
 				return nil, err
+			}
+			result, lossy := containsLossyHistogram(result)
+			if lossy {
+				return nil, nil
 			}
 
 			ret := &parser.VectorSelector{OriginalOffset: synthOffset}
@@ -704,6 +743,10 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		if err != nil {
 			return nil, err
 		}
+		result, lossy := containsLossyHistogram(result)
+		if lossy {
+			return nil, nil
+		}
 
 		ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 		if s.Interval > 0 {
@@ -750,6 +793,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		removeOffsetFn()
 
 		var result storage.SeriesSet
+		origLookback := n.LookbackDelta
 		if s.Interval > 0 {
 			n.LookbackDelta = s.Interval - time.Duration(1)
 			result = state.client.QueryRange(ctx, n.String(), v1.Range{
@@ -763,6 +807,16 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 		if err := result.Err(); err != nil {
 			return nil, err
+		}
+		result, lossy := containsLossyHistogram(result)
+		if lossy {
+			// We abandoned the pushdown — restore the original LookbackDelta
+			// so the engine's local eval uses the default lookback when it
+			// calls Querier.Select instead of the tighter step-minus-1
+			// window we set above (which would otherwise drop boundary
+			// samples like a load at t=0 with a range query starting at 0).
+			n.LookbackDelta = origLookback
+			return nil, nil
 		}
 
 		if n.Timestamp != nil {
@@ -862,6 +916,10 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			if err := result.Err(); err != nil {
 				return nil, err
 			}
+			result, lossy := containsLossyHistogram(result)
+			if lossy {
+				return nil, nil
+			}
 
 			ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 			if s.Interval > 0 {
@@ -892,6 +950,10 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			}
 			if err := result.Err(); err != nil {
 				return nil, err
+			}
+			result, lossy := containsLossyHistogram(result)
+			if lossy {
+				return nil, nil
 			}
 
 			ret := &parser.VectorSelector{OriginalOffset: synthOffset}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,12 +20,22 @@ import (
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
+// annotationPosSuffix matches the " (line:col)" suffix that upstream's
+// annotations.AsStrings appends to formatted annotation messages. The position
+// refers to the upstream query's text, which is meaningless to promxy's callers
+// (we never round-trip the original query string). Stripping it also lets the
+// upstream promql test framework match expected warning text exactly.
+var annotationPosSuffix = regexp.MustCompile(` \(\d+:\d+\)$`)
+
 // toAnnotationError re-wraps a downstream warning/info string back into a
 // properly-typed annotation. The v1 JSON API serializes annotations as plain
 // strings (losing the typed wrapping), prefixed with "PromQL warning: " /
 // "PromQL info: "; we detect the prefix and re-wrap with the matching sentinel
-// so consumers can classify info-vs-warning via errors.Is.
+// so consumers can classify info-vs-warning via errors.Is. The trailing
+// " (line:col)" position suffix is stripped — it points into the downstream's
+// query text, which promxy never round-trips.
 func toAnnotationError(s string) error {
+	s = annotationPosSuffix.ReplaceAllString(s, "")
 	if rest, ok := strings.CutPrefix(s, "PromQL warning: "); ok {
 		return fmt.Errorf("%w: %s", annotations.PromQLWarning, rest)
 	}
