@@ -71,8 +71,17 @@ func TestSampleHistogramFallbackReconstruction(t *testing.T) {
 	if got, want := fh.Count, 5.0; got != want {
 		t.Fatalf("count: got %v want %v", got, want)
 	}
-	if got, want := fh.CustomValues, []float64{1, 2}; !equal(got, want) {
+	// Both bucket boundaries must round-trip into CustomValues — the first
+	// bucket's Lower (0) plus each bucket's Upper (1, 2). Earlier versions
+	// of the converter dropped the first Lower, which silently shifted
+	// every bucket's range when the engine read it back.
+	if got, want := fh.CustomValues, []float64{0, 1, 2}; !equal(got, want) {
 		t.Fatalf("CustomValues: got %v want %v", got, want)
+	}
+	// Span Offset = 1 lines up bucket counts with the right boundary pair:
+	// counts[0] maps to (CustomValues[0], CustomValues[1]] = (0, 1].
+	if len(fh.PositiveSpans) != 1 || fh.PositiveSpans[0].Offset != 1 {
+		t.Fatalf("PositiveSpans: got %+v want one span with Offset=1", fh.PositiveSpans)
 	}
 }
 

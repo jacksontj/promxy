@@ -111,6 +111,24 @@ type ServerGroup struct {
 	OriginalURLs []string
 
 	state atomic.Value
+
+	// histogramCache backs IsHistogramMetric. The background refresh loop is
+	// only started when Cfg.HistogramMetadataRefresh > 0; when zero, the
+	// cache stays empty and IsHistogramMetric always returns false (AST-only
+	// routing). See pkg/servergroup/histogram_cache.go.
+	histogramCache histogramMetadataCache
+}
+
+// IsHistogramMetric reports whether the given metric name is known to be a
+// histogram metric in this server group's most recent metadata snapshot.
+// Returns false when the metadata cache is disabled (the default), when no
+// fetch has succeeded yet, or when the name simply isn't a histogram.
+//
+// Used by the proxy-level histogram routing decision to disable HTTP-API
+// pushdown for queries that touch histogram metrics, even when the query
+// doesn't invoke one of the histogram-only PromQL functions.
+func (s *ServerGroup) IsHistogramMetric(name string) bool {
+	return s.histogramCache.Contains(name)
 }
 
 // groupIdentifier returns a human-readable identifier for this server group for
@@ -459,6 +477,25 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	if err := s.targetManager.ApplyConfig(map[string]discovery.Configs{"foo": cfg.ServiceDiscoveryConfigs}); err != nil {
 		return err
 	}
+
+	// Start the metadata cache if histogram routing is configured to use it.
+	// The cache's start is idempotent — repeated ApplyConfig calls won't
+	// spawn duplicate goroutines.
+	s.histogramCache.start(
+		s.ctx,
+		func() promclient.API {
+			st := s.State()
+			if st == nil {
+				return nil
+			}
+			return st.apiClient
+		},
+		cfg.NativeHistogram.MetadataRefresh,
+		logrus.WithFields(logrus.Fields{
+			"component": "histogram-metadata-cache",
+			"sg":        cfg.Ordinal,
+		}),
+	)
 	return nil
 }
 

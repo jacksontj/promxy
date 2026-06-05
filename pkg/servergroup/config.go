@@ -66,6 +66,12 @@ type Config struct {
 	RemoteRead bool `yaml:"remote_read"`
 	// RemoteReadPath sets the remote read path for the hosts in this servergroup
 	RemoteReadPath string `yaml:"remote_read_path"`
+
+	// NativeHistogram tunes how promxy serves native-histogram queries
+	// against this server group. The zero value (no `native_histogram`
+	// block in YAML) is "AST-only detection, fail loud if remote_read
+	// can't preserve fidelity" — the safe default. See NativeHistogramConfig.
+	NativeHistogram NativeHistogramConfig `yaml:"native_histogram,omitempty"`
 	// HTTP client config for promxy to use when connecting to the various server_groups
 	// this is the same config as prometheus
 	HTTPConfig HTTPClientConfig `yaml:"http_client"`
@@ -383,4 +389,46 @@ func (tr *AbsoluteTimeRangeConfig) validate() error {
 		return fmt.Errorf("AbsoluteTimeRangeConfig: End must be after start")
 	}
 	return nil
+}
+
+// NativeHistogramConfig groups the per-server-group knobs that control how
+// promxy handles native-histogram queries. Native histograms only round-trip
+// with full fidelity over remote_read — the HTTP-API JSON path collapses
+// sparse spans and drops empty buckets. Promxy detects histogram-bearing
+// queries from the PromQL AST (and optionally from a metric-name metadata
+// cache) and skips HTTP-API pushdown for them so the embedded engine
+// evaluates locally, fetching raw data via remote_read.
+//
+// The zero value is a safe default: AST-only detection, and any histogram
+// query that targets a server group without remote_read errors out rather
+// than silently returning lossy data.
+type NativeHistogramConfig struct {
+	// MetadataRefresh controls the metric-name → type cache. When zero
+	// (the default), detection is pure AST: a Call to one of the
+	// histogram-only PromQL functions (histogram_avg, histogram_count,
+	// histogram_sum, histogram_stddev, histogram_stdvar,
+	// histogram_fraction). This misses queries that touch histogram
+	// metrics without invoking those functions — e.g. `rate(my_hist[5m])`.
+	//
+	// Set MetadataRefresh to a positive duration to enable the cache:
+	// promxy periodically calls /api/v1/metadata on this server group,
+	// extracts the histogram-typed metric names, and consults the union
+	// of all groups' caches when classifying queries. The cache is
+	// name-keyed (typically <2% of the total metric-name space) so
+	// memory is bounded by histogram-name count, not series cardinality.
+	MetadataRefresh time.Duration `yaml:"metadata_refresh,omitempty"`
+
+	// AllowLossy controls what happens when a histogram-bearing query
+	// targets this server group and remote_read isn't configured.
+	//
+	//   false (default): the query errors out before fan-out. Wrong data
+	//     is worse than no data — the operator should configure
+	//     remote_read (or explicitly opt into lossy fallback) rather
+	//     than silently serve histograms over the lossy JSON path.
+	//
+	//   true: the query proceeds via the HTTP API even though the
+	//     response will be lossy for histogram samples. Use when you
+	//     accept the fidelity loss (e.g. dashboards that only consume
+	//     histogram_quantile output and don't care about sparse spans).
+	AllowLossy bool `yaml:"allow_lossy,omitempty"`
 }
