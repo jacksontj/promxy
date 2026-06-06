@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -26,6 +27,14 @@ var warningPrefixes = []struct {
 	{"PromQL info: ", annotations.PromQLInfo},
 }
 
+// annotationPosSuffix matches the " (line:col)" suffix that upstream's
+// annotations.AsStrings appends to formatted annotation messages. The
+// position refers to the upstream query's text, which is meaningless to
+// promxy's callers (we never round-trip the original query string).
+// Stripping it also lets the upstream promql test framework match
+// expected warning text exactly.
+var annotationPosSuffix = regexp.MustCompile(` \(\d+:\d+\)$`)
+
 // WarningsConvert converts v1.Warnings (the JSON-decoded plain-string form
 // of an annotation set) to an annotations.Annotations, preserving the
 // info-vs-warning classification when the original prefix is present.
@@ -38,6 +47,7 @@ func WarningsConvert(ws v1.Warnings) annotations.Annotations {
 }
 
 func toAnnotationError(s string) error {
+	s = annotationPosSuffix.ReplaceAllString(s, "")
 	for _, p := range warningPrefixes {
 		if rest, ok := strings.CutPrefix(s, p.prefix); ok {
 			return fmt.Errorf("%w: %s", p.parent, rest)
