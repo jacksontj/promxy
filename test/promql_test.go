@@ -299,6 +299,30 @@ func TestUpstreamEvaluations(t *testing.T) {
 				// queryRangeAt instant-query optimization in proxystorage
 				// NodeReplacer; keeping the file in the skip set until the
 				// other clusters land too.
+				//
+				// Also fixed (still skipped because other clusters here
+				// remain broken — leave the skip alone until those land):
+				//   * absent() label propagation under the test
+				//     framework's @-timestamp sweep: lines 1544, 1547,
+				//     1550, 1553 (preserve Name/LabelMatchers when
+				//     synthesizing the @-modified VectorSelector
+				//     replacement so createLabelsForAbsentFunction still
+				//     sees them).
+				//   * present_over_time and other sparse range-mode
+				//     outputs bleeding forward via engine lookback:
+				//     lines 1705, 1707, 1713, 1719 (fill StaleNaN at
+				//     missing step timestamps on the substituted Call
+				//     result so vectorSelectorSingle bails per-step).
+				//   * label_join eval_fail expects the engine-emitted
+				//     "vector cannot contain metrics with the same
+				//     labelset" verbatim: line 543 (skip pushdown for
+				//     label_join / label_replace / info so the engine
+				//     evaluates them locally rather than round-tripping
+				//     through ErrorWrap chains).
+				// Same fix flips the range-mode "_" expected-empty
+				// assertions on lines 11, 58, 90, 612, 615, 618, 1837
+				// (resets/changes/clamp*/round over sparse data) that
+				// shared the same lookback-bleed pattern.
 				"functions.test",
 				"limit.test":
 				continue
