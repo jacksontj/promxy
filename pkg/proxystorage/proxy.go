@@ -3,6 +3,7 @@ package proxystorage
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"reflect"
@@ -17,6 +18,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/storage"
@@ -704,9 +706,20 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		logrus.Debugf("call %v %v", n, n.Type())
 
 		// absent and absent_over_time are difficult to implement at this layer; and as such we won't touch them
-		// we'll do our NodeReplace at another node in the tree
+		// we'll do our NodeReplace at another node in the tree.
+		//
+		// label_join / label_replace / info are evaluated by the engine via
+		// dedicated evalLabel{Join,Replace,Info} dispatchers that bypass the
+		// FunctionCalls table and call ev.errorf/ev.error with a precise,
+		// caller-facing message (e.g. "vector cannot contain metrics with
+		// the same labelset"). Pushing them to a single downstream means the
+		// error round-trips through ErrorWrap chains (target=…, servergroup=…)
+		// before reaching the engine, mangling the exact wording — fine for
+		// production, fatal for eval_fail tests. Let the engine handle these
+		// locally by fetching args[0] via Querier.Select.
 		switch n.Func.Name {
-		case "absent", "absent_over_time":
+		case "absent", "absent_over_time",
+			"label_join", "label_replace", "info":
 			return nil, nil
 		}
 
@@ -731,6 +744,21 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		}
 		if containsLossyHistogram(result) {
 			return nil, nil
+		}
+
+		// For range queries, fill StaleNaN at step timestamps the downstream
+		// did not return a value for. The engine's per-step VectorSelector
+		// eval uses ev.lookbackDelta (5m default, not our ret.LookbackDelta
+		// hint) when peeking at the previous sample, so an isolated step
+		// sample from a sparse range output (e.g. present_over_time returning
+		// 1 at one step only) otherwise bleeds forward into every later step
+		// within the lookback window.
+		if s.Interval > 0 {
+			if mat, ok := result.(model.Matrix); ok {
+				startMs := timestamp.FromTime(s.Start.Add(-reqOffset))
+				endMs := timestamp.FromTime(s.End.Add(-reqOffset))
+				fillStaleNaNGaps(mat, startMs, endMs, int64(s.Interval/time.Millisecond))
+			}
 		}
 
 		iterators := promclient.IteratorsForValue(result)
@@ -822,7 +850,19 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			// VectorSelector whose samples sit at the request timestamps so
 			// the engine looks them up by ts directly instead of reapplying
 			// @ T - offset to a sample set that's already pinned.
-			ret := &parser.VectorSelector{OriginalOffset: synthOffset}
+			//
+			// Preserve Name and LabelMatchers: functions like absent() read
+			// these from the (already-resolved) VectorSelector AST node to
+			// synthesize output labels (createLabelsForAbsentFunction). The
+			// matchers are inert for data lookup at this point — the
+			// downstream already returned exactly the right series — but
+			// dropping them would mean absent(foo{job="x"} @ T) returns
+			// `{} 1` instead of `{job="x"} 1`.
+			ret := &parser.VectorSelector{
+				Name:           n.Name,
+				LabelMatchers:  n.LabelMatchers,
+				OriginalOffset: synthOffset,
+			}
 			if s.Interval > 0 {
 				ret.LookbackDelta = s.Interval - time.Duration(1)
 			}
@@ -1011,4 +1051,74 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 func durationMilliseconds(d time.Duration) int64 {
 	return int64(d / (time.Millisecond / time.Nanosecond))
+}
+
+// fillStaleNaNGaps inserts StaleNaN markers at the step timestamps where the
+// downstream's range response did not include a sample. We need this because
+// promxy substitutes a *parser.Call (e.g. present_over_time, last_over_time)
+// with a synthetic VectorSelector whose UnexpandedSeriesSet exposes the
+// downstream-computed samples. When the engine re-evaluates that VectorSelector
+// it uses the engine-wide lookback (default 5m) to find samples — even though
+// the substituted node represents the call's already-computed step-pinned
+// output. Without explicit "no value at this step" markers, an isolated sample
+// at one step T_k bleeds forward to every subsequent step within the lookback,
+// turning sparse outputs (present_over_time returning 1 at only one step) into
+// dense ones. StaleNaN at the empty step timestamps tells vectorSelectorSingle
+// to bail out at that step (see promql.IsStaleNaN check in engine.go).
+//
+// startTs/endTs/interval are in milliseconds (model.Time is ms). startTs and
+// endTs are inclusive. If interval is 0 (instant query) we leave the matrix
+// untouched.
+func fillStaleNaNGaps(m model.Matrix, startTs, endTs, interval int64) {
+	if interval <= 0 {
+		return
+	}
+	stale := math.Float64frombits(value.StaleNaN)
+	for _, stream := range m {
+		// Build the set of step timestamps already present.
+		present := make(map[int64]struct{}, len(stream.Values))
+		for _, v := range stream.Values {
+			present[int64(v.Timestamp)] = struct{}{}
+		}
+		for _, h := range stream.Histograms {
+			present[int64(h.Timestamp)] = struct{}{}
+		}
+
+		// Collect missing step timestamps in order. We bound the number
+		// of iterations defensively: bogus startTs/endTs from upstream
+		// shouldn't lock us in an unbounded loop.
+		expected := (endTs-startTs)/interval + 1
+		if expected <= 0 || expected > int64(len(present))+10_000 {
+			// If the eval window is way larger than the actual returned
+			// data we'd rather skip the fill than allocate a giant slice
+			// — the engine's lookback can still misbehave but the
+			// existing samples remain correct.
+			continue
+		}
+		for ts := startTs; ts <= endTs; ts += interval {
+			if _, ok := present[ts]; ok {
+				continue
+			}
+			stream.Values = append(stream.Values, model.SamplePair{
+				Timestamp: model.Time(ts),
+				Value:     model.SampleValue(stale),
+			})
+		}
+		// model.SampleStream.Values must be timestamp-ordered for our
+		// SeriesIterator to walk it monotonically; the appended StaleNaN
+		// samples can sit out of order relative to the original samples.
+		sortSampleStreamValues(stream)
+	}
+}
+
+// sortSampleStreamValues sorts stream.Values by timestamp using insertion
+// sort — len(stream.Values) is typically a handful of points (one per step),
+// so a stdlib sort.Slice would pay disproportionate cost for the closure call.
+func sortSampleStreamValues(stream *model.SampleStream) {
+	vs := stream.Values
+	for i := 1; i < len(vs); i++ {
+		for j := i; j > 0 && vs[j-1].Timestamp > vs[j].Timestamp; j-- {
+			vs[j-1], vs[j] = vs[j], vs[j-1]
+		}
+	}
 }
