@@ -3,6 +3,7 @@ package proxystorage
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"reflect"
@@ -17,6 +18,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/storage"
@@ -419,11 +421,37 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	offsetFinder := &promclient.OffsetFinder{}
 	vecFinder := &promclient.BooleanFinder{Func: isVectorSelector}
 	timestampFinder := &promclient.BooleanFinder{Func: hasTimestamp}
+	// histFinder rides along on the same tree walk to detect histogram-
+	// bearing subtrees: histogram-only function calls (always) plus
+	// VectorSelectors whose metric name is histogram-typed per the
+	// per-server-group metadata cache (when native_histogram.metadata_refresh
+	// is configured).
+	histFinder := &histogramFinder{isHistogramName: p.histogramNamePredicate()}
 
-	visitor := promclient.NewMultiVisitor([]parser.Visitor{aggFinder, offsetFinder, vecFinder, timestampFinder})
+	visitor := promclient.NewMultiVisitor([]parser.Visitor{aggFinder, offsetFinder, vecFinder, timestampFinder, histFinder})
 
 	if _, err := parser.Walk(ctx, visitor, s, node, nil, nil); err != nil {
 		return nil, err
+	}
+
+	// Histogram-bearing queries lose schema fidelity over the HTTP API
+	// (the JSON SampleHistogram shape collapses sparse spans into a flat
+	// bucket list, drops empty buckets, etc.). Two-step handling:
+	//   1. Fail loud if any targeted server group has neither remote_read
+	//      nor native_histogram.allow_lossy — wrong data is worse than no
+	//      data, so the default is to surface the misconfig.
+	//   2. Otherwise opt out of pushdown so the embedded engine evaluates
+	//      locally and fetches raw data through GetValue, which routes
+	//      via remote_read where configured and preserves the original
+	//      FloatHistogram end-to-end.
+	// Ancestor-path inheritance: parser.Walk descends into children even
+	// when NodeReplacer returns nil for the parent, so a histogram-only
+	// call above us still propagates the histogram signal.
+	if pathHasHistogramOnlyCall(path) || histFinder.found.Load() {
+		if missing := p.strictMissingRemoteRead(); len(missing) > 0 {
+			return nil, histogramFidelityError(missing)
+		}
+		return nil, nil
 	}
 
 	if aggFinder.Found > 0 {
@@ -529,6 +557,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			if err != nil {
 				return nil, err
 			}
+			if containsLossyHistogram(result) {
+				return nil, nil
+			}
 
 		// Convert avg into sum() / count()
 		case parser.AVG:
@@ -615,6 +646,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			if err != nil {
 				return nil, err
 			}
+			if containsLossyHistogram(result) {
+				return nil, nil
+			}
 			n.Op = parser.SUM
 
 			// To aggregate count_values we simply sum(count_values(key, metric)) by (key)
@@ -633,6 +667,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 			if err != nil {
 				return nil, err
+			}
+			if containsLossyHistogram(result) {
+				return nil, nil
 			}
 
 			iterators := promclient.IteratorsForValue(result)
@@ -721,6 +758,23 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		if err != nil {
 			return nil, err
 		}
+		if containsLossyHistogram(result) {
+			return nil, nil
+		}
+
+		// For range pushdowns the upstream returns one float per step where
+		// the underlying expression produced one. Steps where the expression
+		// has no float result — e.g. clamp / round / abs / ceil on a series
+		// that carries a histogram at that timestamp, which the function
+		// silently drops — come back as gaps. If we hand the gappy series
+		// directly to the engine, its PeekPrev fallback (governed by the
+		// query-level lookbackDelta, not the per-VectorSelector one) extends
+		// the last float forward across those gaps, producing values where
+		// the upstream had none. Mark each missing step with a stale NaN so
+		// vectorSelectorSingle returns ok=false at those timestamps.
+		if s.Interval > 0 {
+			result = padMissingStepsWithStaleNaN(result, s.Start.Add(-reqOffset), s.End.Add(-reqOffset), s.Interval)
+		}
 
 		iterators := promclient.IteratorsForValue(result)
 		series := make([]storage.Series, len(iterators))
@@ -775,6 +829,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		var result model.Value
 		var warnings v1.Warnings
 		var err error
+		origLookback := n.LookbackDelta
 		if s.Interval > 0 {
 			n.LookbackDelta = s.Interval - time.Duration(1)
 			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
@@ -788,6 +843,15 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 		if err != nil {
 			return nil, err
+		}
+		if containsLossyHistogram(result) {
+			// We abandoned the pushdown — restore the original LookbackDelta
+			// so the engine's local eval uses the default lookback when it
+			// calls Querier.Select instead of the tighter step-minus-1
+			// window we set above (which would otherwise drop boundary
+			// samples like a load at t=0 with a range query starting at 0).
+			n.LookbackDelta = origLookback
+			return nil, nil
 		}
 
 		iterators := promclient.IteratorsForValue(result)
@@ -894,6 +958,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			if err != nil {
 				return nil, err
 			}
+			if containsLossyHistogram(result) {
+				return nil, nil
+			}
 
 			iterators := promclient.IteratorsForValue(result)
 			series := make([]storage.Series, len(iterators))
@@ -934,6 +1001,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			}
 			if err != nil {
 				return nil, err
+			}
+			if containsLossyHistogram(result) {
+				return nil, nil
 			}
 
 			iterators := promclient.IteratorsForValue(result)
@@ -984,4 +1054,80 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 func durationMilliseconds(d time.Duration) int64 {
 	return int64(d / (time.Millisecond / time.Nanosecond))
+}
+
+// padMissingStepsWithStaleNaN walks every series in v (instant or range
+// matrix) and, for each step in [start, end] aligned to interval, inserts a
+// stale-marker NaN where no float sample is present.
+//
+// Why: when the Call branch of NodeReplacer pushes a function down as a
+// QueryRange the upstream returns one float per step where the function
+// produced a result. Functions like clamp/round/abs/ceil silently drop
+// histogram samples, so steps that fall on a histogram timestamp come back
+// as gaps. Without the pad, the engine's PeekPrev fallback — which
+// evaluates against the query-level lookbackDelta (typically 5m), not the
+// per-VectorSelector LookbackDelta promxy sets on the synthesized
+// replacement — extends the last float forward across those gaps and
+// produces values where the upstream returned none. Stale NaNs are dropped
+// by promql.vectorSelectorSingle via value.IsStaleNaN, which is the same
+// mechanism upstream uses to terminate a series on the producer side.
+//
+// Histograms in the existing series are left untouched. Only float gaps
+// are filled.
+func padMissingStepsWithStaleNaN(v model.Value, start, end time.Time, interval time.Duration) model.Value {
+	mat, ok := v.(model.Matrix)
+	if !ok {
+		return v
+	}
+	if interval <= 0 {
+		return v
+	}
+	stepMs := model.Time(interval / time.Millisecond)
+	if stepMs <= 0 {
+		// Sub-millisecond intervals would never advance the loop below.
+		// Promxy already rounds step to >= 1ms upstream of this point;
+		// the guard is just belt-and-suspenders.
+		return v
+	}
+	staleVal := model.SampleValue(math.Float64frombits(value.StaleNaN))
+	startMs := model.Time(timestamp.FromTime(start))
+	endMs := model.Time(timestamp.FromTime(end))
+	for _, ss := range mat {
+		present := make(map[model.Time]struct{}, len(ss.Values))
+		for _, sp := range ss.Values {
+			present[sp.Timestamp] = struct{}{}
+		}
+		// We intentionally do NOT mark histogram-bearing step timestamps as
+		// present: the engine reads floats and histograms from separate
+		// At*/AtFloatHistogram paths, so a stale NaN sitting on the same
+		// step as a histogram still terminates the float-lookback chain
+		// without affecting the histogram side.
+		var newValues []model.SamplePair
+		for t := startMs; t <= endMs; t += stepMs {
+			if _, ok := present[t]; ok {
+				continue
+			}
+			newValues = append(newValues, model.SamplePair{Timestamp: t, Value: staleVal})
+		}
+		if len(newValues) == 0 {
+			continue
+		}
+		// Merge maintaining timestamp order. Existing ss.Values is already
+		// sorted by Timestamp (upstream returns step-ascending samples).
+		merged := make([]model.SamplePair, 0, len(ss.Values)+len(newValues))
+		i, j := 0, 0
+		for i < len(ss.Values) && j < len(newValues) {
+			if ss.Values[i].Timestamp <= newValues[j].Timestamp {
+				merged = append(merged, ss.Values[i])
+				i++
+			} else {
+				merged = append(merged, newValues[j])
+				j++
+			}
+		}
+		merged = append(merged, ss.Values[i:]...)
+		merged = append(merged, newValues[j:]...)
+		ss.Values = merged
+	}
+	return mat
 }

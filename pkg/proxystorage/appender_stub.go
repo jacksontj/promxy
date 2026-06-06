@@ -45,15 +45,26 @@ func (a *appenderStub) AppendExemplar(_ storage.SeriesRef, _ labels.Labels, _ ex
 	return 0, fmt.Errorf("not Implemented")
 }
 
-// AppendHistogram is a stub: native histograms are not supported in promxy yet.
-// TODO: native histogram support — see follow-up.
+// AppendHistogram silently accepts native-histogram samples when no
+// remote_write endpoint is configured, mirroring the behaviour of Append
+// for floats. Returning an error here would abort recording-rule and
+// alerting evaluation for any rule that produces a histogram.
 func (a *appenderStub) AppendHistogram(_ storage.SeriesRef, _ labels.Labels, _ int64, _ *histogram.Histogram, _ *histogram.FloatHistogram) (storage.SeriesRef, error) {
-	return 0, fmt.Errorf("not Implemented")
+	appenderLock.Lock()
+	now := time.Now()
+	if now.Sub(appenderWarningTime) > time.Minute {
+		logrus.Warning("No remote_write endpoint defined in promxy")
+		appenderWarningTime = now
+	}
+	appenderLock.Unlock()
+	return 0, nil
 }
 
-// AppendHistogramCTZeroSample is a stub.
+// AppendHistogramCTZeroSample silently accepts created-timestamp markers
+// for histograms. promxy doesn't model CT tracking, but the appender must
+// not error or upstream evaluation aborts.
 func (a *appenderStub) AppendHistogramCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64, _ *histogram.Histogram, _ *histogram.FloatHistogram) (storage.SeriesRef, error) {
-	return 0, fmt.Errorf("not Implemented")
+	return 0, nil
 }
 
 // AppendCTZeroSample is a stub.
