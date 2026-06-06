@@ -733,6 +733,17 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			return nil, nil
 		}
 
+		// For range queries the upstream returns one value per step where it
+		// could evaluate the call; gaps where the call had no input get no
+		// sample. The engine's per-step lookup uses its default lookback
+		// (5m) — not the VectorSelector's LookbackDelta — so without help
+		// it would carry the previous step's value across any gap. Inject a
+		// stale marker at the step boundary after each gap so the engine
+		// reports no sample, matching direct upstream evaluation.
+		if s.Interval > 0 {
+			result = promclient.InjectStaleMarkers(result, durationMilliseconds(s.Interval))
+		}
+
 		iterators := promclient.IteratorsForValue(result)
 		series := make([]storage.Series, len(iterators))
 		for i, iterator := range iterators {
