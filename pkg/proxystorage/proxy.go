@@ -15,20 +15,25 @@ import (
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/agent"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
+	"github.com/prometheus/prometheus/tsdb/chunks"
 	"github.com/prometheus/prometheus/tsdb/index"
 	"github.com/sirupsen/logrus"
 
 	"github.com/jacksontj/promxy/pkg/logging"
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
+	"github.com/jacksontj/promxy/pkg/promapi"
 	"github.com/jacksontj/promxy/pkg/promclient"
 	"github.com/jacksontj/promxy/pkg/proxyquerier"
 	"github.com/jacksontj/promxy/pkg/servergroup"
@@ -370,6 +375,70 @@ func (p *ProxyStorage) WALReplayStatus() (tsdb.WALReplayStatus, error) {
 	return tsdb.WALReplayStatus{}, errors.New("not implemented")
 }
 
+// vectorToStepMatrix converts an instant-query SeriesSet (one sample per
+// series at the @ time) into a range-query-shaped SeriesSet: each input
+// series' single sample is replicated at every step time in [start, end]
+// (inclusive of start, inclusive of end when (end-start) is a multiple of
+// step). Histograms are replicated the same way. This is only valid when the
+// underlying expression is step-invariant — currently used by the NodeReplacer
+// when the subtree below has an @ modifier.
+//
+// The replicated FloatHistogram pointer is shared across steps; that is safe
+// because promapi.NewSeries hands out copy-on-read iterators, so the engine
+// can't observe an aliased histogram.
+func vectorToStepMatrix(vec storage.SeriesSet, start, end time.Time, step time.Duration) storage.SeriesSet {
+	if step <= 0 {
+		return promapi.NewSeriesSet(nil, vec.Warnings(), vec.Err())
+	}
+	startMs := timestamp.FromTime(start)
+	endMs := timestamp.FromTime(end)
+	stepMs := int64(step / time.Millisecond)
+	if stepMs <= 0 || endMs < startMs {
+		return promapi.NewSeriesSet(nil, vec.Warnings(), vec.Err())
+	}
+	n := int((endMs-startMs)/stepMs) + 1
+	var out []storage.Series
+	for vec.Next() {
+		src := vec.At()
+		lbls := src.Labels().Copy()
+
+		// Instant query → at most one sample per series. Read it (the last
+		// one wins if, defensively, more than one is present).
+		var (
+			haveFloat bool
+			fval      float64
+			fh        *histogram.FloatHistogram
+		)
+		it := src.Iterator(nil)
+		for vt := it.Next(); vt != chunkenc.ValNone; vt = it.Next() {
+			switch vt {
+			case chunkenc.ValFloat:
+				_, fval = it.At()
+				haveFloat, fh = true, nil
+			case chunkenc.ValHistogram, chunkenc.ValFloatHistogram:
+				_, fh = it.AtFloatHistogram(nil)
+				haveFloat = false
+			}
+		}
+		if err := it.Err(); err != nil {
+			return promapi.NewSeriesSet(nil, vec.Warnings(), err)
+		}
+
+		samples := make([]chunks.Sample, 0, n)
+		for i := 0; i < n; i++ {
+			ts := startMs + int64(i)*stepMs
+			switch {
+			case fh != nil:
+				samples = append(samples, promapi.HistogramSample(ts, fh))
+			case haveFloat:
+				samples = append(samples, promapi.FloatSample(ts, fval))
+			}
+		}
+		out = append(out, promapi.NewSeries(lbls, samples))
+	}
+	return promapi.NewSeriesSet(out, vec.Warnings(), vec.Err())
+}
+
 // NodeReplacer replaces promql Nodes with more efficient-to-fetch ones. This works by taking lower-layer
 // chunks of the query, farming them out to prometheus hosts, then stitching the results back together.
 // An example would be a sum, we can sum multiple sums and come up with the same result -- so we do.
@@ -405,6 +474,20 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		return false
 	}
 
+	// isAtModifierUnsafeCall flags Call nodes whose result is NOT
+	// step-invariant even when an inner @ modifier pins the input — e.g.
+	// timestamp() returns the evaluation-time timestamp, predict_linear
+	// extrapolates from evalTime, etc. Their presence in the subtree
+	// disqualifies the instant-query optimization in queryRangeAt below.
+	isAtModifierUnsafeCall := func(node parser.Node) bool {
+		c, ok := node.(*parser.Call)
+		if !ok {
+			return false
+		}
+		_, unsafe := promql.AtModifierUnsafeFunctions[c.Func.Name]
+		return unsafe
+	}
+
 	// If we are a child of a subquery; we just skip replacement (since it already did a nodereplacer for those)
 	for _, n := range path {
 		if isSubQuery(n) {
@@ -418,6 +501,14 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	offsetFinder := &promclient.OffsetFinder{}
 	vecFinder := &promclient.BooleanFinder{Func: isVectorSelector}
 	timestampFinder := &promclient.BooleanFinder{Func: hasTimestamp}
+	// atTimestampFinder records the @ timestamp itself (in ms) so we can
+	// issue an instant query at a guaranteed-safe time when pushing down
+	// step-invariant subtrees — see queryRangeAt.
+	atTimestampFinder := &promclient.TimestampFinder{}
+	// atUnsafeFinder counts Call nodes whose result depends on the
+	// evaluation timestamp regardless of any inner @; if any are present
+	// queryRangeAt cannot use the instant-query optimization.
+	atUnsafeFinder := &promclient.BooleanFinder{Func: isAtModifierUnsafeCall}
 	// histFinder rides along on the same tree walk to detect histogram-
 	// bearing subtrees: histogram-only function calls (always) plus
 	// VectorSelectors whose metric name is histogram-typed per the
@@ -425,7 +516,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// is configured).
 	histFinder := &histogramFinder{isHistogramName: p.histogramNamePredicate()}
 
-	visitor := promclient.NewMultiVisitor([]parser.Visitor{aggFinder, offsetFinder, vecFinder, timestampFinder, histFinder})
+	visitor := promclient.NewMultiVisitor([]parser.Visitor{aggFinder, offsetFinder, vecFinder, timestampFinder, atTimestampFinder, atUnsafeFinder, histFinder})
 
 	if _, err := parser.Walk(ctx, visitor, s, node, nil, nil); err != nil {
 		return nil, err
@@ -518,6 +609,39 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	}
 
 	state := p.GetState()
+
+	// queryRangeAt issues a step-aware downstream request for queryStr. When
+	// the subtree below us pins evaluation to a single timestamp via @, the
+	// result at every step is identical (step-invariant); in that case we
+	// issue a single instant Query at the @ timestamp and replicate the
+	// returned vector across each step in [s.Start, s.End]. This avoids
+	// sending QueryRange with a pre-epoch sub-second start time, which the
+	// upstream prometheus/common model.Time.UnmarshalJSON mis-decodes on
+	// the way back (see api_query.go hasNegativeFractionalSecond). When the
+	// subtree has no @, or it contains a Call whose result depends on the
+	// evaluation timestamp even with @ pinning (timestamp, predict_linear,
+	// time, etc. — see promql.AtModifierUnsafeFunctions), falls back to the
+	// regular QueryRange.
+	queryRangeAt := func(queryStr string) storage.SeriesSet {
+		if subtreeHasAt && atTimestampFinder.Found && atUnsafeFinder.Found == 0 && s.Interval > 0 {
+			at := timestamp.Time(atTimestampFinder.Timestamp)
+			result := state.client.Query(ctx, queryStr, at)
+			if err := result.Err(); err != nil {
+				return result
+			}
+			// The instant query returns one sample per series at the @ time;
+			// replicate each across the request's step grid. (Every series in
+			// a SeriesSet is vector-shaped here — there is no Scalar/Matrix/
+			// String ambiguity left at this layer.)
+			return vectorToStepMatrix(result, s.Start.Add(-reqOffset), s.End.Add(-reqOffset), s.Interval)
+		}
+		return state.client.QueryRange(ctx, queryStr, v1.Range{
+			Start: s.Start.Add(-reqOffset),
+			End:   s.End.Add(-reqOffset),
+			Step:  s.Interval,
+		})
+	}
+
 	switch n := node.(type) {
 	// Some AggregateExprs can be composed (meaning they are "reentrant". If the aggregation op
 	// is reentrant/composable then we'll do so, otherwise we let it fall through to normal query mechanisms
@@ -744,11 +868,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		var result storage.SeriesSet
 		var err error
 		if s.Interval > 0 {
-			result = state.client.QueryRange(ctx, n.String(), v1.Range{
-				Start: s.Start.Add(-reqOffset),
-				End:   s.End.Add(-reqOffset),
-				Step:  s.Interval,
-			})
+			result = queryRangeAt(n.String())
 		} else {
 			result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 		}

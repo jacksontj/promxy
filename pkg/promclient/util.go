@@ -113,6 +113,41 @@ func (f *BooleanFinder) Visit(node parser.Node, _ []parser.Node) (parser.Visitor
 	return f, nil
 }
 
+// TimestampFinder records the first @-modifier timestamp it encounters on a
+// VectorSelector / MatrixSelector / SubqueryExpr in the subtree. Found is set
+// once a timestamp is captured; subsequent matches are ignored. Used by the
+// NodeReplacer when subtreeHasAt is true: knowing one safe pinning timestamp
+// lets us issue an instant query rather than a range query whose start may
+// land on a pre-epoch sub-second time and trip the upstream
+// prometheus/common Time.UnmarshalJSON bug.
+type TimestampFinder struct {
+	l         sync.Mutex
+	Found     bool
+	Timestamp int64
+}
+
+// Visit runs on each node in the tree.
+func (f *TimestampFinder) Visit(node parser.Node, _ []parser.Node) (parser.Visitor, error) {
+	f.l.Lock()
+	defer f.l.Unlock()
+	if f.Found {
+		return f, nil
+	}
+	switch n := node.(type) {
+	case *parser.VectorSelector:
+		if n.Timestamp != nil {
+			f.Found = true
+			f.Timestamp = *n.Timestamp
+		}
+	case *parser.SubqueryExpr:
+		if n.Timestamp != nil {
+			f.Found = true
+			f.Timestamp = *n.Timestamp
+		}
+	}
+	return f, nil
+}
+
 // CloneExp returns a cloned copy of `expr`
 func CloneExpr(expr parser.Expr) (newExpr parser.Expr) {
 	newExpr, _ = parser.ParseExpr(expr.String())

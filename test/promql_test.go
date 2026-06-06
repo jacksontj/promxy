@@ -292,6 +292,13 @@ func TestUpstreamEvaluations(t *testing.T) {
 				// fall through to non-pushdown in NodeReplacer; the
 				// fidelity loss is in the JSON round-trip, fixed only by
 				// configuring remote_read on the server group.
+				//
+				// functions.test lines 1131, 1134, 1137, 1140, 1143, 1146,
+				// 1149, 1152, 1155, 1158, 1161, 1164 (sum_over_time(metric
+				// [N{,001,002,003}ms]) at evalTime 4s) are now fixed by the
+				// queryRangeAt instant-query optimization in proxystorage
+				// NodeReplacer; keeping the file in the skip set until the
+				// other clusters land too.
 				"functions.test",
 				"limit.test":
 				continue
