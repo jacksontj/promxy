@@ -3,6 +3,7 @@ package proxystorage
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"reflect"
@@ -17,18 +18,22 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/agent"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
+	"github.com/prometheus/prometheus/tsdb/chunks"
 	"github.com/prometheus/prometheus/tsdb/index"
 	"github.com/sirupsen/logrus"
 
 	"github.com/jacksontj/promxy/pkg/logging"
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
+	"github.com/jacksontj/promxy/pkg/promapi"
 	"github.com/jacksontj/promxy/pkg/promclient"
 	"github.com/jacksontj/promxy/pkg/proxyquerier"
 	"github.com/jacksontj/promxy/pkg/servergroup"
@@ -748,6 +753,20 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			return nil, nil
 		}
 
+		// For range pushdowns the upstream returns one float per step where
+		// the underlying expression produced one. Steps where the expression
+		// has no float result — e.g. clamp / round / abs / ceil on a series
+		// that carries a histogram at that timestamp, which the function
+		// silently drops — come back as gaps. If we hand the gappy series
+		// directly to the engine, its PeekPrev fallback (governed by the
+		// query-level lookbackDelta, not the per-VectorSelector one) extends
+		// the last float forward across those gaps, producing values where
+		// the upstream had none. Mark each missing step with a stale NaN so
+		// vectorSelectorSingle returns ok=false at those timestamps.
+		if s.Interval > 0 {
+			result = padMissingStepsWithStaleNaN(result, s.Start.Add(-reqOffset), s.End.Add(-reqOffset), s.Interval)
+		}
+
 		ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 		if s.Interval > 0 {
 			ret.LookbackDelta = s.Interval - time.Duration(1)
@@ -997,4 +1016,99 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 func durationMilliseconds(d time.Duration) int64 {
 	return int64(d / (time.Millisecond / time.Nanosecond))
+}
+
+// padMissingStepsWithStaleNaN materializes ss and, for each step in
+// [start, end] aligned to interval, inserts a stale-marker NaN where the
+// series has no sample at all.
+//
+// Why: when the Call branch of NodeReplacer pushes a function down as a
+// QueryRange the upstream returns one float per step where the function
+// produced a result. Functions like clamp/round/abs/ceil silently drop
+// histogram samples, so steps that fall on a histogram timestamp come back
+// as gaps. Without the pad, the engine's PeekPrev fallback — which
+// evaluates against the query-level lookbackDelta (typically 5m), not the
+// per-VectorSelector LookbackDelta promxy sets on the synthesized
+// replacement — extends the last float forward across those gaps and
+// produces values where the upstream returned none. Stale NaNs are dropped
+// by promql.vectorSelectorSingle via value.IsStaleNaN, which is the same
+// mechanism upstream uses to terminate a series on the producer side.
+//
+// Unlike the original model.Value implementation, a storage.Series carries
+// floats and histograms in a single timestamp-ordered stream rather than two
+// independent channels, so we cannot drop a float StaleNaN onto a step that
+// already holds a histogram without colliding at that timestamp. We instead
+// treat any sample — float or histogram — as covering its step: a histogram
+// already blocks the float lookback at its own step (the engine reads it
+// there), so it needs no marker. For the clamp/round fix that motivates this
+// the upstream drops histograms entirely, so result is float-only and the two
+// behaviors coincide; the distinction only matters for mixed series, where
+// "histogram covers the step" is the correct outcome anyway.
+//
+// If interval is <= 0 (instant query) ss is returned unchanged.
+func padMissingStepsWithStaleNaN(ss storage.SeriesSet, start, end time.Time, interval time.Duration) storage.SeriesSet {
+	if interval <= 0 {
+		return ss
+	}
+	stepMs := int64(interval / time.Millisecond)
+	if stepMs <= 0 {
+		// Sub-millisecond intervals would never advance the loop below.
+		// Promxy already rounds step to >= 1ms upstream of this point;
+		// the guard is just belt-and-suspenders.
+		return ss
+	}
+	staleF := math.Float64frombits(value.StaleNaN)
+	startMs := timestamp.FromTime(start)
+	endMs := timestamp.FromTime(end)
+	var out []storage.Series
+	for ss.Next() {
+		s := ss.At()
+		lbls := s.Labels().Copy()
+		var samples []chunks.Sample
+		present := make(map[int64]struct{})
+		it := s.Iterator(nil)
+		for vt := it.Next(); vt != chunkenc.ValNone; vt = it.Next() {
+			switch vt {
+			case chunkenc.ValFloat:
+				t, v := it.At()
+				samples = append(samples, promapi.FloatSample(t, v))
+				present[t] = struct{}{}
+			case chunkenc.ValHistogram, chunkenc.ValFloatHistogram:
+				t, fh := it.AtFloatHistogram(nil)
+				samples = append(samples, promapi.HistogramSample(t, fh))
+				present[t] = struct{}{}
+			}
+		}
+		if err := it.Err(); err != nil {
+			return promapi.NewSeriesSet(nil, ss.Warnings(), err)
+		}
+
+		var added bool
+		for t := startMs; t <= endMs; t += stepMs {
+			if _, ok := present[t]; ok {
+				continue
+			}
+			samples = append(samples, promapi.FloatSample(t, staleF))
+			added = true
+		}
+		// promapi.NewSeries' list iterator must walk samples in timestamp
+		// order; the appended StaleNaN points land out of order relative to
+		// the originals.
+		if added {
+			sortSamplesByTime(samples)
+		}
+		out = append(out, promapi.NewSeries(lbls, samples))
+	}
+	return promapi.NewSeriesSet(out, ss.Warnings(), ss.Err())
+}
+
+// sortSamplesByTime sorts samples by timestamp using insertion sort — a step
+// range is typically a handful of points, so a stdlib sort.Slice would pay
+// disproportionate cost for the closure call.
+func sortSamplesByTime(vs []chunks.Sample) {
+	for i := 1; i < len(vs); i++ {
+		for j := i; j > 0 && vs[j-1].T() > vs[j].T(); j-- {
+			vs[j-1], vs[j] = vs[j], vs[j-1]
+		}
+	}
 }
