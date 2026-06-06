@@ -3,6 +3,7 @@ package proxystorage
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"reflect"
@@ -17,6 +18,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/storage"
@@ -733,6 +735,20 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			return nil, nil
 		}
 
+		// For range pushdowns the upstream returns one float per step where
+		// the underlying expression produced one. Steps where the expression
+		// has no float result — e.g. clamp / round / abs / ceil on a series
+		// that carries a histogram at that timestamp, which the function
+		// silently drops — come back as gaps. If we hand the gappy series
+		// directly to the engine, its PeekPrev fallback (governed by the
+		// query-level lookbackDelta, not the per-VectorSelector one) extends
+		// the last float forward across those gaps, producing values where
+		// the upstream had none. Mark each missing step with a stale NaN so
+		// vectorSelectorSingle returns ok=false at those timestamps.
+		if s.Interval > 0 {
+			result = padMissingStepsWithStaleNaN(result, s.Start.Add(-reqOffset), s.End.Add(-reqOffset), s.Interval)
+		}
+
 		iterators := promclient.IteratorsForValue(result)
 		series := make([]storage.Series, len(iterators))
 		for i, iterator := range iterators {
@@ -1011,4 +1027,80 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 func durationMilliseconds(d time.Duration) int64 {
 	return int64(d / (time.Millisecond / time.Nanosecond))
+}
+
+// padMissingStepsWithStaleNaN walks every series in v (instant or range
+// matrix) and, for each step in [start, end] aligned to interval, inserts a
+// stale-marker NaN where no float sample is present.
+//
+// Why: when the Call branch of NodeReplacer pushes a function down as a
+// QueryRange the upstream returns one float per step where the function
+// produced a result. Functions like clamp/round/abs/ceil silently drop
+// histogram samples, so steps that fall on a histogram timestamp come back
+// as gaps. Without the pad, the engine's PeekPrev fallback — which
+// evaluates against the query-level lookbackDelta (typically 5m), not the
+// per-VectorSelector LookbackDelta promxy sets on the synthesized
+// replacement — extends the last float forward across those gaps and
+// produces values where the upstream returned none. Stale NaNs are dropped
+// by promql.vectorSelectorSingle via value.IsStaleNaN, which is the same
+// mechanism upstream uses to terminate a series on the producer side.
+//
+// Histograms in the existing series are left untouched. Only float gaps
+// are filled.
+func padMissingStepsWithStaleNaN(v model.Value, start, end time.Time, interval time.Duration) model.Value {
+	mat, ok := v.(model.Matrix)
+	if !ok {
+		return v
+	}
+	if interval <= 0 {
+		return v
+	}
+	stepMs := model.Time(interval / time.Millisecond)
+	if stepMs <= 0 {
+		// Sub-millisecond intervals would never advance the loop below.
+		// Promxy already rounds step to >= 1ms upstream of this point;
+		// the guard is just belt-and-suspenders.
+		return v
+	}
+	staleVal := model.SampleValue(math.Float64frombits(value.StaleNaN))
+	startMs := model.Time(timestamp.FromTime(start))
+	endMs := model.Time(timestamp.FromTime(end))
+	for _, ss := range mat {
+		present := make(map[model.Time]struct{}, len(ss.Values))
+		for _, sp := range ss.Values {
+			present[sp.Timestamp] = struct{}{}
+		}
+		// We intentionally do NOT mark histogram-bearing step timestamps as
+		// present: the engine reads floats and histograms from separate
+		// At*/AtFloatHistogram paths, so a stale NaN sitting on the same
+		// step as a histogram still terminates the float-lookback chain
+		// without affecting the histogram side.
+		var newValues []model.SamplePair
+		for t := startMs; t <= endMs; t += stepMs {
+			if _, ok := present[t]; ok {
+				continue
+			}
+			newValues = append(newValues, model.SamplePair{Timestamp: t, Value: staleVal})
+		}
+		if len(newValues) == 0 {
+			continue
+		}
+		// Merge maintaining timestamp order. Existing ss.Values is already
+		// sorted by Timestamp (upstream returns step-ascending samples).
+		merged := make([]model.SamplePair, 0, len(ss.Values)+len(newValues))
+		i, j := 0, 0
+		for i < len(ss.Values) && j < len(newValues) {
+			if ss.Values[i].Timestamp <= newValues[j].Timestamp {
+				merged = append(merged, ss.Values[i])
+				i++
+			} else {
+				merged = append(merged, newValues[j])
+				j++
+			}
+		}
+		merged = append(merged, ss.Values[i:]...)
+		merged = append(merged, newValues[j:]...)
+		ss.Values = merged
+	}
+	return mat
 }

@@ -279,6 +279,13 @@ func TestUpstreamEvaluations(t *testing.T) {
 				// separately from #637; until those are fixed, skip the
 				// whole files so we can keep parser.EnableExperimentalFunctions
 				// on for native_histograms.test.
+				// functions.test contains other clusters of failures unrelated
+				// to the mixed-metric arithmetic bug fixed in this change
+				// (line_612 clamp, line_615 clamp_min, line_618 clamp_max,
+				// line_1837 round). The remaining clusters — counter-reset
+				// functions on mixed series, sub-second range queries,
+				// limit_ratio, etc. — are tracked separately, so keep the
+				// suite skipped until they all clear.
 				"functions.test",
 				"limit.test":
 				continue
