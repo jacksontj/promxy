@@ -279,6 +279,14 @@ func TestUpstreamEvaluations(t *testing.T) {
 				// separately from #637; until those are fixed, skip the
 				// whole files so we can keep parser.EnableExperimentalFunctions
 				// on for native_histograms.test.
+				//
+				// Fixed so far (still skipped here while sibling clusters
+				// land):
+				//   - lines 11, 58, 90: resets()/changes() over short
+				//     range vectors leaked the previous step's value
+				//     across gaps because the engine's per-step lookback
+				//     defaults to 5m. Pushdown now injects stale markers
+				//     after each gap so the engine reports no sample.
 				"functions.test",
 				"limit.test":
 				continue
