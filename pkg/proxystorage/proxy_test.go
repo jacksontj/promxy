@@ -13,9 +13,12 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
+	"github.com/prometheus/prometheus/tsdb/chunks"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/jacksontj/promxy/pkg/promapi"
 	"github.com/jacksontj/promxy/pkg/promclient"
 )
 
@@ -400,4 +403,73 @@ func TestNodeReplacer(t *testing.T) {
 
 	//func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, node parser.Node, path []parser.Node) (parser.Node, error) {
 
+}
+
+func TestVectorToStepMatrix(t *testing.T) {
+	// Instant-query result: one sample per series at the @ time. The input
+	// timestamps are irrelevant — vectorToStepMatrix replicates each value
+	// across the step grid.
+	vec := promapi.NewSeriesSet([]storage.Series{
+		promapi.NewSeries(labels.FromStrings("__name__", "foo", "instance", "a"),
+			[]chunks.Sample{promapi.FloatSample(4000, 1.5)}),
+		promapi.NewSeries(labels.FromStrings("__name__", "foo", "instance", "b"),
+			[]chunks.Sample{promapi.FloatSample(4000, 2.5)}),
+	}, nil, nil)
+
+	// Range [-59.2s, 60.8s] step 60s → 3 steps at -59200ms, 800ms, 60800ms.
+	// The synthesized series MUST place samples exactly at those step times
+	// (not at the @ time) so the engine's step-by-step lookup finds the
+	// pinned value at each step within its LookbackDelta window.
+	start := time.Unix(0, 800*int64(time.Millisecond)).Add(-time.Minute)
+	end := time.Unix(0, 800*int64(time.Millisecond)).Add(time.Minute)
+
+	type sample struct {
+		t int64
+		v float64
+	}
+	read := func(ss storage.SeriesSet) [][]sample {
+		var got [][]sample
+		for ss.Next() {
+			var pts []sample
+			it := ss.At().Iterator(nil)
+			for vt := it.Next(); vt != chunkenc.ValNone; vt = it.Next() {
+				ts, v := it.At()
+				pts = append(pts, sample{ts, v})
+			}
+			if err := it.Err(); err != nil {
+				t.Fatalf("iterator error: %v", err)
+			}
+			got = append(got, pts)
+		}
+		return got
+	}
+
+	mat := read(vectorToStepMatrix(vec, start, end, time.Minute))
+	if len(mat) != 2 {
+		t.Fatalf("expected 2 streams, got %d", len(mat))
+	}
+	for i, stream := range mat {
+		if len(stream) != 3 {
+			t.Fatalf("stream %d: expected 3 samples, got %d", i, len(stream))
+		}
+		wantTs := []int64{-59200, 800, 60800}
+		wantVal := []float64{1.5, 2.5}[i]
+		for j, sp := range stream {
+			if sp.t != wantTs[j] {
+				t.Errorf("stream %d sample %d: got ts %d, want %d", i, j, sp.t, wantTs[j])
+			}
+			if sp.v != wantVal {
+				t.Errorf("stream %d sample %d: got value %v, want %v", i, j, sp.v, wantVal)
+			}
+		}
+	}
+
+	// Step ≤ 0 → empty set (defensive: caller gates on s.Interval > 0).
+	vec2 := promapi.NewSeriesSet([]storage.Series{
+		promapi.NewSeries(labels.FromStrings("__name__", "foo"),
+			[]chunks.Sample{promapi.FloatSample(4000, 1.5)}),
+	}, nil, nil)
+	if got := read(vectorToStepMatrix(vec2, start, end, 0)); len(got) != 0 {
+		t.Errorf("step=0: expected empty set, got %v", got)
+	}
 }
