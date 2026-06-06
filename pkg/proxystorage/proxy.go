@@ -700,6 +700,19 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		case parser.STDVAR:
 			// DO NOTHING
 
+		// limitk(k, expr) and limit_ratio(r, expr) are NOT reentrant: the
+		// engine picks k (or floor(r*N)) series by hash from the *full*
+		// input vector, so pushing the aggregation independently into N
+		// upstreams and unioning the results would pick a different,
+		// possibly inconsistent, subset than evaluating against the union
+		// directly. We let the engine evaluate locally over the raw matrix
+		// data fetched via Querier.Select so the hash-based selection sees
+		// the complete series set. (Listed here explicitly rather than
+		// relying on default fall-through so the non-reentrant decision is
+		// visible alongside the reentrant case list above.)
+		case parser.LIMITK, parser.LIMIT_RATIO:
+			// DO NOTHING
+
 		}
 
 		if result != nil {

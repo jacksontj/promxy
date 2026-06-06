@@ -279,6 +279,19 @@ func TestUpstreamEvaluations(t *testing.T) {
 				// separately from #637; until those are fixed, skip the
 				// whole files so we can keep parser.EnableExperimentalFunctions
 				// on for native_histograms.test.
+				//
+				// limit.test additionally fails on the HTTP-only config
+				// (but passes on remote_read) at lines 45/48/52/57/162/165:
+				// these six evals return a raw native-histogram series in
+				// their result, and the engine's fallback path after the
+				// VectorSelector pushdown's lossy-histogram bail-out still
+				// fetches via Client.GetValue -> HTTP /api/v1/query, which
+				// JSON-encodes histograms as SampleHistogram (flat bucket
+				// list, schema collapsed to CustomBuckets/-53). limitk and
+				// limit_ratio themselves are non-reentrant and correctly
+				// fall through to non-pushdown in NodeReplacer; the
+				// fidelity loss is in the JSON round-trip, fixed only by
+				// configuring remote_read on the server group.
 				"functions.test",
 				"limit.test":
 				continue
