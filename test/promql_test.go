@@ -279,6 +279,13 @@ func TestUpstreamEvaluations(t *testing.T) {
 				// separately from #637; until those are fixed, skip the
 				// whole files so we can keep parser.EnableExperimentalFunctions
 				// on for native_histograms.test.
+				//
+				// Lines 1131, 1134, 1137, 1140, 1143, 1146, 1149, 1152,
+				// 1155, 1158, 1161, 1164 (sum_over_time(metric[N{,001,002,003}ms])
+				// at evalTime 4s) are now fixed by the queryRangeAt
+				// instant-query optimization in proxystorage NodeReplacer;
+				// keeping the file in the skip set until the other
+				// clusters land too.
 				"functions.test",
 				"limit.test":
 				continue

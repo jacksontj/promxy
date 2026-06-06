@@ -398,3 +398,43 @@ func TestNodeReplacer(t *testing.T) {
 	//func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, node parser.Node, path []parser.Node) (parser.Node, error) {
 
 }
+
+func TestVectorToStepMatrix(t *testing.T) {
+	metricA := model.Metric{"__name__": "foo", "instance": "a"}
+	metricB := model.Metric{"__name__": "foo", "instance": "b"}
+	vec := model.Vector{
+		&model.Sample{Metric: metricA, Timestamp: model.Time(4000), Value: 1.5},
+		&model.Sample{Metric: metricB, Timestamp: model.Time(4000), Value: 2.5},
+	}
+
+	// Range [-59.2s, 60.8s] step 60s → 3 steps at -59200ms, 800ms, 60800ms.
+	// The synthesized matrix MUST place samples exactly at those step times
+	// (not at the @ time) so the engine's step-by-step lookup finds the
+	// pinned value at each step within its LookbackDelta window.
+	start := time.Unix(0, 800*int64(time.Millisecond)).Add(-time.Minute)
+	end := time.Unix(0, 800*int64(time.Millisecond)).Add(time.Minute)
+	mat := vectorToStepMatrix(vec, start, end, time.Minute)
+	if len(mat) != 2 {
+		t.Fatalf("expected 2 streams, got %d", len(mat))
+	}
+	for i, stream := range mat {
+		if len(stream.Values) != 3 {
+			t.Fatalf("stream %d: expected 3 samples, got %d", i, len(stream.Values))
+		}
+		wantTs := []int64{-59200, 800, 60800}
+		wantVal := []float64{1.5, 2.5}[i]
+		for j, sp := range stream.Values {
+			if int64(sp.Timestamp) != wantTs[j] {
+				t.Errorf("stream %d sample %d: got ts %d, want %d", i, j, int64(sp.Timestamp), wantTs[j])
+			}
+			if float64(sp.Value) != wantVal {
+				t.Errorf("stream %d sample %d: got value %v, want %v", i, j, float64(sp.Value), wantVal)
+			}
+		}
+	}
+
+	// Step ≤ 0 → nil (defensive: caller is expected to gate on s.Interval > 0).
+	if mat := vectorToStepMatrix(vec, start, end, 0); mat != nil {
+		t.Errorf("step=0: expected nil, got %v", mat)
+	}
+}
