@@ -328,10 +328,13 @@ func TestNodeReplacer(t *testing.T) {
 		// a flat VectorSelector whose samples sit at the request
 		// timestamps so the engine looks them up by ts directly instead
 		// of re-applying the @ pin and offset to a sample set that's
-		// already step-invariant.
+		// already step-invariant. We preserve Name and LabelMatchers on
+		// the synthesized node so functions like absent() that derive
+		// their output labels from the selector's matchers
+		// (createLabelsForAbsentFunction) still see them.
 		{
 			in:  "foo @ 100",
-			out: "",
+			out: "foo",
 			queries: []string{
 				"foo @ 100.000 @ 10000",
 			},

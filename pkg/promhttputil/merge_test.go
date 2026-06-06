@@ -1252,3 +1252,37 @@ func TestMergeValuesHistograms(t *testing.T) {
 		})
 	}
 }
+
+func TestToAnnotationError_StripsPositionSuffix(t *testing.T) {
+	cases := []struct {
+		in  string
+		out string
+	}{
+		{
+			in:  `PromQL warning: vector contains a mix of classic and native histograms for metric name "series" (1:25)`,
+			out: `PromQL warning: vector contains a mix of classic and native histograms for metric name "series"`,
+		},
+		{
+			in:  `PromQL info: ignored timestamp clause (12:34)`,
+			out: `PromQL info: ignored timestamp clause`,
+		},
+		{
+			// No position — passthrough.
+			in:  `PromQL warning: something happened`,
+			out: `PromQL warning: something happened`,
+		},
+		{
+			// Non-prefixed warning still gets the position stripped.
+			in:  `plain warning text (5:6)`,
+			out: `plain warning text`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			got := toAnnotationError(tc.in).Error()
+			if got != tc.out {
+				t.Fatalf("toAnnotationError(%q).Error() = %q, want %q", tc.in, got, tc.out)
+			}
+		})
+	}
+}
