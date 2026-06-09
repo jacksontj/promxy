@@ -25,6 +25,8 @@ type API interface {
 	GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error)
 	// Metadata returns metadata about metrics currently scraped by the metric name.
 	Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error)
+	// QueryExemplars performs a query for exemplars by the given query and time range.
+	QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error)
 }
 
 // APILabels includes a Key() mechanism to differentiate which APIs are "the same"

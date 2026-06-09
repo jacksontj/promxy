@@ -68,6 +68,11 @@ func (a *stubAPI) Metadata(ctx context.Context, metric, limit string) (map[strin
 	return nil, nil
 }
 
+// QueryExemplars performs a query for exemplars by the given query and time range.
+func (a *stubAPI) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	return nil, nil
+}
+
 func TestNodeReplacer(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 

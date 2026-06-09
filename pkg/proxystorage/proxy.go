@@ -353,11 +353,6 @@ func (p *ProxyStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, err
 	return nil, errors.New("not implemented")
 }
 
-// ExemplarQuerier returns a new ExemplarQuerier on the storage.
-func (p *ProxyStorage) ExemplarQuerier(ctx context.Context) (storage.ExemplarQuerier, error) {
-	return nil, errors.New("not implemented")
-}
-
 // Implement web.LocalStorage
 func (p *ProxyStorage) CleanTombstones() (err error) { return nil }
 func (p *ProxyStorage) Delete(_ context.Context, mint, maxt int64, ms ...*labels.Matcher) error {
