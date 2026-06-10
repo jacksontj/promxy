@@ -6,10 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
-	yaml "gopkg.in/yaml.v2"
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 )
@@ -18,12 +16,9 @@ func noStepSubqueryInterval(int64) int64 { return 0 }
 
 func loadConfig(t *testing.T, raw string) *proxyconfig.Config {
 	t.Helper()
-	cfg := &proxyconfig.Config{
-		PromConfig:   config.DefaultConfig,
-		PromxyConfig: proxyconfig.DefaultPromxyConfig,
-	}
-	if err := yaml.Unmarshal([]byte(raw), cfg); err != nil {
-		t.Fatalf("error unmarshaling config: %v", err)
+	cfg, err := proxyconfig.ConfigFromBytes([]byte(raw))
+	if err != nil {
+		t.Fatalf("error loading config: %v", err)
 	}
 	return cfg
 }
