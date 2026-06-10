@@ -140,6 +140,89 @@ http_client:
 	}
 }
 
+func TestInjectMatchersConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   string
+		wantErr  bool
+		errMsg   string
+		expected []string // expected matcher.String() values from GetInjectMatchers
+	}{
+		{
+			name: "no inject_matchers",
+			config: `
+static_configs:
+  - targets:
+      - localhost:9090
+`,
+			expected: nil,
+		},
+		{
+			name: "single matcher",
+			config: `
+static_configs:
+  - targets:
+      - localhost:9090
+inject_matchers:
+  - 'cluster="A"'
+`,
+			expected: []string{`cluster="A"`},
+		},
+		{
+			name: "multiple matchers including a regex",
+			config: `
+inject_matchers:
+  - 'cluster="A"'
+  - 'region=~"us-.*"'
+`,
+			expected: []string{`cluster="A"`, `region=~"us-.*"`},
+		},
+		{
+			name: "invalid matcher fails at config load",
+			config: `
+inject_matchers:
+  - 'this is not a matcher'
+`,
+			wantErr: true,
+			errMsg:  "error parsing inject_matchers",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cfg Config
+			err := yaml.Unmarshal([]byte(tt.config), &cfg)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error but got none")
+				}
+				if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+					t.Fatalf("expected error containing %q, got %q", tt.errMsg, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			matchers, err := cfg.GetInjectMatchers()
+			if err != nil {
+				t.Fatalf("unexpected error from GetInjectMatchers: %v", err)
+			}
+			if len(matchers) != len(tt.expected) {
+				t.Fatalf("len mismatch\nexpected=%v\nactual=%v", tt.expected, matchers)
+			}
+			for i, m := range matchers {
+				if m.String() != tt.expected[i] {
+					t.Fatalf("matcher %d mismatch\nexpected=%s\nactual=%s", i, tt.expected[i], m.String())
+				}
+			}
+		})
+	}
+}
+
 // contains checks if a string contains a substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
