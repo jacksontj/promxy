@@ -315,6 +315,19 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 					}
 				})
 
+				// Inject static matchers into all requests sent to this target. This is
+				// applied beneath the label-manipulation wrappers below so the matchers
+				// reach the downstream verbatim, without interacting with label_filter's
+				// query filtering or metrics_relabel's matcher reversal.
+				if injectMatchers, err := s.Cfg.GetInjectMatchers(); err != nil {
+					return err
+				} else if len(injectMatchers) > 0 {
+					apiClient, err = promclient.NewInjectMatchersClient(apiClient, injectMatchers)
+					if err != nil {
+						return err
+					}
+				}
+
 				// Add labels
 				apiClient = &promclient.AddLabelClient{apiClient, modelLabelSet.Merge(s.Cfg.Labels)}
 
