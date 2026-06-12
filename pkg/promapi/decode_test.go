@@ -1,11 +1,13 @@
 package promapi
 
 import (
+	stdjson "encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
@@ -127,6 +129,59 @@ func BenchmarkDecodeSeriesSet(b *testing.B) {
 		ss := DecodeSeriesSet(body)
 		for ss.Next() {
 			_ = ss.At().Labels()
+		}
+	}
+}
+
+// envelope/innerResult mirror the shape the pre-refactor query path decoded with
+// stdlib encoding/json (promclient.queryWithInfos): outer
+// {status,data,warnings,infos}, then data {resultType,result}, then result into
+// a model.Matrix (Vector/Matrix with model.Metric maps + checkValid).
+type envelope struct {
+	Status string             `json:"status"`
+	Data   stdjson.RawMessage `json:"data"`
+}
+
+type innerResult struct {
+	Type   model.ValueType    `json:"resultType"`
+	Result stdjson.RawMessage `json:"result"`
+}
+
+func decodeModelValueStdlib(body []byte) (model.Matrix, error) {
+	var ar envelope
+	if err := stdjson.Unmarshal(body, &ar); err != nil {
+		return nil, err
+	}
+	var ir innerResult
+	if err := stdjson.Unmarshal(ar.Data, &ir); err != nil {
+		return nil, err
+	}
+	var mv model.Matrix
+	if err := stdjson.Unmarshal(ir.Result, &mv); err != nil {
+		return nil, err
+	}
+	return mv, nil
+}
+
+// BenchmarkDecodeModelValueStdlib is the pre-refactor baseline: stdlib decode of
+// the same body into a model.Matrix. Compare against BenchmarkDecodeSeriesSet to
+// see what dropping model.Value for a streaming SeriesSet decode buys on the
+// query/federate hot path.
+func BenchmarkDecodeModelValueStdlib(b *testing.B) {
+	body := buildMatrixBody(5000)
+	mv, err := decodeModelValueStdlib(body)
+	if err != nil {
+		b.Fatal(err)
+	}
+	if len(mv) != 5000 {
+		b.Fatalf("expected 5000 series, got %d", len(mv))
+	}
+	b.SetBytes(int64(len(body)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := decodeModelValueStdlib(body); err != nil {
+			b.Fatal(err)
 		}
 	}
 }
