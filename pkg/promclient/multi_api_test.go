@@ -3,13 +3,18 @@ package promclient
 import (
 	"context"
 	"fmt"
+	"slices"
+	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
 type stubAPI struct {
@@ -39,19 +44,19 @@ func (s *stubAPI) LabelValues(ctx context.Context, label string, matchers []stri
 }
 
 // Query performs a query for the given time.
-func (s *stubAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+func (s *stubAPI) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
 	if s.query == nil {
-		return nil, nil, nil
+		return storage.EmptySeriesSet()
 	}
-	return s.query(), nil, nil
+	return ModelValueToSeriesSet(s.query(), nil, nil)
 }
 
 // QueryRange performs a query for the given range.
-func (s *stubAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+func (s *stubAPI) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
 	if s.queryRange == nil {
-		return nil, nil, nil
+		return storage.EmptySeriesSet()
 	}
-	return s.queryRange(query, r), nil, nil
+	return ModelValueToSeriesSet(s.queryRange(query, r), nil, nil)
 }
 
 // Series finds series by label matchers.
@@ -63,11 +68,11 @@ func (s *stubAPI) Series(ctx context.Context, matches []string, startTime time.T
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (s *stubAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
+func (s *stubAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
 	if s.getValue == nil {
-		return nil, nil, nil
+		return storage.EmptySeriesSet()
 	}
-	return s.getValue(), nil, nil
+	return ModelValueToSeriesSet(s.getValue(), nil, nil)
 }
 
 // Metadata returns metadata about metrics currently scraped by the metric name.
@@ -106,17 +111,17 @@ func (s *errorAPI) LabelValues(ctx context.Context, label string, matchers []str
 }
 
 // Query performs a query for the given time.
-func (s *errorAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+func (s *errorAPI) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
 	if s.err != nil {
-		return nil, nil, s.err
+		return storage.ErrSeriesSet(s.err)
 	}
 	return s.Query(ctx, query, ts)
 }
 
 // QueryRange performs a query for the given range.
-func (s *errorAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+func (s *errorAPI) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
 	if s.err != nil {
-		return nil, nil, s.err
+		return storage.ErrSeriesSet(s.err)
 	}
 	return s.QueryRange(ctx, query, r)
 }
@@ -130,9 +135,9 @@ func (s *errorAPI) Series(ctx context.Context, matches []string, startTime time.
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (s *errorAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
+func (s *errorAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
 	if s.err != nil {
-		return nil, nil, s.err
+		return storage.ErrSeriesSet(s.err)
 	}
 	return s.GetValue(ctx, start, end, matchers)
 }
@@ -429,7 +434,8 @@ func TestMultiAPIMerging(t *testing.T) {
 			})
 
 			t.Run("Query", func(t *testing.T) {
-				v, _, err := test.a.Query(context.TODO(), "testmetric", time.Now())
+				ss := test.a.Query(context.TODO(), "testmetric", time.Now())
+				err := ss.Err()
 				if err != nil != test.err {
 					if test.err {
 						t.Fatalf("missing expected err")
@@ -438,8 +444,8 @@ func TestMultiAPIMerging(t *testing.T) {
 					}
 				}
 				if err == nil {
-					if v.String() != test.v.String() {
-						t.Fatalf("mismatch in value: \nexpected=%s\nactual=%s", test.v.String(), v.String())
+					if got, want := ssDataStrings(ss), valueDataStrings(test.v); !slices.Equal(got, want) {
+						t.Fatalf("mismatch in value: \nexpected=%v\nactual=%v", want, got)
 					}
 				} else {
 					if test.v != nil {
@@ -449,7 +455,8 @@ func TestMultiAPIMerging(t *testing.T) {
 			})
 
 			t.Run("QueryRange", func(t *testing.T) {
-				v, _, err := test.a.QueryRange(context.TODO(), "testmetric", v1.Range{})
+				ss := test.a.QueryRange(context.TODO(), "testmetric", v1.Range{})
+				err := ss.Err()
 				if err != nil != test.err {
 					if test.err {
 						t.Fatalf("missing expected err")
@@ -458,8 +465,8 @@ func TestMultiAPIMerging(t *testing.T) {
 					}
 				}
 				if err == nil {
-					if v.String() != test.v.String() {
-						t.Fatalf("mismatch in value: \nexpected=%s\nactual=%s", test.v.String(), v.String())
+					if got, want := ssDataStrings(ss), valueDataStrings(test.v); !slices.Equal(got, want) {
+						t.Fatalf("mismatch in value: \nexpected=%v\nactual=%v", want, got)
 					}
 				} else {
 					if test.v != nil {
@@ -495,11 +502,12 @@ func TestMultiAPIMerging(t *testing.T) {
 			})
 
 			t.Run("GetValue", func(t *testing.T) {
-				v, _, err := test.a.GetValue(context.TODO(), time.Now(), time.Now(), []*labels.Matcher{{
+				ss := test.a.GetValue(context.TODO(), time.Now(), time.Now(), []*labels.Matcher{{
 					Type:  labels.MatchEqual,
 					Name:  "__name__",
 					Value: "testmetric",
 				}})
+				err := ss.Err()
 				if err != nil != test.err {
 					if test.err {
 						t.Fatalf("missing expected err")
@@ -508,8 +516,8 @@ func TestMultiAPIMerging(t *testing.T) {
 					}
 				}
 				if err == nil {
-					if v.String() != test.v.String() {
-						t.Fatalf("mismatch in value: \nexpected=%s\nactual=%s", test.v.String(), v.String())
+					if got, want := ssDataStrings(ss), valueDataStrings(test.v); !slices.Equal(got, want) {
+						t.Fatalf("mismatch in value: \nexpected=%v\nactual=%v", want, got)
 					}
 				} else {
 					if test.v != nil {
@@ -519,4 +527,53 @@ func TestMultiAPIMerging(t *testing.T) {
 			})
 		})
 	}
+}
+
+func ssDataStrings(ss storage.SeriesSet) []string {
+	var out []string
+	for ss.Next() {
+		s := ss.At()
+		var b strings.Builder
+		b.WriteString(s.Labels().String())
+		b.WriteString(" =>")
+		it := s.Iterator(nil)
+		for it.Next() != chunkenc.ValNone {
+			t, v := it.At()
+			fmt.Fprintf(&b, " %d=%g", t, v)
+		}
+		out = append(out, b.String())
+	}
+	sort.Strings(out)
+	return out
+}
+
+func metricToLabelsT(m model.Metric) labels.Labels {
+	b := labels.NewScratchBuilder(len(m))
+	for k, v := range m {
+		b.Add(string(k), string(v))
+	}
+	b.Sort()
+	return b.Labels()
+}
+
+func valueDataStrings(v model.Value) []string {
+	var out []string
+	switch tv := v.(type) {
+	case model.Vector:
+		for _, s := range tv {
+			out = append(out, fmt.Sprintf("%s => %d=%g", metricToLabelsT(s.Metric).String(), int64(s.Timestamp), float64(s.Value)))
+		}
+	case model.Matrix:
+		for _, ss := range tv {
+			var b strings.Builder
+			b.WriteString(metricToLabelsT(ss.Metric).String())
+			b.WriteString(" =>")
+			for _, p := range ss.Values {
+				fmt.Fprintf(&b, " %d=%g", int64(p.Timestamp), float64(p.Value))
+			}
+			out = append(out, b.String())
+		}
+	}
+	sort.Strings(out)
+	return out
 }

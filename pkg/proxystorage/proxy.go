@@ -27,7 +27,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/jacksontj/promxy/pkg/logging"
-	"github.com/jacksontj/promxy/pkg/promhttputil"
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/promclient"
@@ -506,8 +505,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 		logrus.Debugf("AggregateExpr %v %s", n, n.Op)
 
-		var result model.Value
-		var warnings v1.Warnings
+		var result storage.SeriesSet
 		var err error
 
 		// Not all Aggregation functions are composable, so we'll do what we can
@@ -517,13 +515,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			removeOffsetFn()
 
 			if s.Interval > 0 {
-				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+				result = state.client.QueryRange(ctx, n.String(), v1.Range{
 					Start: s.Start.Add(-reqOffset),
 					End:   s.End.Add(-reqOffset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
+				result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 			}
 
 			if err != nil {
@@ -603,13 +601,13 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			removeOffsetFn()
 
 			if s.Interval > 0 {
-				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+				result = state.client.QueryRange(ctx, n.String(), v1.Range{
 					Start: s.Start.Add(-reqOffset),
 					End:   s.End.Add(-reqOffset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
+				result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 			}
 
 			if err != nil {
@@ -622,31 +620,24 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 			// First we must fetch the data into a vectorselector
 			if s.Interval > 0 {
-				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+				result = state.client.QueryRange(ctx, n.String(), v1.Range{
 					Start: s.Start.Add(-reqOffset),
 					End:   s.End.Add(-reqOffset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
+				result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 			}
 
 			if err != nil {
 				return nil, err
 			}
 
-			iterators := promclient.IteratorsForValue(result)
-
-			series := make([]storage.Series, len(iterators))
-			for i, iterator := range iterators {
-				series[i] = &proxyquerier.Series{iterator}
-			}
-
 			ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 			if s.Interval > 0 {
 				ret.LookbackDelta = s.Interval - time.Duration(1)
 			}
-			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
+			ret.UnexpandedSeriesSet = result
 
 			// Replace with sum(count_values()) BY (label)
 			return &parser.AggregateExpr{
@@ -673,18 +664,11 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		}
 
 		if result != nil {
-			iterators := promclient.IteratorsForValue(result)
-
-			series := make([]storage.Series, len(iterators))
-			for i, iterator := range iterators {
-				series[i] = &proxyquerier.Series{iterator}
-			}
-
 			ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 			if s.Interval > 0 {
 				ret.LookbackDelta = s.Interval - time.Duration(1)
 			}
-			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
+			ret.UnexpandedSeriesSet = result
 			n.Expr = ret
 
 			return n, nil
@@ -705,34 +689,27 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		// For all the Call's we actually will work on, we need to remove the offset
 		removeOffsetFn()
 
-		var result model.Value
-		var warnings v1.Warnings
+		var result storage.SeriesSet
 		var err error
 		if s.Interval > 0 {
-			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+			result = state.client.QueryRange(ctx, n.String(), v1.Range{
 				Start: s.Start.Add(-reqOffset),
 				End:   s.End.Add(-reqOffset),
 				Step:  s.Interval,
 			})
 		} else {
-			result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
+			result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 		}
 
 		if err != nil {
 			return nil, err
 		}
 
-		iterators := promclient.IteratorsForValue(result)
-		series := make([]storage.Series, len(iterators))
-		for i, iterator := range iterators {
-			series[i] = &proxyquerier.Series{iterator}
-		}
-
 		ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 		if s.Interval > 0 {
 			ret.LookbackDelta = s.Interval - time.Duration(1)
 		}
-		ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
+		ret.UnexpandedSeriesSet = result
 
 		// Some functions require specific handling which we'll catch here
 		switch n.Func.Name {
@@ -772,29 +749,22 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		logrus.Debugf("VectorSelector: %v", n)
 		removeOffsetFn()
 
-		var result model.Value
-		var warnings v1.Warnings
-		var err error
+		var result storage.SeriesSet
 		if s.Interval > 0 {
 			n.LookbackDelta = s.Interval - time.Duration(1)
-			result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+			result = state.client.QueryRange(ctx, n.String(), v1.Range{
 				Start: s.Start.Add(-reqOffset),
 				End:   s.End.Add(-reqOffset),
 				Step:  s.Interval,
 			})
 		} else {
-			result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
+			result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 		}
 
-		if err != nil {
+		if err := result.Err(); err != nil {
 			return nil, err
 		}
 
-		iterators := promclient.IteratorsForValue(result)
-		series := make([]storage.Series, len(iterators))
-		for i, iterator := range iterators {
-			series[i] = &proxyquerier.Series{iterator}
-		}
 		if n.Timestamp != nil {
 			// Downstream resolved @ T (and any offset) when evaluating
 			// n.String(); the result is step-invariant. Replace with a flat
@@ -805,11 +775,11 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			if s.Interval > 0 {
 				ret.LookbackDelta = s.Interval - time.Duration(1)
 			}
-			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
+			ret.UnexpandedSeriesSet = result
 			return ret, nil
 		}
 		n.OriginalOffset = offset
-		n.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
+		n.UnexpandedSeriesSet = result
 		return n, nil
 
 	// If we hit this someone is asking for a matrix directly, if so then we don't
@@ -877,35 +847,27 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			logrus.Debugf("BinaryExpr (VectorSelector + Literal): %v", n)
 			removeOffsetFn()
 
-			var result model.Value
-			var warnings v1.Warnings
-			var err error
+			var result storage.SeriesSet
 			if s.Interval > 0 {
 				vs.LookbackDelta = s.Interval - time.Duration(1)
-				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+				result = state.client.QueryRange(ctx, n.String(), v1.Range{
 					Start: s.Start.Add(-reqOffset),
 					End:   s.End.Add(-reqOffset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
+				result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 			}
 
-			if err != nil {
+			if err := result.Err(); err != nil {
 				return nil, err
-			}
-
-			iterators := promclient.IteratorsForValue(result)
-			series := make([]storage.Series, len(iterators))
-			for i, iterator := range iterators {
-				series[i] = &proxyquerier.Series{iterator}
 			}
 
 			ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 			if s.Interval > 0 {
 				ret.LookbackDelta = s.Interval - time.Duration(1)
 			}
-			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
+			ret.UnexpandedSeriesSet = result
 			return ret, nil
 		}
 
@@ -917,37 +879,26 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 			removeOffsetFn()
 
-			var (
-				result   model.Value
-				warnings v1.Warnings
-				err      error
-			)
+			var result storage.SeriesSet
 
 			if s.Interval > 0 {
-				result, warnings, err = state.client.QueryRange(ctx, n.String(), v1.Range{
+				result = state.client.QueryRange(ctx, n.String(), v1.Range{
 					Start: s.Start.Add(-reqOffset),
 					End:   s.End.Add(-reqOffset),
 					Step:  s.Interval,
 				})
 			} else {
-				result, warnings, err = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
+				result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 			}
-			if err != nil {
+			if err := result.Err(); err != nil {
 				return nil, err
-			}
-
-			iterators := promclient.IteratorsForValue(result)
-
-			series := make([]storage.Series, len(iterators))
-			for i, iterator := range iterators {
-				series[i] = &proxyquerier.Series{iterator}
 			}
 
 			ret := &parser.VectorSelector{OriginalOffset: synthOffset}
 			if s.Interval > 0 {
 				ret.LookbackDelta = s.Interval - time.Duration(1)
 			}
-			ret.UnexpandedSeriesSet = proxyquerier.NewSeriesSet(series, promhttputil.WarningsConvert(warnings), err)
+			ret.UnexpandedSeriesSet = result
 
 			agg.Expr = ret
 			return agg, nil

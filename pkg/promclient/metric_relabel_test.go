@@ -236,19 +236,14 @@ func TestMetricRelabel(t *testing.T) {
 			}
 			for i, query := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
-					val, _, err := c.Query(context.TODO(), query, model.Time(5).Time())
-					if err != nil {
+					ss := c.Query(context.TODO(), query, model.Time(5).Time())
+					if err := ss.Err(); err != nil {
 						t.Fatal(err)
 					}
-					switch valTyped := val.(type) {
-					case model.Vector:
-						for _, v := range []*model.Sample(valTyped) {
-							if _, ok := v.Metric[droplabel]; ok {
-								t.Fatalf("found droplabel in response")
-							}
+					for ss.Next() {
+						if ss.At().Labels().Has(droplabel) {
+							t.Fatalf("found droplabel in response")
 						}
-					default:
-						t.Fatalf("unknown val type: %T", val)
 					}
 				})
 			}
@@ -263,19 +258,14 @@ func TestMetricRelabel(t *testing.T) {
 			}
 			for i, query := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
-					val, _, err := c.QueryRange(context.TODO(), query, v1.Range{Start: model.Time(0).Time(), End: model.Time(10).Time(), Step: time.Duration(1e6)})
-					if err != nil {
+					ss := c.QueryRange(context.TODO(), query, v1.Range{Start: model.Time(0).Time(), End: model.Time(10).Time(), Step: time.Duration(1e6)})
+					if err := ss.Err(); err != nil {
 						t.Fatal(err)
 					}
-					switch valTyped := val.(type) {
-					case model.Matrix:
-						for _, v := range []*model.SampleStream(valTyped) {
-							if _, ok := v.Metric[droplabel]; ok {
-								t.Fatalf("found droplabel in response")
-							}
+					for ss.Next() {
+						if ss.At().Labels().Has(droplabel) {
+							t.Fatalf("found droplabel in response")
 						}
-					default:
-						t.Fatalf("unknown val type: %T", val)
 					}
 				})
 			}
@@ -311,19 +301,14 @@ func TestMetricRelabel(t *testing.T) {
 			}
 			for i, matchers := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
-					val, _, err := c.GetValue(context.TODO(), model.Time(0).Time(), model.Time(10).Time(), matchers)
-					if err != nil {
+					ss := c.GetValue(context.TODO(), model.Time(0).Time(), model.Time(10).Time(), matchers)
+					if err := ss.Err(); err != nil {
 						t.Fatal(err)
 					}
-					switch valTyped := val.(type) {
-					case model.Matrix:
-						for _, v := range []*model.SampleStream(valTyped) {
-							if _, ok := v.Metric[droplabel]; ok {
-								t.Fatalf("found droplabel in response")
-							}
+					for ss.Next() {
+						if ss.At().Labels().Has(droplabel) {
+							t.Fatalf("found droplabel in response")
 						}
-					default:
-						t.Fatalf("unknown val type: %T", val)
 					}
 				})
 			}
@@ -399,19 +384,14 @@ func TestMetricRelabel(t *testing.T) {
 			}
 			for i, query := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
-					val, _, err := c.Query(context.TODO(), query, model.Time(5).Time())
-					if err != nil {
+					ss := c.Query(context.TODO(), query, model.Time(5).Time())
+					if err := ss.Err(); err != nil {
 						t.Fatal(err)
 					}
-					switch valTyped := val.(type) {
-					case model.Vector:
-						for _, v := range []*model.Sample(valTyped) {
-							if _, ok := v.Metric[targetlabel]; !ok {
-								t.Fatalf("sourcelabel not found in response")
-							}
+					for ss.Next() {
+						if !ss.At().Labels().Has(targetlabel) {
+							t.Fatalf("sourcelabel not found in response")
 						}
-					default:
-						t.Fatalf("unknown val type: %T", val)
 					}
 				})
 			}
@@ -426,19 +406,14 @@ func TestMetricRelabel(t *testing.T) {
 			}
 			for i, query := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
-					val, _, err := c.QueryRange(context.TODO(), query, v1.Range{Start: model.Time(0).Time(), End: model.Time(10).Time(), Step: time.Duration(1e6)})
-					if err != nil {
+					ss := c.QueryRange(context.TODO(), query, v1.Range{Start: model.Time(0).Time(), End: model.Time(10).Time(), Step: time.Duration(1e6)})
+					if err := ss.Err(); err != nil {
 						t.Fatal(err)
 					}
-					switch valTyped := val.(type) {
-					case model.Matrix:
-						for _, v := range []*model.SampleStream(valTyped) {
-							if _, ok := v.Metric[targetlabel]; !ok {
-								t.Fatalf("targetlabel not found in response")
-							}
+					for ss.Next() {
+						if !ss.At().Labels().Has(targetlabel) {
+							t.Fatalf("targetlabel not found in response")
 						}
-					default:
-						t.Fatalf("unknown val type: %T", val)
 					}
 				})
 			}
@@ -474,19 +449,14 @@ func TestMetricRelabel(t *testing.T) {
 			}
 			for i, matchers := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
-					val, _, err := c.GetValue(context.TODO(), model.Time(0).Time(), model.Time(10).Time(), matchers)
-					if err != nil {
+					ss := c.GetValue(context.TODO(), model.Time(0).Time(), model.Time(10).Time(), matchers)
+					if err := ss.Err(); err != nil {
 						t.Fatal(err)
 					}
-					switch valTyped := val.(type) {
-					case model.Matrix:
-						for _, v := range []*model.SampleStream(valTyped) {
-							if _, ok := v.Metric[targetlabel]; !ok {
-								t.Fatalf("targetlabel not found in response")
-							}
+					for ss.Next() {
+						if !ss.At().Labels().Has(targetlabel) {
+							t.Fatalf("targetlabel not found in response")
 						}
-					default:
-						t.Fatalf("unknown val type: %T", val)
 					}
 				})
 			}
@@ -562,19 +532,14 @@ func TestMetricRelabel(t *testing.T) {
 			}
 			for i, query := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
-					val, _, err := c.Query(context.TODO(), query, model.Time(5).Time())
-					if err != nil {
+					ss := c.Query(context.TODO(), query, model.Time(5).Time())
+					if err := ss.Err(); err != nil {
 						t.Fatal(err)
 					}
-					switch valTyped := val.(type) {
-					case model.Vector:
-						for _, v := range []*model.Sample(valTyped) {
-							if _, ok := v.Metric[targetlabel]; !ok {
-								t.Fatalf("sourcelabel not found in response")
-							}
+					for ss.Next() {
+						if !ss.At().Labels().Has(targetlabel) {
+							t.Fatalf("sourcelabel not found in response")
 						}
-					default:
-						t.Fatalf("unknown val type: %T", val)
 					}
 				})
 			}
@@ -589,19 +554,14 @@ func TestMetricRelabel(t *testing.T) {
 			}
 			for i, query := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
-					val, _, err := c.QueryRange(context.TODO(), query, v1.Range{Start: model.Time(0).Time(), End: model.Time(10).Time(), Step: time.Duration(1e6)})
-					if err != nil {
+					ss := c.QueryRange(context.TODO(), query, v1.Range{Start: model.Time(0).Time(), End: model.Time(10).Time(), Step: time.Duration(1e6)})
+					if err := ss.Err(); err != nil {
 						t.Fatal(err)
 					}
-					switch valTyped := val.(type) {
-					case model.Matrix:
-						for _, v := range []*model.SampleStream(valTyped) {
-							if _, ok := v.Metric[targetlabel]; !ok {
-								t.Fatalf("targetlabel not found in response")
-							}
+					for ss.Next() {
+						if !ss.At().Labels().Has(targetlabel) {
+							t.Fatalf("targetlabel not found in response")
 						}
-					default:
-						t.Fatalf("unknown val type: %T", val)
 					}
 				})
 			}
@@ -637,19 +597,14 @@ func TestMetricRelabel(t *testing.T) {
 			}
 			for i, matchers := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
-					val, _, err := c.GetValue(context.TODO(), model.Time(0).Time(), model.Time(10).Time(), matchers)
-					if err != nil {
+					ss := c.GetValue(context.TODO(), model.Time(0).Time(), model.Time(10).Time(), matchers)
+					if err := ss.Err(); err != nil {
 						t.Fatal(err)
 					}
-					switch valTyped := val.(type) {
-					case model.Matrix:
-						for _, v := range []*model.SampleStream(valTyped) {
-							if _, ok := v.Metric[targetlabel]; !ok {
-								t.Fatalf("targetlabel not found in response")
-							}
+					for ss.Next() {
+						if !ss.At().Labels().Has(targetlabel) {
+							t.Fatalf("targetlabel not found in response")
 						}
-					default:
-						t.Fatalf("unknown val type: %T", val)
 					}
 				})
 			}
@@ -725,19 +680,14 @@ func TestMetricRelabel(t *testing.T) {
 			}
 			for i, query := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
-					val, _, err := c.Query(context.TODO(), query, model.Time(5).Time())
-					if err != nil {
+					ss := c.Query(context.TODO(), query, model.Time(5).Time())
+					if err := ss.Err(); err != nil {
 						t.Fatal(err)
 					}
-					switch valTyped := val.(type) {
-					case model.Vector:
-						for _, v := range []*model.Sample(valTyped) {
-							if _, ok := v.Metric[targetlabel]; !ok {
-								t.Fatalf("sourcelabel not found in response")
-							}
+					for ss.Next() {
+						if !ss.At().Labels().Has(targetlabel) {
+							t.Fatalf("sourcelabel not found in response")
 						}
-					default:
-						t.Fatalf("unknown val type: %T", val)
 					}
 				})
 			}
@@ -752,19 +702,14 @@ func TestMetricRelabel(t *testing.T) {
 			}
 			for i, query := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
-					val, _, err := c.QueryRange(context.TODO(), query, v1.Range{Start: model.Time(0).Time(), End: model.Time(10).Time(), Step: time.Duration(1e6)})
-					if err != nil {
+					ss := c.QueryRange(context.TODO(), query, v1.Range{Start: model.Time(0).Time(), End: model.Time(10).Time(), Step: time.Duration(1e6)})
+					if err := ss.Err(); err != nil {
 						t.Fatal(err)
 					}
-					switch valTyped := val.(type) {
-					case model.Matrix:
-						for _, v := range []*model.SampleStream(valTyped) {
-							if _, ok := v.Metric[targetlabel]; !ok {
-								t.Fatalf("targetlabel not found in response")
-							}
+					for ss.Next() {
+						if !ss.At().Labels().Has(targetlabel) {
+							t.Fatalf("targetlabel not found in response")
 						}
-					default:
-						t.Fatalf("unknown val type: %T", val)
 					}
 				})
 			}
@@ -800,19 +745,14 @@ func TestMetricRelabel(t *testing.T) {
 			}
 			for i, matchers := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
-					val, _, err := c.GetValue(context.TODO(), model.Time(0).Time(), model.Time(10).Time(), matchers)
-					if err != nil {
+					ss := c.GetValue(context.TODO(), model.Time(0).Time(), model.Time(10).Time(), matchers)
+					if err := ss.Err(); err != nil {
 						t.Fatal(err)
 					}
-					switch valTyped := val.(type) {
-					case model.Matrix:
-						for _, v := range []*model.SampleStream(valTyped) {
-							if _, ok := v.Metric[targetlabel]; !ok {
-								t.Fatalf("targetlabel not found in response")
-							}
+					for ss.Next() {
+						if !ss.At().Labels().Has(targetlabel) {
+							t.Fatalf("targetlabel not found in response")
 						}
-					default:
-						t.Fatalf("unknown val type: %T", val)
 					}
 				})
 			}

@@ -122,15 +122,16 @@ func (q *AlertBackfillQuerier) Select(ctx context.Context, sortSeries bool, hint
 	// If we haven't queried this *rule* before; lets load that
 	if !ok {
 		now := time.Now()
-		value, warnings, err := q.api.QueryRange(ctx, matchingRule.Query().String(), v1.Range{
+		ss := q.api.QueryRange(ctx, matchingRule.Query().String(), v1.Range{
 			// Start is the HoldDuration + 1 step (to avoid "edge" issues)
 			Start: now.Add(-1 * matchingRule.HoldDuration()).Add(-1 * interval),
 			End:   now,
 			Step:  interval,
 		})
+		matrix, err := promclient.SeriesSetToMatrix(ss)
 		result = &queryResult{
-			v:        value,
-			warnings: StringsToWarnings(warnings),
+			v:        matrix,
+			warnings: ss.Warnings(),
 			err:      err,
 		}
 		q.ruleValues[key] = result
@@ -146,14 +147,9 @@ func (q *AlertBackfillQuerier) Select(ctx context.Context, sortSeries bool, hint
 		return proxyquerier.NewSeriesSet(nil, nil, fmt.Errorf("backfill query returned unexpected type: %T", result.v))
 	}
 
-	iterators := promclient.IteratorsForValue(GenerateAlertStateMatrix(resultMatrix, matchers, matchingRule.Labels(), interval))
-
-	series := make([]storage.Series, len(iterators))
-	for i, iterator := range iterators {
-		series[i] = &proxyquerier.Series{It: iterator}
-	}
-
-	return proxyquerier.NewSeriesSet(series, result.warnings, nil)
+	return promclient.ModelValueToSeriesSet(
+		GenerateAlertStateMatrix(resultMatrix, matchers, matchingRule.Labels(), interval),
+		result.warnings, nil)
 }
 
 func (q *AlertBackfillQuerier) LabelValues(_ context.Context, _ string, _ *storage.LabelHints, _ ...*labels.Matcher) ([]string, annotations.Annotations, error) {

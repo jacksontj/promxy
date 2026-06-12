@@ -12,6 +12,8 @@ import (
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
+
+	"github.com/jacksontj/promxy/pkg/promapi"
 )
 
 // AnnotationsToAPIWarnings converts annotations.Annotations to v1.Warnings.
@@ -94,28 +96,28 @@ func (a *EngineAPI) LabelValues(ctx context.Context, label string, matchers []st
 }
 
 // Query performs a query for the given time.
-func (a *EngineAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
-	return nil, nil, fmt.Errorf("not implemented")
+func (a *EngineAPI) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
+	return storage.ErrSeriesSet(fmt.Errorf("not implemented"))
 }
 
 // QueryRange performs a query for the given range.
-func (a *EngineAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+func (a *EngineAPI) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
 	engineQuery, err := a.e.NewRangeQuery(ctx, a.q, promql.NewPrometheusQueryOpts(false, 0), query, r.Start, r.End, r.Step)
 	if err != nil {
-		return nil, nil, err
+		return storage.ErrSeriesSet(err)
 	}
 
 	result := engineQuery.Exec(ctx)
 	if result.Err != nil {
-		return nil, AnnotationsToAPIWarnings(result.Warnings), result.Err
+		return promapi.NewSeriesSet(nil, result.Warnings, result.Err)
 	}
 
 	val, err := ParserValueToModelValue(result.Value)
 	if err != nil {
-		return nil, nil, err
+		return storage.ErrSeriesSet(err)
 	}
 
-	return val, AnnotationsToAPIWarnings(result.Warnings), nil
+	return ModelValueToSeriesSet(val, result.Warnings, nil)
 }
 
 // Series finds series by label matchers.
@@ -124,8 +126,8 @@ func (a *EngineAPI) Series(ctx context.Context, matches []string, startTime time
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (a *EngineAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
-	return nil, nil, fmt.Errorf("not implemented")
+func (a *EngineAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
+	return storage.ErrSeriesSet(fmt.Errorf("not implemented"))
 }
 
 // Metadata returns metadata about metrics currently scraped by the metric name.

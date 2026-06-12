@@ -12,8 +12,11 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/prometheus/prometheus/storage"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/jacksontj/promxy/pkg/promclient"
 )
 
 type stubAPI struct {
@@ -37,20 +40,20 @@ func (a *stubAPI) LabelValues(ctx context.Context, label string, matchers []stri
 }
 
 // Query performs a query for the given time.
-func (a *stubAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+func (a *stubAPI) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
 	a.queries = append(a.queries, query+" @ "+model.TimeFromUnixNano(ts.UnixNano()).String())
-	return model.Vector{}, nil, nil
+	return promclient.ModelValueToSeriesSet(model.Vector{}, nil, nil)
 }
 
 // QueryRange performs a query for the given range.
-func (a *stubAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+func (a *stubAPI) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
 	from := fmt.Sprintf("%s to %s step %s",
 		model.TimeFromUnix(r.Start.Unix()).String(),
 		model.TimeFromUnix(r.End.Unix()).String(),
 		r.Step.String(),
 	)
 	a.queries = append(a.queries, query+" @ "+from)
-	return model.Matrix{}, nil, nil
+	return promclient.ModelValueToSeriesSet(model.Matrix{}, nil, nil)
 }
 
 // Series finds series by label matchers.
@@ -59,8 +62,8 @@ func (a *stubAPI) Series(ctx context.Context, matches []string, startTime time.T
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (a *stubAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
-	return nil, nil, nil
+func (a *stubAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
+	return promclient.ModelValueToSeriesSet(model.Vector{}, nil, nil)
 }
 
 // Metadata returns metadata about metrics currently scraped by the metric name.

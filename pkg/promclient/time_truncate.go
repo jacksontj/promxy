@@ -7,6 +7,7 @@ import (
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/storage"
 )
 
 // NewTimeTruncate returns a new TimeTruncate client -- which will truncate the time to the millisecond.
@@ -25,12 +26,12 @@ type TimeTruncate struct {
 }
 
 // Query performs a query for the given time.
-func (t *TimeTruncate) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+func (t *TimeTruncate) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
 	return t.API.Query(ctx, query, ts.Truncate(truncateDuration))
 }
 
 // QueryRange performs a query for the given range.
-func (t *TimeTruncate) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+func (t *TimeTruncate) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
 	return t.API.QueryRange(ctx, query, v1.Range{
 		Start: r.Start.Truncate(truncateDuration),
 		End:   r.End.Truncate(truncateDuration),
@@ -44,6 +45,6 @@ func (t *TimeTruncate) Series(ctx context.Context, matches []string, startTime t
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (t *TimeTruncate) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
+func (t *TimeTruncate) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
 	return t.API.GetValue(ctx, start.Truncate(truncateDuration), end.Truncate(truncateDuration), matchers)
 }

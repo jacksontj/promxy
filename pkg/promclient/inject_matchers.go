@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/prometheus/prometheus/storage"
 
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 )
@@ -107,19 +108,19 @@ func (c *InjectMatchersClient) LabelValues(ctx context.Context, label string, ma
 }
 
 // Query performs a query for the given time.
-func (c *InjectMatchersClient) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+func (c *InjectMatchersClient) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
 	query, err := c.injectIntoQuery(ctx, query)
 	if err != nil {
-		return nil, nil, err
+		return storage.ErrSeriesSet(err)
 	}
 	return c.API.Query(ctx, query, ts)
 }
 
 // QueryRange performs a query for the given range.
-func (c *InjectMatchersClient) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+func (c *InjectMatchersClient) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
 	query, err := c.injectIntoQuery(ctx, query)
 	if err != nil {
-		return nil, nil, err
+		return storage.ErrSeriesSet(err)
 	}
 	return c.API.QueryRange(ctx, query, r)
 }
@@ -134,7 +135,7 @@ func (c *InjectMatchersClient) Series(ctx context.Context, matches []string, sta
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (c *InjectMatchersClient) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
+func (c *InjectMatchersClient) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
 	return c.API.GetValue(ctx, start, end, appendMatchers(matchers, c.matchers))
 }
 

@@ -23,6 +23,7 @@ import (
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
+	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/prometheus/sigv4"
 	"github.com/sirupsen/logrus"
@@ -471,17 +472,17 @@ func (s *ServerGroup) State() *ServerGroupState {
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
+func (s *ServerGroup) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
 	return s.State().apiClient.GetValue(ctx, start, end, matchers)
 }
 
 // Query performs a query for the given time.
-func (s *ServerGroup) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+func (s *ServerGroup) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
 	return s.State().apiClient.Query(ctx, query, ts)
 }
 
 // QueryRange performs a query for the given range.
-func (s *ServerGroup) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+func (s *ServerGroup) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
 	return s.State().apiClient.QueryRange(ctx, query, r)
 }
 

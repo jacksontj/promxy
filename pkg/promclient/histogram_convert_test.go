@@ -96,7 +96,7 @@ func TestSeriesIteratorEmitsHistogramSamples(t *testing.T) {
 			{Timestamp: 200, Histogram: floatHistogramToSampleHistogram(original)},
 		},
 	}
-	it := NewSeriesIterator(stream)
+	it := sampleStreamToSeries(stream, metricLabels(stream.Metric)).Iterator(nil)
 	count := 0
 	for {
 		vt := it.Next()
@@ -143,7 +143,7 @@ func TestSeriesIteratorEmitsConstHistogramSequence(t *testing.T) {
 			{Timestamp: 180_000, Histogram: floatHistogramToSampleHistogram(original)},
 		},
 	}
-	it := NewSeriesIterator(stream)
+	it := sampleStreamToSeries(stream, metricLabels(stream.Metric)).Iterator(nil)
 	hint := &histogram.FloatHistogram{}
 	count := 0
 	for {

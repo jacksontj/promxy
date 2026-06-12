@@ -7,6 +7,7 @@ import (
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/storage"
 )
 
 // API Subset of the interface defined in the prometheus client
@@ -16,13 +17,13 @@ type API interface {
 	// LabelValues performs a query for the values of the given label.
 	LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error)
 	// Query performs a query for the given time.
-	Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error)
+	Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet
 	// QueryRange performs a query for the given range.
-	QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error)
+	QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet
 	// Series finds series by label matchers.
 	Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error)
 	// GetValue loads the raw data for a given set of matchers in the time range
-	GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error)
+	GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet
 	// Metadata returns metadata about metrics currently scraped by the metric name.
 	Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error)
 }

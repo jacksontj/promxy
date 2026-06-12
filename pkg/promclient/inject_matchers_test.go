@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/prometheus/prometheus/storage"
 )
 
 // recordingAPI captures the query/matchers it is called with so tests can assert what
@@ -29,14 +30,14 @@ func (a *recordingAPI) LabelValues(ctx context.Context, label string, matchers [
 	return nil, nil, nil
 }
 
-func (a *recordingAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+func (a *recordingAPI) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
 	a.query = query
-	return nil, nil, nil
+	return storage.EmptySeriesSet()
 }
 
-func (a *recordingAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+func (a *recordingAPI) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
 	a.query = query
-	return nil, nil, nil
+	return storage.EmptySeriesSet()
 }
 
 func (a *recordingAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
@@ -44,9 +45,9 @@ func (a *recordingAPI) Series(ctx context.Context, matches []string, startTime t
 	return nil, nil, nil
 }
 
-func (a *recordingAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
+func (a *recordingAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
 	a.getVal = matchers
-	return nil, nil, nil
+	return storage.EmptySeriesSet()
 }
 
 func (a *recordingAPI) Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
@@ -116,7 +117,7 @@ func TestInjectMatchersQuery(t *testing.T) {
 				t.Fatalf("unexpected err: %v", err)
 			}
 
-			if _, _, err := c.Query(context.TODO(), test.query, time.Time{}); err != nil {
+			if err := c.Query(context.TODO(), test.query, time.Time{}).Err(); err != nil {
 				t.Fatalf("unexpected err: %v", err)
 			}
 			if rec.query != test.expected {
@@ -125,7 +126,7 @@ func TestInjectMatchersQuery(t *testing.T) {
 
 			// QueryRange should rewrite identically
 			rec.query = ""
-			if _, _, err := c.QueryRange(context.TODO(), test.query, v1.Range{}); err != nil {
+			if err := c.QueryRange(context.TODO(), test.query, v1.Range{}).Err(); err != nil {
 				t.Fatalf("unexpected err: %v", err)
 			}
 			if rec.query != test.expected {
@@ -199,7 +200,7 @@ func TestInjectMatchersGetValue(t *testing.T) {
 	}
 
 	in := mustMatchers(t, `__name__="up",job="foo"`)
-	if _, _, err := c.GetValue(context.TODO(), time.Time{}, time.Time{}, in); err != nil {
+	if err := c.GetValue(context.TODO(), time.Time{}, time.Time{}, in).Err(); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
