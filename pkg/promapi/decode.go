@@ -1,9 +1,10 @@
-package promclient
+package promapi
 
 import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strconv"
 
@@ -277,4 +278,36 @@ func decodeHistogramPair(iter *jsoniter.Iterator) (int64, *histogram.FloatHistog
 		return int64(ts * 1000), nil
 	}
 	return int64(ts * 1000), sampleHistogramToFloatHistogram(&sh)
+}
+
+// sampleHistogramToFloatHistogram converts the API's model.SampleHistogram
+// (flat bucket list) to a histogram.FloatHistogram. JSON-sourced histograms
+// carry no original FloatHistogram, so this is a best-effort reconstruction as
+// a custom-buckets histogram (Schema=-53); empty buckets are not preserved by
+// the JSON form. (promxy's remote_read path keeps full fidelity separately.)
+func sampleHistogramToFloatHistogram(sh *model.SampleHistogram) *histogram.FloatHistogram {
+	if sh == nil {
+		return nil
+	}
+	fh := &histogram.FloatHistogram{
+		Schema: histogram.CustomBucketsSchema,
+		Count:  float64(sh.Count),
+		Sum:    float64(sh.Sum),
+	}
+	if len(sh.Buckets) == 0 {
+		return fh
+	}
+	customValues := make([]float64, 0, len(sh.Buckets))
+	counts := make([]float64, 0, len(sh.Buckets))
+	for _, b := range sh.Buckets {
+		upper := float64(b.Upper)
+		if !math.IsInf(upper, 1) {
+			customValues = append(customValues, upper)
+		}
+		counts = append(counts, float64(b.Count))
+	}
+	fh.CustomValues = customValues
+	fh.PositiveBuckets = counts
+	fh.PositiveSpans = []histogram.Span{{Offset: 0, Length: uint32(len(counts))}}
+	return fh
 }
