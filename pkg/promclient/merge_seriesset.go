@@ -29,6 +29,46 @@ func labelsToMetric(ls labels.Labels) model.Metric {
 	return m
 }
 
+func metricLabels(m model.Metric) labels.Labels {
+	b := labels.NewScratchBuilder(len(m))
+	for k, v := range m {
+		b.Add(string(k), string(v))
+	}
+	b.Sort()
+	return b.Labels()
+}
+
+// ModelValueToSeriesSet converts a model.Value (from the remote_read path or a
+// client_golang fallback) into a storage.SeriesSet. It is the inverse of the
+// streaming decode and exists only for the non-JSON paths that still produce
+// model.Value.
+func ModelValueToSeriesSet(v model.Value, warnings annotations.Annotations, err error) storage.SeriesSet {
+	if err != nil {
+		return promapi.NewSeriesSet(nil, warnings, err)
+	}
+	var series []storage.Series
+	switch tv := v.(type) {
+	case model.Vector:
+		for _, s := range tv {
+			ss := &model.SampleStream{Metric: s.Metric}
+			if s.Histogram != nil {
+				ss.Histograms = []model.SampleHistogramPair{{Timestamp: s.Timestamp, Histogram: s.Histogram}}
+			} else {
+				ss.Values = []model.SamplePair{{Timestamp: s.Timestamp, Value: s.Value}}
+			}
+			series = append(series, sampleStreamToSeries(ss, metricLabels(s.Metric)))
+		}
+	case model.Matrix:
+		for _, ss := range tv {
+			series = append(series, sampleStreamToSeries(ss, metricLabels(ss.Metric)))
+		}
+	case *model.Scalar:
+		series = append(series, promapi.NewSeries(labels.EmptyLabels(),
+			[]chunks.Sample{promapi.FloatSample(int64(tv.Timestamp), float64(tv.Value))}))
+	}
+	return promapi.NewSeriesSet(series, warnings, nil)
+}
+
 func seriesToSampleStream(s storage.Series) *model.SampleStream {
 	ss := &model.SampleStream{Metric: labelsToMetric(s.Labels())}
 	it := s.Iterator(nil)
@@ -55,7 +95,47 @@ func sampleStreamToSeries(ss *model.SampleStream, lbls labels.Labels) storage.Se
 		samples = append(samples, promapi.HistogramSample(int64(p.Timestamp), sampleHistogramToFloatHistogram(p.Histogram)))
 	}
 	sort.SliceStable(samples, func(i, j int) bool { return samples[i].T() < samples[j].T() })
-	return storage.NewListSeries(lbls, samples)
+	return promapi.NewSeries(lbls, samples)
+}
+
+// materializeSeriesSet drains ss into an in-memory SeriesSet, copying every
+// sample. This decouples the result from the source's lifecycle -- required for
+// the remote_read streaming path, whose lazy ChunkedSeriesSet reads from an HTTP
+// body that is closed (and whose context is canceled) the moment iteration
+// would otherwise happen, after GetValue has already returned.
+func materializeSeriesSet(ss storage.SeriesSet) storage.SeriesSet {
+	var series []storage.Series
+	for ss.Next() {
+		s := ss.At()
+		lbls := s.Labels().Copy()
+		var samples []chunks.Sample
+		it := s.Iterator(nil)
+		for vt := it.Next(); vt != chunkenc.ValNone; vt = it.Next() {
+			switch vt {
+			case chunkenc.ValFloat:
+				t, v := it.At()
+				samples = append(samples, promapi.FloatSample(t, v))
+			case chunkenc.ValHistogram, chunkenc.ValFloatHistogram:
+				t, fh := it.AtFloatHistogram(nil)
+				samples = append(samples, promapi.HistogramSample(t, fh))
+			}
+		}
+		if err := it.Err(); err != nil {
+			return promapi.NewSeriesSet(nil, ss.Warnings(), err)
+		}
+		series = append(series, promapi.NewSeries(lbls, samples))
+	}
+	return promapi.NewSeriesSet(series, ss.Warnings(), ss.Err())
+}
+
+// SeriesSetToMatrix materializes a storage.SeriesSet into a model.Matrix, for
+// the few call sites that still operate on model.Value.
+func SeriesSetToMatrix(ss storage.SeriesSet) (model.Matrix, error) {
+	var m model.Matrix
+	for ss.Next() {
+		m = append(m, seriesToSampleStream(ss.At()))
+	}
+	return m, ss.Err()
 }
 
 func mergeAntiAffinity(antiAffinity model.Time, preferMax bool) storage.VerticalSeriesMergeFunc {

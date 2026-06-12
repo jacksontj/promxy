@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/prometheus/prometheus/storage"
 
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 )
@@ -144,58 +145,53 @@ func (c *AddLabelClient) LabelValues(ctx context.Context, label string, matchers
 	return val, w, nil
 }
 
+// addLabels returns a label-rewrite that sets c.Labels on each series.
+func (c *AddLabelClient) addLabels(l labels.Labels) labels.Labels {
+	b := labels.NewBuilder(l)
+	for k, v := range c.Labels {
+		b.Set(string(k), string(v))
+	}
+	return b.Labels()
+}
+
 // Query performs a query for the given time.
-func (c *AddLabelClient) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+func (c *AddLabelClient) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
 	// Parse out the promql query into expressions etc.
 	e, err := parser.ParseExpr(query)
 	if err != nil {
-		return nil, nil, err
+		return storage.ErrSeriesSet(err)
 	}
 
 	// Walk the expression, to filter out any LabelMatchers that match etc.
 	filterVisitor := NewFilterMatcherVisitor(c.Labels)
 	if _, err := parser.Walk(ctx, filterVisitor, &parser.EvalStmt{Expr: e}, e, nil, nil); err != nil {
-		return nil, nil, err
+		return storage.ErrSeriesSet(err)
 	}
 	if !filterVisitor.filterMatch {
-		return nil, nil, nil
+		return storage.EmptySeriesSet()
 	}
 
-	val, w, err := c.API.Query(ctx, e.String(), ts)
-	if err != nil {
-		return nil, w, err
-	}
-	if err := promhttputil.ValueAddLabelSet(val, c.Labels); err != nil {
-		return nil, w, err
-	}
-	return val, w, nil
+	return MapLabelsSeriesSet(c.API.Query(ctx, e.String(), ts), c.addLabels)
 }
 
 // QueryRange performs a query for the given range.
-func (c *AddLabelClient) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+func (c *AddLabelClient) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
 	// Parse out the promql query into expressions etc.
 	e, err := parser.ParseExpr(query)
 	if err != nil {
-		return nil, nil, err
+		return storage.ErrSeriesSet(err)
 	}
 
 	// Walk the expression, to filter out any LabelMatchers that match etc.
 	filterVisitor := NewFilterMatcherVisitor(c.Labels)
 	if _, err := parser.Walk(ctx, filterVisitor, &parser.EvalStmt{Expr: e}, e, nil, nil); err != nil {
-		return nil, nil, err
+		return storage.ErrSeriesSet(err)
 	}
 	if !filterVisitor.filterMatch {
-		return nil, nil, nil
+		return storage.EmptySeriesSet()
 	}
 
-	val, w, err := c.API.QueryRange(ctx, e.String(), r)
-	if err != nil {
-		return nil, w, err
-	}
-	if err := promhttputil.ValueAddLabelSet(val, c.Labels); err != nil {
-		return nil, w, err
-	}
-	return val, w, nil
+	return MapLabelsSeriesSet(c.API.QueryRange(ctx, e.String(), r), c.addLabels)
 }
 
 // Series finds series by label matchers.
@@ -244,19 +240,10 @@ func (c *AddLabelClient) Series(ctx context.Context, matches []string, startTime
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (c *AddLabelClient) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
+func (c *AddLabelClient) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
 	filteredMatchers, ok := FilterMatchers(c.Labels, matchers)
 	if !ok {
-		return nil, nil, nil
+		return storage.EmptySeriesSet()
 	}
-
-	val, w, err := c.API.GetValue(ctx, start, end, filteredMatchers)
-	if err != nil {
-		return nil, w, err
-	}
-	if err := promhttputil.ValueAddLabelSet(val, c.Labels); err != nil {
-		return nil, w, err
-	}
-
-	return val, w, nil
+	return MapLabelsSeriesSet(c.API.GetValue(ctx, start, end, filteredMatchers), c.addLabels)
 }

@@ -12,8 +12,8 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/remote"
-	"github.com/prometheus/prometheus/tsdb/chunkenc"
 
 	"github.com/jacksontj/promxy/pkg/promhttputil"
 )
@@ -68,12 +68,13 @@ func (p *PromAPIV1) LabelValues(ctx context.Context, label string, matchers []st
 }
 
 // Query performs a query for the given time.
-func (p *PromAPIV1) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+func (p *PromAPIV1) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
 	if hasNegativeFractionalSecond(ts) {
-		return nil, nil, errNegativeFractionalTimestamp
+		return storage.ErrSeriesSet(errNegativeFractionalTimestamp)
 	}
 	if p.Client == nil {
-		return p.API.Query(ctx, query, ts)
+		v, w, err := p.API.Query(ctx, query, ts)
+		return ModelValueToSeriesSet(v, promhttputil.WarningsConvert(w), err)
 	}
 	u := p.Client.URL(epQuery, nil)
 	q := u.Query()
@@ -85,17 +86,18 @@ func (p *PromAPIV1) Query(ctx context.Context, query string, ts time.Time) (mode
 }
 
 // QueryRange performs a query for the given range.
-func (p *PromAPIV1) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+func (p *PromAPIV1) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
 	// Reject ranges whose first eval step would land on a pre-epoch
 	// sub-second timestamp; the upstream JSON decoder mis-parses these.
 	// See hasNegativeFractionalSecond. Step times are start + k*step, so
 	// checking start covers the whole range when step is whole-second
 	// (the only thing PromQL produces here).
 	if hasNegativeFractionalSecond(r.Start) {
-		return nil, nil, errNegativeFractionalTimestamp
+		return storage.ErrSeriesSet(errNegativeFractionalTimestamp)
 	}
 	if p.Client == nil {
-		return p.API.QueryRange(ctx, query, r)
+		v, w, err := p.API.QueryRange(ctx, query, r)
+		return ModelValueToSeriesSet(v, promhttputil.WarningsConvert(w), err)
 	}
 	u := p.Client.URL(epQueryRange, nil)
 	q := u.Query()
@@ -120,19 +122,17 @@ func (p *PromAPIV1) Series(ctx context.Context, matches []string, startTime time
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (p *PromAPIV1) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
-	// http://localhost:8080/api/v1/query?query=scrape_duration_seconds%7Bjob%3D%22prometheus%22%7D&time=1507412244.663&_=1507412096887
+func (p *PromAPIV1) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
 	pql, err := promhttputil.MatcherToString(matchers)
 	if err != nil {
-		return nil, nil, err
+		return storage.ErrSeriesSet(err)
 	}
 
-	// We want to grab only the raw datapoints, so we do that through the query interface
-	// passing in a duration that is at least as long as ours (the added second is to deal
-	// with any rounding error etc since the duration is a floating point and we are casting
-	// to an int64
+	// We want to grab only the raw datapoints, so we do that through the query
+	// interface passing in a duration that is at least as long as ours (the
+	// added second deals with float rounding when casting to int64).
 	query := pql + fmt.Sprintf("[%ds]", int64(end.Sub(start).Seconds())+1)
-	return p.API.Query(ctx, query, end)
+	return p.Query(ctx, query, end)
 }
 
 // PromAPIRemoteRead implements our internal API interface using a combination of
@@ -143,58 +143,20 @@ type PromAPIRemoteRead struct {
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (p *PromAPIRemoteRead) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
+func (p *PromAPIRemoteRead) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
 	query, err := remote.ToQuery(int64(timestamp.FromTime(start)), int64(timestamp.FromTime(end)), matchers, nil)
 	if err != nil {
-		return nil, nil, err
+		return storage.ErrSeriesSet(err)
 	}
+	// remote.Read returns a storage.SeriesSet, but the streamed/chunked variant
+	// is lazy: it reads from the HTTP body (and holds the request context) until
+	// iterated. We must drain it here, while the context is still alive --
+	// otherwise iteration downstream races the context cancel and fails with
+	// "context canceled". materializeSeriesSet copies every sample so the result
+	// is safe to consume after this returns.
 	ss, err := p.ReadClient.Read(ctx, query, false)
 	if err != nil {
-		return nil, nil, err
+		return storage.ErrSeriesSet(err)
 	}
-
-	// Convert the SeriesSet to a model.Matrix.
-	matrix := make(model.Matrix, 0)
-	for ss.Next() {
-		s := ss.At()
-
-		metric := make(model.Metric)
-		s.Labels().Range(func(label labels.Label) {
-			metric[model.LabelName(label.Name)] = model.LabelValue(label.Value)
-		})
-
-		samples := []model.SamplePair{}
-		var histograms []model.SampleHistogramPair
-		it := s.Iterator(nil)
-		for vt := it.Next(); vt != chunkenc.ValNone; vt = it.Next() {
-			switch vt {
-			case chunkenc.ValFloat:
-				t, v := it.At()
-				samples = append(samples, model.SamplePair{
-					Timestamp: model.Time(t),
-					Value:     model.SampleValue(v),
-				})
-			case chunkenc.ValHistogram, chunkenc.ValFloatHistogram:
-				t, fh := it.AtFloatHistogram(nil)
-				histograms = append(histograms, model.SampleHistogramPair{
-					Timestamp: model.Time(t),
-					Histogram: floatHistogramToSampleHistogram(fh),
-				})
-			}
-		}
-		if err := it.Err(); err != nil {
-			return nil, nil, err
-		}
-
-		matrix = append(matrix, &model.SampleStream{
-			Metric:     metric,
-			Values:     samples,
-			Histograms: histograms,
-		})
-	}
-
-	if err := ss.Err(); err != nil {
-		return nil, nil, err
-	}
-	return matrix, nil, nil
+	return materializeSeriesSet(ss)
 }

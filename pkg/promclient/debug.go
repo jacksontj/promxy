@@ -7,8 +7,20 @@ import (
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/storage"
 	"github.com/sirupsen/logrus"
 )
+
+// logSeriesSet emits the trace/debug line for a SeriesSet-returning call.
+func (d *DebugAPI) logSeriesSet(fields logrus.Fields, ss storage.SeriesSet) storage.SeriesSet {
+	if logrus.GetLevel() > logrus.DebugLevel {
+		fields["error"] = ss.Err()
+		logrus.WithFields(fields).Trace(d.PrefixMessage)
+	} else {
+		logrus.WithFields(fields).Debug(d.PrefixMessage)
+	}
+	return ss
+}
 
 // DebugAPI simply logs debug lines for the given API with the given prefix
 type DebugAPI struct {
@@ -64,7 +76,7 @@ func (d *DebugAPI) LabelValues(ctx context.Context, label string, matchers []str
 }
 
 // Query performs a query for the given time.
-func (d *DebugAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
+func (d *DebugAPI) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
 	fields := logrus.Fields{
 		"api":   "Query",
 		"query": query,
@@ -73,23 +85,13 @@ func (d *DebugAPI) Query(ctx context.Context, query string, ts time.Time) (model
 	logrus.WithFields(fields).Debug(d.PrefixMessage)
 
 	s := time.Now()
-	v, w, err := d.A.Query(ctx, query, ts)
+	ss := d.A.Query(ctx, query, ts)
 	fields["took"] = time.Since(s)
-
-	if logrus.GetLevel() > logrus.DebugLevel {
-		fields["value"] = v
-		fields["warnings"] = w
-		fields["error"] = err
-		logrus.WithFields(fields).Trace(d.PrefixMessage)
-	} else {
-		logrus.WithFields(fields).Debug(d.PrefixMessage)
-	}
-
-	return v, w, err
+	return d.logSeriesSet(fields, ss)
 }
 
 // QueryRange performs a query for the given range.
-func (d *DebugAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
+func (d *DebugAPI) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
 	fields := logrus.Fields{
 		"api":   "QueryRange",
 		"query": query,
@@ -98,19 +100,9 @@ func (d *DebugAPI) QueryRange(ctx context.Context, query string, r v1.Range) (mo
 	logrus.WithFields(fields).Debug(d.PrefixMessage)
 
 	s := time.Now()
-	v, w, err := d.A.QueryRange(ctx, query, r)
+	ss := d.A.QueryRange(ctx, query, r)
 	fields["took"] = time.Since(s)
-
-	if logrus.GetLevel() > logrus.DebugLevel {
-		fields["value"] = v
-		fields["warnings"] = w
-		fields["error"] = err
-		logrus.WithFields(fields).Trace(d.PrefixMessage)
-	} else {
-		logrus.WithFields(fields).Debug(d.PrefixMessage)
-	}
-
-	return v, w, err
+	return d.logSeriesSet(fields, ss)
 }
 
 // Series finds series by label matchers.
@@ -139,7 +131,7 @@ func (d *DebugAPI) Series(ctx context.Context, matches []string, startTime time.
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (d *DebugAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
+func (d *DebugAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
 	fields := logrus.Fields{
 		"api":      "GetValue",
 		"start":    start,
@@ -150,19 +142,9 @@ func (d *DebugAPI) GetValue(ctx context.Context, start, end time.Time, matchers 
 	logrus.WithFields(fields).Debug(d.PrefixMessage)
 
 	s := time.Now()
-	v, w, err := d.A.GetValue(ctx, start, end, matchers)
+	ss := d.A.GetValue(ctx, start, end, matchers)
 	fields["took"] = time.Since(s)
-
-	if logrus.GetLevel() > logrus.DebugLevel {
-		fields["value"] = v
-		fields["warnings"] = w
-		fields["error"] = err
-		logrus.WithFields(fields).Trace(d.PrefixMessage)
-	} else {
-		logrus.WithFields(fields).Debug(d.PrefixMessage)
-	}
-
-	return v, w, err
+	return d.logSeriesSet(fields, ss)
 }
 
 // Metadata returns metadata about metrics currently scraped by the metric name.

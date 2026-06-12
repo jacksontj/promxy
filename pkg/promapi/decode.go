@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/common/model"
@@ -17,6 +18,21 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunks"
 	"github.com/prometheus/prometheus/util/annotations"
 )
+
+// toAnnotationError re-wraps a downstream warning/info string back into a
+// properly-typed annotation. The v1 JSON API serializes annotations as plain
+// strings (losing the typed wrapping), prefixed with "PromQL warning: " /
+// "PromQL info: "; we detect the prefix and re-wrap with the matching sentinel
+// so consumers can classify info-vs-warning via errors.Is.
+func toAnnotationError(s string) error {
+	if rest, ok := strings.CutPrefix(s, "PromQL warning: "); ok {
+		return fmt.Errorf("%w: %s", annotations.PromQLWarning, rest)
+	}
+	if rest, ok := strings.CutPrefix(s, "PromQL info: "); ok {
+		return fmt.Errorf("%w: %s", annotations.PromQLInfo, rest)
+	}
+	return errors.New(s)
+}
 
 // ResponseError is a downstream API error (a status:"error" body or a malformed
 // response). It carries the API errorType and message but, unlike
@@ -70,6 +86,27 @@ func (s histSample) FH() *histogram.FloatHistogram { return s.fh }
 func (s histSample) Type() chunkenc.ValueType      { return chunkenc.ValFloatHistogram }
 func (s histSample) Copy() chunks.Sample           { return histSample{s.t, s.fh.Copy()} }
 
+// sampleSlice adapts []chunks.Sample to storage.Samples.
+type sampleSlice []chunks.Sample
+
+func (s sampleSlice) Get(i int) chunks.Sample { return s[i] }
+func (s sampleSlice) Len() int                { return len(s) }
+
+// NewSeries builds a storage.Series whose float-histogram reads are defensively
+// copied (via storage.NewListSeriesIteratorWithCopy). The plain
+// storage.NewListSeries hands back the stored *FloatHistogram pointer, so a
+// caller (e.g. the PromQL engine) that reuses a hint across samples can observe
+// aliased histograms when the same histogram repeats; copy-on-read prevents that
+// while leaving float reads zero-copy.
+func NewSeries(lbls labels.Labels, samples []chunks.Sample) storage.Series {
+	return &storage.SeriesEntry{
+		Lset: lbls,
+		SampleIteratorFn: func(chunkenc.Iterator) chunkenc.Iterator {
+			return storage.NewListSeriesIteratorWithCopy(sampleSlice(samples))
+		},
+	}
+}
+
 // SeriesSet is a minimal in-memory storage.SeriesSet carrying series, warnings
 // and an error. It is the one reusable list-SeriesSet for promxy.
 //
@@ -119,7 +156,7 @@ func DecodeSeriesSet(body []byte) storage.SeriesSet {
 			// "PromQL warning: " / "PromQL info: " prefixes; preserve them as
 			// annotations so SeriesSet.Warnings() exposes both.
 			for iter.ReadArray() {
-				anns = anns.Add(errors.New(iter.ReadString()))
+				anns = anns.Add(toAnnotationError(iter.ReadString()))
 			}
 		case "data":
 			for dk := iter.ReadObject(); dk != ""; dk = iter.ReadObject() {
@@ -168,7 +205,7 @@ func decodeResult(resultType string, body []byte) ([]storage.Series, error) {
 		return decodeMatrix(iter), iter.Error
 	case "scalar":
 		t, f := decodeSamplePair(iter)
-		return []storage.Series{storage.NewListSeries(labels.EmptyLabels(), []chunks.Sample{floatSample{t, f}})}, iter.Error
+		return []storage.Series{NewSeries(labels.EmptyLabels(), []chunks.Sample{floatSample{t, f}})}, iter.Error
 	case "string":
 		// strings carry no series; the model.Value path didn't support them either.
 		return nil, nil
@@ -198,7 +235,7 @@ func decodeVector(iter *jsoniter.Iterator) []storage.Series {
 			}
 		}
 		b.Sort()
-		out = append(out, storage.NewListSeries(b.Labels(), []chunks.Sample{sample}))
+		out = append(out, NewSeries(b.Labels(), []chunks.Sample{sample}))
 	}
 	return out
 }
@@ -235,7 +272,7 @@ func decodeMatrix(iter *jsoniter.Iterator) []storage.Series {
 			sort.SliceStable(samples, func(i, j int) bool { return samples[i].T() < samples[j].T() })
 		}
 		b.Sort()
-		out = append(out, storage.NewListSeries(b.Labels(), samples))
+		out = append(out, NewSeries(b.Labels(), samples))
 	}
 	return out
 }

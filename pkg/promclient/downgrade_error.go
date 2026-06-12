@@ -7,6 +7,7 @@ import (
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/storage"
 )
 
 // DowngradeErrorAPI simply downgrades all errors into warnings from the given API.
@@ -34,23 +35,13 @@ func (n *DowngradeErrorAPI) LabelValues(ctx context.Context, label string, match
 }
 
 // Query performs a query for the given time.
-func (n *DowngradeErrorAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
-	v, w, err := n.A.Query(ctx, query, ts)
-	if err != nil {
-		w = append(w, err.Error())
-	}
-
-	return v, w, nil
+func (n *DowngradeErrorAPI) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
+	return DowngradeErrSeriesSet(n.A.Query(ctx, query, ts))
 }
 
 // QueryRange performs a query for the given range.
-func (n *DowngradeErrorAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
-	v, w, err := n.A.QueryRange(ctx, query, r)
-	if err != nil {
-		w = append(w, err.Error())
-	}
-
-	return v, w, nil
+func (n *DowngradeErrorAPI) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
+	return DowngradeErrSeriesSet(n.A.QueryRange(ctx, query, r))
 }
 
 // Series finds series by label matchers.
@@ -64,13 +55,8 @@ func (n *DowngradeErrorAPI) Series(ctx context.Context, matches []string, startT
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (n *DowngradeErrorAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
-	v, w, err := n.A.GetValue(ctx, start, end, matchers)
-	if err != nil {
-		w = append(w, err.Error())
-	}
-
-	return v, w, nil
+func (n *DowngradeErrorAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
+	return DowngradeErrSeriesSet(n.A.GetValue(ctx, start, end, matchers))
 }
 
 // Key returns a labelset used to determine other api clients that are the "same"

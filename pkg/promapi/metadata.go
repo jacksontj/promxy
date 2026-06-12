@@ -63,7 +63,7 @@ func decodeEnvelope(body []byte) ([]byte, annotations.Annotations, error) {
 			errMsg = iter.ReadString()
 		case "warnings", "infos":
 			for iter.ReadArray() {
-				anns = anns.Add(errors.New(iter.ReadString()))
+				anns = anns.Add(toAnnotationError(iter.ReadString()))
 			}
 		case "data":
 			data = iter.SkipAndReturnBytes()

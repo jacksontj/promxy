@@ -14,6 +14,7 @@ import (
 	model "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/prometheus/prometheus/storage"
 )
 
 func TestMergeLabelValues(t *testing.T) {
@@ -164,14 +165,14 @@ func (a *labelStubAPI) LabelValues(ctx context.Context, label string, matchers [
 }
 
 // Query performs a query for the given time.
-func (a *labelStubAPI) Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error) {
-	return nil, nil, fmt.Errorf("not implemented")
+func (a *labelStubAPI) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
+	return storage.ErrSeriesSet(fmt.Errorf("not implemented"))
 
 }
 
 // QueryRange performs a query for the given range.
-func (a *labelStubAPI) QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error) {
-	return nil, nil, fmt.Errorf("not implemented")
+func (a *labelStubAPI) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
+	return storage.ErrSeriesSet(fmt.Errorf("not implemented"))
 }
 
 // Series finds series by label matchers.
@@ -181,8 +182,8 @@ func (a *labelStubAPI) Series(ctx context.Context, matches []string, startTime t
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
-func (a *labelStubAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) (model.Value, v1.Warnings, error) {
-	return nil, nil, fmt.Errorf("not implemented")
+func (a *labelStubAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
+	return storage.ErrSeriesSet(fmt.Errorf("not implemented"))
 
 }
 
