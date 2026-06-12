@@ -1,0 +1,280 @@
+package promclient
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"sort"
+	"strconv"
+
+	jsoniter "github.com/json-iterator/go"
+	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/histogram"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
+	"github.com/prometheus/prometheus/tsdb/chunks"
+	"github.com/prometheus/prometheus/util/annotations"
+)
+
+// ResponseError is a downstream API error (a status:"error" body or a malformed
+// response). It carries the API errorType and message but, unlike
+// client_golang's v1.Error, adds no client_golang dependency -- keeping this
+// decoder a standalone, reusable unit (and a step toward dropping client_golang
+// entirely).
+type ResponseError struct {
+	Type string
+	Msg  string
+}
+
+func (e *ResponseError) Error() string {
+	if e.Type != "" {
+		return e.Type + ": " + e.Msg
+	}
+	return e.Msg
+}
+
+// This is the replacement for the model.Value decode path (queryWithInfos +
+// IteratorsForValue + metricToLabels). It streams a Prometheus HTTP API
+// response straight into a storage.SeriesSet: each series' metric is read
+// directly into a labels.Labels (no model.Metric map) and samples (float or
+// native histogram) are read without model.SamplePair. Warnings and infos are
+// returned as annotations.Annotations carried by the SeriesSet.
+
+var jsonCfg = jsoniter.ConfigCompatibleWithStandardLibrary
+
+// floatSample is a chunks.Sample backed by a single float point.
+type floatSample struct {
+	t int64
+	f float64
+}
+
+func (s floatSample) T() int64                      { return s.t }
+func (s floatSample) F() float64                    { return s.f }
+func (s floatSample) H() *histogram.Histogram       { return nil }
+func (s floatSample) FH() *histogram.FloatHistogram { return nil }
+func (s floatSample) Type() chunkenc.ValueType      { return chunkenc.ValFloat }
+func (s floatSample) Copy() chunks.Sample           { return s }
+
+// histSample is a chunks.Sample backed by a native (float) histogram point.
+type histSample struct {
+	t  int64
+	fh *histogram.FloatHistogram
+}
+
+func (s histSample) T() int64                      { return s.t }
+func (s histSample) F() float64                    { return 0 }
+func (s histSample) H() *histogram.Histogram       { return nil }
+func (s histSample) FH() *histogram.FloatHistogram { return s.fh }
+func (s histSample) Type() chunkenc.ValueType      { return chunkenc.ValFloatHistogram }
+func (s histSample) Copy() chunks.Sample           { return histSample{s.t, s.fh.Copy()} }
+
+// SeriesSet is a minimal in-memory storage.SeriesSet carrying series, warnings
+// and an error. It is the one reusable list-SeriesSet for promxy.
+//
+// TODO(seriesset-refactor): pkg/proxyquerier has an identical type; once the
+// query path returns this directly, delete proxyquerier's copy and use this.
+type SeriesSet struct {
+	series   []storage.Series
+	idx      int
+	warnings annotations.Annotations
+	err      error
+}
+
+// NewSeriesSet returns a storage.SeriesSet over the given series.
+func NewSeriesSet(series []storage.Series, warnings annotations.Annotations, err error) *SeriesSet {
+	return &SeriesSet{series: series, idx: -1, warnings: warnings, err: err}
+}
+
+func (s *SeriesSet) Next() bool                        { s.idx++; return s.idx < len(s.series) }
+func (s *SeriesSet) At() storage.Series                { return s.series[s.idx] }
+func (s *SeriesSet) Err() error                        { return s.err }
+func (s *SeriesSet) Warnings() annotations.Annotations { return s.warnings }
+
+// DecodeSeriesSet streams an API response body into a storage.SeriesSet.
+func DecodeSeriesSet(body []byte) storage.SeriesSet {
+	iter := jsonCfg.BorrowIterator(body)
+	defer jsonCfg.ReturnIterator(iter)
+
+	var (
+		status      string
+		errType     string
+		errMsg      string
+		resultType  string
+		resultBytes []byte
+		anns        annotations.Annotations
+	)
+
+	for key := iter.ReadObject(); key != ""; key = iter.ReadObject() {
+		switch key {
+		case "status":
+			status = iter.ReadString()
+		case "errorType":
+			errType = iter.ReadString()
+		case "error":
+			errMsg = iter.ReadString()
+		case "warnings", "infos":
+			// Downstream warnings/infos already carry their
+			// "PromQL warning: " / "PromQL info: " prefixes; preserve them as
+			// annotations so SeriesSet.Warnings() exposes both.
+			for iter.ReadArray() {
+				anns = anns.Add(errors.New(iter.ReadString()))
+			}
+		case "data":
+			for dk := iter.ReadObject(); dk != ""; dk = iter.ReadObject() {
+				switch dk {
+				case "resultType":
+					resultType = iter.ReadString()
+				case "result":
+					// Capture raw so we can decode once resultType is known
+					// (the two fields are ordered resultType-then-result in
+					// practice, but don't rely on it).
+					resultBytes = iter.SkipAndReturnBytes()
+				default:
+					iter.Skip()
+				}
+			}
+		default:
+			iter.Skip()
+		}
+	}
+
+	if iter.Error != nil && !errors.Is(iter.Error, io.EOF) {
+		return NewSeriesSet(nil, anns, &ResponseError{Type: "bad_response", Msg: iter.Error.Error()})
+	}
+	if status == "error" {
+		return NewSeriesSet(nil, anns, &ResponseError{Type: errType, Msg: errMsg})
+	}
+
+	series, err := decodeResult(resultType, resultBytes)
+	if err != nil {
+		return NewSeriesSet(nil, anns, err)
+	}
+	return NewSeriesSet(series, anns, nil)
+}
+
+func decodeResult(resultType string, body []byte) ([]storage.Series, error) {
+	if len(body) == 0 {
+		return nil, nil
+	}
+	iter := jsonCfg.BorrowIterator(body)
+	defer jsonCfg.ReturnIterator(iter)
+
+	switch resultType {
+	case "vector":
+		return decodeVector(iter), iter.Error
+	case "matrix":
+		return decodeMatrix(iter), iter.Error
+	case "scalar":
+		t, f := decodeSamplePair(iter)
+		return []storage.Series{storage.NewListSeries(labels.EmptyLabels(), []chunks.Sample{floatSample{t, f}})}, iter.Error
+	case "string":
+		// strings carry no series; the model.Value path didn't support them either.
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unknown result type %q", resultType)
+	}
+}
+
+func decodeVector(iter *jsoniter.Iterator) []storage.Series {
+	var out []storage.Series
+	var b labels.ScratchBuilder
+	for iter.ReadArray() {
+		b.Reset()
+		var sample chunks.Sample
+		for k := iter.ReadObject(); k != ""; k = iter.ReadObject() {
+			switch k {
+			case "metric":
+				readMetric(iter, &b)
+			case "value":
+				t, f := decodeSamplePair(iter)
+				sample = floatSample{t, f}
+			case "histogram":
+				t, fh := decodeHistogramPair(iter)
+				sample = histSample{t, fh}
+			default:
+				iter.Skip()
+			}
+		}
+		b.Sort()
+		out = append(out, storage.NewListSeries(b.Labels(), []chunks.Sample{sample}))
+	}
+	return out
+}
+
+func decodeMatrix(iter *jsoniter.Iterator) []storage.Series {
+	var out []storage.Series
+	var b labels.ScratchBuilder
+	for iter.ReadArray() {
+		b.Reset()
+		var samples []chunks.Sample
+		hadHist := false
+		for k := iter.ReadObject(); k != ""; k = iter.ReadObject() {
+			switch k {
+			case "metric":
+				readMetric(iter, &b)
+			case "values":
+				for iter.ReadArray() {
+					t, f := decodeSamplePair(iter)
+					samples = append(samples, floatSample{t, f})
+				}
+			case "histograms":
+				hadHist = true
+				for iter.ReadArray() {
+					t, fh := decodeHistogramPair(iter)
+					samples = append(samples, histSample{t, fh})
+				}
+			default:
+				iter.Skip()
+			}
+		}
+		// A series may carry both float and histogram samples (after a type
+		// transition); the storage iterator expects them in timestamp order.
+		if hadHist {
+			sort.SliceStable(samples, func(i, j int) bool { return samples[i].T() < samples[j].T() })
+		}
+		b.Sort()
+		out = append(out, storage.NewListSeries(b.Labels(), samples))
+	}
+	return out
+}
+
+// readMetric reads a {"name":"value",...} object straight into the builder.
+func readMetric(iter *jsoniter.Iterator, b *labels.ScratchBuilder) {
+	for name := iter.ReadObject(); name != ""; name = iter.ReadObject() {
+		b.Add(name, iter.ReadString())
+	}
+}
+
+// decodeSamplePair reads a [<unix-seconds-float>, "<value>"] pair and returns a
+// millisecond timestamp and float value (NaN/+Inf/-Inf handled by ParseFloat).
+func decodeSamplePair(iter *jsoniter.Iterator) (int64, float64) {
+	iter.ReadArray()
+	ts := iter.ReadFloat64()
+	iter.ReadArray()
+	vs := iter.ReadString()
+	iter.ReadArray() // consume closing ]
+	f, err := strconv.ParseFloat(vs, 64)
+	if err != nil {
+		iter.ReportError("decodeSamplePair", err.Error())
+	}
+	return int64(ts * 1000), f
+}
+
+// decodeHistogramPair reads a [<unix-seconds-float>, {histogram}] pair. The
+// histogram object is decoded into a model.SampleHistogram (its JSON shape) and
+// converted to a histogram.FloatHistogram via the same path the model.Value
+// iterator uses, so the result is identical.
+func decodeHistogramPair(iter *jsoniter.Iterator) (int64, *histogram.FloatHistogram) {
+	iter.ReadArray()
+	ts := iter.ReadFloat64()
+	iter.ReadArray()
+	objBytes := iter.SkipAndReturnBytes()
+	iter.ReadArray() // consume closing ]
+	var sh model.SampleHistogram
+	if err := jsonCfg.Unmarshal(objBytes, &sh); err != nil {
+		iter.ReportError("decodeHistogramPair", err.Error())
+		return int64(ts * 1000), nil
+	}
+	return int64(ts * 1000), sampleHistogramToFloatHistogram(&sh)
+}
