@@ -1,6 +1,7 @@
 package promclient
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/chunks"
+	"github.com/prometheus/prometheus/util/annotations"
 
 	"github.com/jacksontj/promxy/pkg/promapi"
 	"github.com/jacksontj/promxy/pkg/promhttputil"
@@ -134,5 +136,93 @@ func TestMergeSeriesSetsMatchesMergeValues(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestMergeSeriesSetsEdgeCases covers the non-merge paths: no sets, and the
+// single-set fast path (which returns the set directly and must therefore
+// preserve its warnings and data unchanged).
+func TestMergeSeriesSetsEdgeCases(t *testing.T) {
+	t.Run("no_sets", func(t *testing.T) {
+		ss := MergeSeriesSets(0, false)
+		if ss.Next() {
+			t.Fatal("expected empty result")
+		}
+		if ss.Err() != nil {
+			t.Fatalf("expected no error, got %v", ss.Err())
+		}
+	})
+
+	t.Run("single_set_preserves_warnings_and_data", func(t *testing.T) {
+		warn := annotations.New().Add(errors.New("a warning"))
+		single := matrixToSeriesSet(model.Matrix{stream("m", 0, 1, 10, 2)})
+		single = WithWarnings(single, warn)
+
+		got := MergeSeriesSets(0, false, single)
+		dump := dumpSS(t, got)
+		if len(dump) != 1 {
+			t.Fatalf("expected 1 series, got %d: %v", len(dump), dump)
+		}
+		if len(got.Warnings().AsErrors()) != 1 {
+			t.Fatalf("expected warnings preserved through single-set path, got %v", got.Warnings().AsErrors())
+		}
+	})
+}
+
+// flakySeries reads its samples lazily and, once its source is "canceled"
+// (mimicking the remote_read HTTP body being closed / context canceled after
+// GetValue returns), yields nothing. It models the lazy ChunkedSeriesSet that
+// materializeSeriesSet must drain eagerly.
+type flakySeries struct {
+	lbls     labels.Labels
+	samples  []chunks.Sample
+	canceled *bool
+}
+
+func (s *flakySeries) Labels() labels.Labels { return s.lbls }
+func (s *flakySeries) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
+	if *s.canceled {
+		return storage.NewListSeries(s.lbls, nil).Iterator(nil)
+	}
+	return storage.NewListSeries(s.lbls, s.samples).Iterator(nil)
+}
+
+func newFlakySeriesSet(series ...storage.Series) storage.SeriesSet {
+	return promapi.NewSeriesSet(series, nil, nil)
+}
+
+// TestMaterializeSeriesSetDecouplesFromSource asserts materializeSeriesSet drains
+// the source eagerly, so the returned SeriesSet still yields every sample after
+// the source goes dead -- the exact guarantee the remote_read path depends on.
+func TestMaterializeSeriesSetDecouplesFromSource(t *testing.T) {
+	canceled := false
+	samples := []chunks.Sample{promapi.FloatSample(0, 1), promapi.FloatSample(10, 2)}
+	src := newFlakySeriesSet(&flakySeries{
+		lbls:     labels.FromStrings("__name__", "m"),
+		samples:  samples,
+		canceled: &canceled,
+	})
+
+	materialized := materializeSeriesSet(src)
+
+	// Source goes dead, as if GetValue had returned and the body/context closed.
+	canceled = true
+
+	got := dumpSS(t, materialized)
+	want := map[string]string{`{__name__="m"}`: "0=1 10=2 "}
+	if len(got) != 1 || got[`{__name__="m"}`] != want[`{__name__="m"}`] {
+		t.Fatalf("materialized result lost data after source cancel: got %v want %v", got, want)
+	}
+
+	// Sanity: a fresh flaky source that is canceled before reading yields nothing,
+	// proving the cancel flag actually has teeth.
+	canceled2 := true
+	dead := newFlakySeriesSet(&flakySeries{
+		lbls:     labels.FromStrings("__name__", "m"),
+		samples:  samples,
+		canceled: &canceled2,
+	})
+	if d := dumpSS(t, dead); d[`{__name__="m"}`] != "" {
+		t.Fatalf("expected canceled source to yield no samples, got %v", d)
 	}
 }
