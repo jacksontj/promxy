@@ -1136,7 +1136,7 @@ func TestMergeValues(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := MergeValues(test.antiAffinity, test.a, test.b, test.preferMax)
+			result, err := MergeValues(test.antiAffinity, false, test.a, test.b, test.preferMax)
 			if err != test.err {
 				t.Fatalf("mismatch err in %s expected=%v actual=%v", test.name, test.err, err)
 			}
@@ -1242,7 +1242,7 @@ func TestMergeValuesHistograms(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := MergeValues(test.antiAffinity, test.a, test.b, false)
+			result, err := MergeValues(test.antiAffinity, false, test.a, test.b, false)
 			if err != nil {
 				t.Fatalf("unexpected err: %v", err)
 			}
