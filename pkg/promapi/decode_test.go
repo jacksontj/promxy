@@ -2,6 +2,7 @@ package promapi
 
 import (
 	stdjson "encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,7 +11,75 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
+	"github.com/prometheus/prometheus/util/annotations"
 )
+
+// TestDecodeAnnotationClassification asserts that downstream warning/info
+// strings are re-wrapped with the typed annotation sentinels so consumers can
+// classify them via errors.Is -- the regression that produced "unexpected
+// annotation type" failures on offset queries.
+func TestDecodeAnnotationClassification(t *testing.T) {
+	body := []byte(`{"status":"success","data":{"resultType":"vector","result":[]},` +
+		`"warnings":["PromQL warning: something is off"],` +
+		`"infos":["PromQL info: metric might not be a counter"]}`)
+
+	ss := DecodeSeriesSet(body)
+	if ss.Err() != nil {
+		t.Fatalf("unexpected error: %v", ss.Err())
+	}
+
+	errs := ss.Warnings().AsErrors()
+	if len(errs) != 2 {
+		t.Fatalf("expected 2 annotations, got %d: %v", len(errs), errs)
+	}
+	var sawWarn, sawInfo bool
+	for _, e := range errs {
+		if errors.Is(e, annotations.PromQLWarning) {
+			sawWarn = true
+		}
+		if errors.Is(e, annotations.PromQLInfo) {
+			sawInfo = true
+		}
+	}
+	if !sawWarn {
+		t.Error("warning was not classified as annotations.PromQLWarning")
+	}
+	if !sawInfo {
+		t.Error("info was not classified as annotations.PromQLInfo")
+	}
+}
+
+// TestDecodeEdgeResultTypes covers the result shapes outside the common
+// vector/matrix path: empty results, string results (no series), and an
+// unknown resultType (which must surface as an error).
+func TestDecodeEdgeResultTypes(t *testing.T) {
+	cases := []struct {
+		name       string
+		body       string
+		wantSeries int
+		wantErr    bool
+	}{
+		{"empty_matrix", `{"status":"success","data":{"resultType":"matrix","result":[]}}`, 0, false},
+		{"empty_vector", `{"status":"success","data":{"resultType":"vector","result":[]}}`, 0, false},
+		{"string", `{"status":"success","data":{"resultType":"string","result":[1700000000,"hello"]}}`, 0, false},
+		{"unknown_type", `{"status":"success","data":{"resultType":"bogus","result":[{"metric":{},"value":[0,"1"]}]}}`, 0, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ss := DecodeSeriesSet([]byte(tc.body))
+			n := 0
+			for ss.Next() {
+				n++
+			}
+			if (ss.Err() != nil) != tc.wantErr {
+				t.Fatalf("err mismatch: got %v want error=%v", ss.Err(), tc.wantErr)
+			}
+			if n != tc.wantSeries {
+				t.Fatalf("series count: got %d want %d", n, tc.wantSeries)
+			}
+		})
+	}
+}
 
 func dumpSeriesSet(t *testing.T, ss storage.SeriesSet) map[string]string {
 	t.Helper()
