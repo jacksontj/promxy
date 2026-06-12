@@ -311,3 +311,12 @@ func sampleHistogramToFloatHistogram(sh *model.SampleHistogram) *histogram.Float
 	fh.PositiveSpans = []histogram.Span{{Offset: 0, Length: uint32(len(counts))}}
 	return fh
 }
+
+// FloatSample and HistogramSample expose the package's chunks.Sample
+// implementations so other packages (e.g. promxy's HA merge) can build
+// storage.Series without re-deriving sample types.
+func FloatSample(t int64, v float64) chunks.Sample { return floatSample{t, v} }
+
+func HistogramSample(t int64, fh *histogram.FloatHistogram) chunks.Sample {
+	return histSample{t, fh}
+}
