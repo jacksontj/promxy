@@ -98,8 +98,10 @@ type cliOpts struct {
 	QueryMaxSamples     int           `long:"query.max-samples" description:"Maximum number of samples a single query can load into memory. Note that queries will fail if they would load more samples than this into memory, so this also limits the number of samples a query can return." default:"50000000"`
 	QueryLookbackDelta  time.Duration `long:"query.lookback-delta" description:"The maximum lookback duration for retrieving metrics during expression evaluations." default:"5m"`
 	QueryMaxConcurrency int           `long:"query.max-concurrency" default:"-1" description:"Maximum number of queries executed concurrently."`
-	StoragePath         string        `long:"storage.path" description:"Base directory for promxy's local working state (active query tracker file, remote_write WAL)."`
-	LegacyStoragePath   string        `long:"storage.tsdb.path" description:"DEPRECATED: use --storage.path instead. (Promxy has no TSDB; this flag is misnamed.)"`
+
+	QueryAlignRangeWithStep bool   `long:"query.align-range-with-step" description:"Snap /api/v1/query_range start/end down to a multiple of step before evaluation. Off by default. Fixes 'no data' when start/end are not step-aligned and a backend (e.g. Mimir/Cortex) step-aligns query_range results."`
+	StoragePath             string `long:"storage.path" description:"Base directory for promxy's local working state (active query tracker file, remote_write WAL)."`
+	LegacyStoragePath       string `long:"storage.tsdb.path" description:"DEPRECATED: use --storage.path instead. (Promxy has no TSDB; this flag is misnamed.)"`
 
 	RemoteReadMaxConcurrency int `long:"remote-read.max-concurrency" description:"Maximum number of concurrent remote read calls." default:"10"`
 
@@ -519,7 +521,13 @@ func main() {
 		logrus.Fatalf("Invalid AccessLogDestination: %s", opts.AccessLogDestination)
 	}
 
-	srv, err := server.CreateAndStart(opts.BindAddr, opts.LogFormat, opts.WebReadTimeout, accessLogOut, middleware.NewProxyHeaders(r, opts.ProxyHeaders), opts.WebConfigFile)
+	var handler http.Handler = r
+	if opts.QueryAlignRangeWithStep {
+		handler = middleware.NewAlignQueryRangeStep(handler, path.Join(apiPrefix, "query_range"))
+	}
+	handler = middleware.NewProxyHeaders(handler, opts.ProxyHeaders)
+
+	srv, err := server.CreateAndStart(opts.BindAddr, opts.LogFormat, opts.WebReadTimeout, accessLogOut, handler, opts.WebConfigFile)
 	if err != nil {
 		logrus.Fatalf("Error creating server: %v", err)
 	}
