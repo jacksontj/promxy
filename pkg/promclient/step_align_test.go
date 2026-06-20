@@ -7,6 +7,7 @@ import (
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
@@ -96,6 +97,64 @@ func offGridRange() v1.Range {
 		Start: time.Unix(gridT0+offR, 0),
 		End:   time.Unix(gridT0+offR+npts*stepSec, 0),
 		Step:  time.Duration(stepSec) * time.Second,
+	}
+}
+
+// histGridSeries builds a native-(float-)histogram series on the given grid.
+// The histogram's Sum is set to its (pre-shift) timestamp so the test can
+// confirm the payload is carried through unchanged while only the timestamp
+// moves.
+func histGridSeries(lbls labels.Labels, startMs, n, stepMs int64) storage.Series {
+	samples := make([]chunks.Sample, 0, n)
+	for i := int64(0); i < n; i++ {
+		t := startMs + i*stepMs
+		samples = append(samples, promapi.HistogramSample(t, &histogram.FloatHistogram{
+			Count: float64(t),
+			Sum:   float64(t),
+		}))
+	}
+	return promapi.NewSeries(lbls, samples)
+}
+
+// dumpHist returns the (t, sum) pairs of the first series in ss.
+func dumpHist(ss storage.SeriesSet) (ts []int64, sums []float64) {
+	if !ss.Next() {
+		return nil, nil
+	}
+	it := ss.At().Iterator(nil)
+	for vt := it.Next(); vt != chunkenc.ValNone; vt = it.Next() {
+		if vt == chunkenc.ValHistogram || vt == chunkenc.ValFloatHistogram {
+			t, fh := it.AtFloatHistogram(nil)
+			ts = append(ts, t)
+			sums = append(sums, fh.Sum)
+		}
+	}
+	return ts, sums
+}
+
+// TestStepAlignClient_Restamp_Histogram: native histogram samples are shifted
+// onto the requested grid (via AtFloatHistogram), payload untouched.
+func TestStepAlignClient_Restamp_Histogram(t *testing.T) {
+	client := &StepAlignClient{API: &stubBackend{series: []storage.Series{
+		histGridSeries(labels.FromStrings("__name__", "foo"), gridT0*1000, npts, stepMs),
+	}}}
+
+	gotTs, gotSums := dumpHist(client.QueryRange(context.Background(), "foo", offGridRange()))
+	if len(gotTs) != npts {
+		t.Fatalf("expected %d histogram samples, got %d", npts, len(gotTs))
+	}
+	for i := range gotTs {
+		wantT := (gridT0 + offR + int64(i)*stepSec) * 1000
+		if gotTs[i] != wantT {
+			t.Fatalf("hist sample %d: got t=%d want t=%d", i, gotTs[i], wantT)
+		}
+		if gotTs[i]%stepMs != offR*1000 {
+			t.Fatalf("hist sample %d off requested phase: t=%d", i, gotTs[i])
+		}
+		// payload carried through unchanged: Sum is still the pre-shift timestamp.
+		if wantSum := float64(wantT - offR*1000); gotSums[i] != wantSum {
+			t.Fatalf("hist sample %d: Sum=%v want %v (payload must not change)", i, gotSums[i], wantSum)
+		}
 	}
 }
 
