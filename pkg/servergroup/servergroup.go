@@ -326,6 +326,13 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 					}
 				}
 
+				// Optionally re-stamp step-aligned query_range results back onto the
+				// requested step grid. Enabled per-server-group for backends (e.g.
+				// Mimir/Cortex) that snap query_range output to the epoch grid; see #787.
+				if s.Cfg.AlignQueryRangeWithStep {
+					apiClient = &promclient.StepAlignClient{API: apiClient}
+				}
+
 				// We remove all private labels after we set the target entry
 				modelLabelSet := make(model.LabelSet, lset.Len())
 				lset.Range(func(lbl labels.Label) {
