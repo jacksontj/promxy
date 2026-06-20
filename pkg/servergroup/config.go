@@ -258,6 +258,16 @@ type Config struct {
 	// in multi-tenancy mode
 	// (see https://github.com/jacksontj/promxy/issues/643)
 	HTTPClientHeaders map[string]string `yaml:"http_headers"`
+
+	// AlignQueryRangeWithStep declares that this backend snaps query_range results
+	// to the epoch step grid (k*step), as Mimir/Cortex do by default. When set,
+	// promxy re-stamps the returned samples back onto the grid implied by the
+	// request start (start + j*step) so they line up with promxy's local
+	// evaluation grid. Without it, an unaligned request (start % step != 0) whose
+	// off-grid distance exceeds the lookback-delta yields no data for this backend.
+	// Leave it OFF for backends that do not step-align (e.g. vanilla Prometheus);
+	// their samples already sit on the requested grid. See issue #787.
+	AlignQueryRangeWithStep bool `yaml:"align_query_range_with_step,omitempty"`
 }
 
 // GetScheme returns the scheme for this servergroup
