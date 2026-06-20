@@ -313,8 +313,8 @@ github.com/hetznercloud/hcloud-go/v2 v2.21.1 h1:IH3liW8/cCRjfJ4cyqYvw3s1ek+KWP8d
 github.com/hetznercloud/hcloud-go/v2 v2.21.1/go.mod h1:XOaYycZJ3XKMVWzmqQ24/+1V7ormJHmPdck/kxrNnQA=
 github.com/ionos-cloud/sdk-go/v6 v6.3.4 h1:jTvGl4LOF8v8OYoEIBNVwbFoqSGAFqn6vGE7sp7/BqQ=
 github.com/ionos-cloud/sdk-go/v6 v6.3.4/go.mod h1:wCVwNJ/21W29FWFUv+fNawOTMlFoP1dS3L+ZuztFW48=
-github.com/jacksontj/prometheus v1.8.1-0.20260508151239-99c77ced4af1 h1:1JuLKNvboEK+gbY7U1KhXWMG70KykYfPWffgMXes+Is=
-github.com/jacksontj/prometheus v1.8.1-0.20260508151239-99c77ced4af1/go.mod h1:r48fNfOg8Dcc1aDd0Tuk+hv9B5HldONOTy+6LySICS4=
+github.com/jacksontj/prometheus v1.8.1-0.20260620043205-85414bea37c6 h1:/F2zNqTN+ajxu4W8dQrVfIDspMHHPpVCmkhf/EkU0KM=
+github.com/jacksontj/prometheus v1.8.1-0.20260620043205-85414bea37c6/go.mod h1:r48fNfOg8Dcc1aDd0Tuk+hv9B5HldONOTy+6LySICS4=
 github.com/jarcoal/httpmock v1.4.0 h1:BvhqnH0JAYbNudL2GMJKgOHe2CtKlzJ/5rWKyp+hc2k=
 github.com/jarcoal/httpmock v1.4.0/go.mod h1:ftW1xULwo+j0R0JJkJIIi7UKigZUXCLLanykgjwBXL0=
 github.com/jessevdk/go-flags v1.6.1 h1:Cvu5U8UGrLay1rZfv/zP7iLpSHGUZ/Ou68T0iX1bBK4=
