@@ -30,6 +30,7 @@ import (
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/proxystorage"
+	"github.com/jacksontj/promxy/pkg/servergroup"
 )
 
 func init() {
@@ -37,6 +38,13 @@ func init() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 	parser.EnableExperimentalFunctions = true
+
+	// Each subtest spins up a fresh promxy whose server group only becomes
+	// Ready on the first tick of the discovery manager's update interval. The
+	// 5s production default would add ~5s of pure startup wait to every one of
+	// the ~20 integration subtests (dwarfing the sub-second query work); drop
+	// it so the suite is bound by actual evaluation time instead.
+	servergroup.DiscoveryUpdateInterval = 10 * time.Millisecond
 }
 
 // Config templates take the bound API address(es) as %s. We pick ports
