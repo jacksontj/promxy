@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/prometheus/config"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/jacksontj/promxy/pkg/alerttemplate"
 	"github.com/jacksontj/promxy/pkg/servergroup"
 )
 
@@ -114,4 +115,8 @@ func (c *Config) String() string {
 type PromxyConfig struct {
 	// Config for each of the server groups promxy is configured to aggregate
 	ServerGroups []*servergroup.Config `yaml:"server_groups"`
+
+	// AlertTemplates optionally configures Go templates for alert GeneratorURLs.
+	// When unset, promxy emits its built-in Prometheus-style GeneratorURL.
+	AlertTemplates alerttemplate.Config `yaml:"alert_templates,omitempty"`
 }

@@ -37,3 +37,16 @@ type ApplyConfigFunc struct {
 func (a *ApplyConfigFunc) ApplyConfig(cfg *config.Config) error {
 	return a.F(cfg)
 }
+
+// PromxyApplyConfigFunc wraps a single function that applies a promxy Config
+// into something that implements the `Reloadable` interface. Unlike
+// ApplyConfigFunc it receives the full promxy Config (including the promxy-only
+// sections), not just the embedded prometheus config.
+type PromxyApplyConfigFunc struct {
+	F func(*Config) error
+}
+
+// ApplyConfig applies new configuration
+func (a *PromxyApplyConfigFunc) ApplyConfig(cfg *Config) error {
+	return a.F(cfg)
+}

@@ -46,6 +46,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/jacksontj/promxy/pkg/alertbackfill"
+	"github.com/jacksontj/promxy/pkg/alerttemplate"
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/federate"
 	"github.com/jacksontj/promxy/pkg/logging"
@@ -340,11 +341,19 @@ func main() {
 	} else {
 		ruleQueryable = proxyStorage
 	}
+	// alertTemplates renders configurable GeneratorURLs for alerts. It is
+	// populated from the promxy config on (re)load below; until then (and when
+	// unconfigured) sendAlerts falls back to the built-in GeneratorURL.
+	alertTemplates := alerttemplate.NewManager()
+	reloadables = append(reloadables, &proxyconfig.PromxyApplyConfigFunc{F: func(cfg *proxyconfig.Config) error {
+		return alertTemplates.Apply(cfg.AlertTemplates)
+	}})
+
 	ruleManager := rules.NewManager(&rules.ManagerOptions{
 		Context:         ctx,         // base context for all background tasks
 		ExternalURL:     externalUrl, // URL listed as URL for "who fired this alert"
 		QueryFunc:       rules.EngineQueryFunc(engine, proxyStorage),
-		NotifyFunc:      sendAlerts(notifierManager, externalUrl.String()),
+		NotifyFunc:      sendAlerts(notifierManager, externalUrl.String(), alertTemplates),
 		Appendable:      proxyStorage,
 		Queryable:       ruleQueryable,
 		Logger:          logger,
@@ -593,7 +602,7 @@ func main() {
 
 // sendAlerts implements the rules.NotifyFunc for a Notifier.
 // It filters any non-firing alerts from the input.
-func sendAlerts(n *notifier.Manager, externalURL string) rules.NotifyFunc {
+func sendAlerts(n *notifier.Manager, externalURL string, alertTemplates *alerttemplate.Manager) rules.NotifyFunc {
 	return func(ctx context.Context, expr string, alerts ...*rules.Alert) {
 		var res []*notifier.Alert
 
@@ -602,11 +611,17 @@ func sendAlerts(n *notifier.Manager, externalURL string) rules.NotifyFunc {
 			if alert.State == rules.StatePending {
 				continue
 			}
+			// Use a configured GeneratorURL template if one applies, otherwise
+			// fall back to the built-in Prometheus-style URL.
+			generatorURL, ok := alertTemplates.GeneratorURL(alert, expr, externalURL)
+			if !ok {
+				generatorURL = externalURL + strutil.TableLinkForExpression(expr)
+			}
 			a := &notifier.Alert{
 				StartsAt:     alert.FiredAt,
 				Labels:       alert.Labels,
 				Annotations:  alert.Annotations,
-				GeneratorURL: externalURL + strutil.TableLinkForExpression(expr),
+				GeneratorURL: generatorURL,
 			}
 			if !alert.ResolvedAt.IsZero() {
 				a.EndsAt = alert.ResolvedAt

@@ -3,6 +3,8 @@ package proxyconfig
 import (
 	"os"
 	"testing"
+
+	"github.com/jacksontj/promxy/pkg/alerttemplate"
 )
 
 func TestConfigFromFile(t *testing.T) {
@@ -118,5 +120,42 @@ remote_write:
 				}
 			}
 		})
+	}
+}
+
+// TestAlertTemplatesConfig verifies the promxy.alert_templates block unmarshals
+// into the alerttemplate.Config wired onto PromxyConfig.
+func TestAlertTemplatesConfig(t *testing.T) {
+	raw := `
+promxy:
+  server_groups: []
+  alert_templates:
+    default: 'http://default'
+    named:
+      grafana: 'http://grafana/{{.AlertName}}'
+    rules:
+      - match_labels:
+          severity: critical
+        template: grafana
+`
+	cfg, err := ConfigFromBytes([]byte(raw))
+	if err != nil {
+		t.Fatalf("ConfigFromBytes: %v", err)
+	}
+
+	at := cfg.PromxyConfig.AlertTemplates
+	if at.Default != "http://default" {
+		t.Errorf("default = %q, want %q", at.Default, "http://default")
+	}
+	if at.Named["grafana"] != "http://grafana/{{.AlertName}}" {
+		t.Errorf("named[grafana] = %q", at.Named["grafana"])
+	}
+	if len(at.Rules) != 1 || at.Rules[0].MatchLabels["severity"] != "critical" || at.Rules[0].Template != "grafana" {
+		t.Errorf("unexpected rules: %+v", at.Rules)
+	}
+
+	// The parsed config must be accepted by the manager.
+	if err := alerttemplate.NewManager().Apply(at); err != nil {
+		t.Fatalf("manager rejected parsed config: %v", err)
 	}
 }
