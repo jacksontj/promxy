@@ -38,6 +38,7 @@ import (
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/storage"
 	promlogging "github.com/prometheus/prometheus/util/logging"
+	"github.com/prometheus/prometheus/util/notifications"
 	"github.com/prometheus/prometheus/util/strutil"
 	"github.com/prometheus/prometheus/web"
 	"github.com/sirupsen/logrus"
@@ -52,6 +53,10 @@ import (
 	"github.com/jacksontj/promxy/pkg/proxystorage"
 	"github.com/jacksontj/promxy/pkg/server"
 )
+
+// maxNotificationSubscribers bounds the number of concurrent live subscribers
+// to the notifications SSE endpoint, matching Prometheus' upstream default.
+const maxNotificationSubscribers = 16
 
 var (
 	configSuccess = promauto.NewGauge(prometheus.GaugeOpts{
@@ -124,13 +129,17 @@ func (c *cliOpts) ToFlags() map[string]string {
 
 var opts cliOpts
 
-func reloadConfig(noStepSuqueryInterval *safePromQLNoStepSubqueryInterval, rls ...proxyconfig.Reloadable) (err error) {
+func reloadConfig(noStepSuqueryInterval *safePromQLNoStepSubqueryInterval, notificationsManager *notifications.Notifications, rls ...proxyconfig.Reloadable) (err error) {
 	defer func() {
 		if err == nil {
 			configSuccess.Set(1)
 			configSuccessTime.SetToCurrentTime()
+			// Clear any prior "reload failed" banner exposed via the
+			// notifications API (no-op if none is active).
+			notificationsManager.DeleteNotification(notifications.ConfigurationUnsuccessful)
 		} else {
 			configSuccess.Set(0)
+			notificationsManager.AddNotification(notifications.ConfigurationUnsuccessful)
 		}
 	}()
 
@@ -405,6 +414,11 @@ func main() {
 		logrus.Fatalf("Error creating scrape manager: %v", err)
 	}
 
+	// The notifications API (/api/v1/notifications and its SSE variant) calls
+	// these getters unconditionally; leaving them nil panics on any request to
+	// those endpoints. Wire up a notifications manager so the handlers work.
+	notificationsManager := notifications.NewNotifications(maxNotificationSubscribers, prometheus.DefaultRegisterer)
+
 	webOptions := &web.Options{
 		Registerer:      prometheus.DefaultRegisterer,
 		Gatherer:        prometheus.DefaultGatherer,
@@ -417,6 +431,9 @@ func main() {
 		RuleManager:     ruleManager,
 		Notifier:        notifierManager,
 		LookbackDelta:   opts.QueryLookbackDelta,
+
+		NotificationsGetter: notificationsManager.Get,
+		NotificationsSub:    notificationsManager.Sub,
 
 		RemoteReadConcurrencyLimit: opts.RemoteReadMaxConcurrency,
 
@@ -498,7 +515,7 @@ func main() {
 		}
 	})
 
-	if err := reloadConfig(noStepSubqueryInterval, reloadables...); err != nil {
+	if err := reloadConfig(noStepSubqueryInterval, notificationsManager, reloadables...); err != nil {
 		logrus.Fatalf("Error loading config: %s", err)
 	}
 
@@ -529,7 +546,7 @@ func main() {
 		select {
 		case rc := <-webHandler.Reload():
 			logrus.Infof("Reloading config")
-			if err := reloadConfig(noStepSubqueryInterval, reloadables...); err != nil {
+			if err := reloadConfig(noStepSubqueryInterval, notificationsManager, reloadables...); err != nil {
 				logrus.Errorf("Error reloading config: %s", err)
 				rc <- err
 			} else {
@@ -539,11 +556,15 @@ func main() {
 			switch sig {
 			case syscall.SIGHUP:
 				logrus.Infof("Reloading config")
-				if err := reloadConfig(noStepSubqueryInterval, reloadables...); err != nil {
+				if err := reloadConfig(noStepSubqueryInterval, notificationsManager, reloadables...); err != nil {
 					logrus.Errorf("Error reloading config: %s", err)
 				}
 			case syscall.SIGTERM, syscall.SIGINT:
 				logrus.Info("promxy received exit signal, starting graceful shutdown")
+
+				// Surface the shutdown via the notifications API so connected
+				// UIs can show it during the grace period.
+				notificationsManager.AddNotification(notifications.ShuttingDown)
 
 				// Stop all services we are running
 				stopping = true        // start failing healthchecks
