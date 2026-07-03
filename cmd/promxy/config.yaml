@@ -19,6 +19,13 @@ alerting:
     static_configs:
     - targets:
       - "127.0.0.1:12345"
+    # Custom HTTP headers to inject on every request to this Alertmanager.
+    # Useful when the Alertmanager sits behind a gateway that authenticates
+    # requests via a header. Any header from the standard prometheus
+    # http_client_config is supported here (basic_auth, authorization, etc.).
+    # http_headers:
+    #   X-Gateway-Signature:
+    #     values: ["my-secret-token"]     # or `secret:`, or `files: [...]`
 
 # remote_write configuration is used by promxy as its local Appender, meaning all
 # metrics promxy would "write" (not export) would be sent to this. Examples
