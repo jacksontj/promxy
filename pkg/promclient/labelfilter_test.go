@@ -2,7 +2,9 @@ package promclient
 
 import (
 	"context"
+	"fmt"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -244,4 +246,165 @@ func TestLabelFilter(t *testing.T) {
 		}
 	})
 
+}
+
+// flakyLabelValuesAPI lets a test toggle whether the downstream LabelValues call
+// (the one the label_filter sync uses) succeeds, and counts Query passthroughs.
+// All state is mutex-guarded so it is safe to poke from a test while the
+// LabelFilterClient background sync goroutine is running.
+type flakyLabelValuesAPI struct {
+	*stubAPI
+
+	mu         sync.Mutex
+	fail       bool
+	values     model.LabelValues
+	queryCount int
+}
+
+func (s *flakyLabelValuesAPI) LabelValues(ctx context.Context, label string, matchers []string, startTime, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.fail {
+		return nil, nil, fmt.Errorf("downstream unavailable")
+	}
+	return s.values, nil, nil
+}
+
+func (s *flakyLabelValuesAPI) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
+	s.mu.Lock()
+	s.queryCount++
+	s.mu.Unlock()
+	return s.stubAPI.Query(ctx, query, ts)
+}
+
+func (s *flakyLabelValuesAPI) setFail(b bool) {
+	s.mu.Lock()
+	s.fail = b
+	s.mu.Unlock()
+}
+
+func (s *flakyLabelValuesAPI) getQueryCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.queryCount
+}
+
+func TestLabelFilterConfigOnSyncErrorValidate(t *testing.T) {
+	// Empty defaults to abort.
+	c := &LabelFilterConfig{}
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if c.OnSyncError != LabelFilterOnSyncErrorAbort {
+		t.Fatalf("expected default on_sync_error=abort, got %q", c.OnSyncError)
+	}
+
+	// Explicit valid values are accepted.
+	for _, v := range []LabelFilterOnSyncError{LabelFilterOnSyncErrorAbort, LabelFilterOnSyncErrorOpen, LabelFilterOnSyncErrorClosed} {
+		c := &LabelFilterConfig{OnSyncError: v}
+		if err := c.Validate(); err != nil {
+			t.Fatalf("unexpected error for on_sync_error=%q: %v", v, err)
+		}
+	}
+
+	// Unknown values are rejected.
+	c = &LabelFilterConfig{OnSyncError: "bogus"}
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected error for invalid on_sync_error")
+	}
+}
+
+func TestLabelFilterOnSyncError(t *testing.T) {
+	// abort (the default) surfaces the initial sync error, which blocks startup.
+	t.Run("abort", func(t *testing.T) {
+		api := &flakyLabelValuesAPI{stubAPI: &stubAPI{}, fail: true}
+		cfg := &LabelFilterConfig{DynamicLabels: []string{"__name__"}}
+		if err := cfg.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewLabelFilterClient(context.Background(), api, cfg); err == nil {
+			t.Fatal("expected NewLabelFilterClient to fail when the initial sync errors under on_sync_error=abort")
+		}
+	})
+
+	// open lets startup proceed and sends queries downstream (unfiltered) until synced.
+	t.Run("open", func(t *testing.T) {
+		api := &flakyLabelValuesAPI{stubAPI: &stubAPI{}, fail: true}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		cfg := &LabelFilterConfig{DynamicLabels: []string{"__name__"}, OnSyncError: LabelFilterOnSyncErrorOpen}
+		if err := cfg.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		c, err := NewLabelFilterClient(ctx, api, cfg)
+		if err != nil {
+			t.Fatalf("expected startup to proceed under on_sync_error=open, got: %v", err)
+		}
+		if c.LabelFilter() != nil {
+			t.Fatal("expected filter to be unloaded after a failed initial sync")
+		}
+		// Unloaded + open => query is passed straight through to the downstream.
+		before := api.getQueryCount()
+		if err := c.Query(ctx, "anymetric", time.Now()).Err(); err != nil {
+			t.Fatal(err)
+		}
+		if got := api.getQueryCount(); got != before+1 {
+			t.Fatalf("expected query to pass through while unloaded (open), downstream calls before=%d after=%d", before, got)
+		}
+	})
+
+	// closed lets startup proceed but filters out everything until the first
+	// successful sync, then recovers and filters normally.
+	t.Run("closed_then_recovers", func(t *testing.T) {
+		api := &flakyLabelValuesAPI{stubAPI: &stubAPI{}, fail: true, values: model.LabelValues{"knownmetric"}}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		cfg := &LabelFilterConfig{
+			DynamicLabels: []string{"__name__"},
+			OnSyncError:   LabelFilterOnSyncErrorClosed,
+			SyncInterval:  20 * time.Millisecond,
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		c, err := NewLabelFilterClient(ctx, api, cfg)
+		if err != nil {
+			t.Fatalf("expected startup to proceed under on_sync_error=closed, got: %v", err)
+		}
+
+		// While unloaded, everything is filtered out (target treated as down).
+		before := api.getQueryCount()
+		if err := c.Query(ctx, "knownmetric", time.Now()).Err(); err != nil {
+			t.Fatal(err)
+		}
+		if got := api.getQueryCount(); got != before {
+			t.Fatalf("expected query to be blocked while unloaded (closed), but downstream was called: before=%d after=%d", before, got)
+		}
+
+		// Recover the downstream and wait for a background sync to load the filter.
+		api.setFail(false)
+		deadline := time.Now().Add(2 * time.Second)
+		for c.LabelFilter() == nil && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if c.LabelFilter() == nil {
+			t.Fatal("filter never synced after the downstream recovered")
+		}
+
+		// Now filtering behaves normally: known metric passes, unknown is filtered.
+		before = api.getQueryCount()
+		if err := c.Query(ctx, "knownmetric", time.Now()).Err(); err != nil {
+			t.Fatal(err)
+		}
+		if got := api.getQueryCount(); got != before+1 {
+			t.Fatalf("expected knownmetric to pass through after sync: before=%d after=%d", before, got)
+		}
+		before = api.getQueryCount()
+		if err := c.Query(ctx, "unknownmetric", time.Now()).Err(); err != nil {
+			t.Fatal(err)
+		}
+		if got := api.getQueryCount(); got != before {
+			t.Fatalf("expected unknownmetric to be filtered after sync: before=%d after=%d", before, got)
+		}
+	})
 }

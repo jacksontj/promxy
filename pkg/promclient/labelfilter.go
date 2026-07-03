@@ -40,6 +40,28 @@ func init() {
 	)
 }
 
+// LabelFilterOnSyncError defines what a LabelFilterClient does while it has
+// never successfully synced its filter from the downstream (e.g. the target is
+// unreachable when promxy starts up).
+type LabelFilterOnSyncError string
+
+const (
+	// LabelFilterOnSyncErrorAbort fails the initial sync, which propagates up to
+	// the servergroup and blocks startup until a sync succeeds. This preserves
+	// the historical behavior and is the default.
+	LabelFilterOnSyncErrorAbort LabelFilterOnSyncError = "abort"
+	// LabelFilterOnSyncErrorOpen lets startup proceed and sends all queries
+	// downstream (i.e. no filtering) until the first successful sync.
+	LabelFilterOnSyncErrorOpen LabelFilterOnSyncError = "open"
+	// LabelFilterOnSyncErrorClosed lets startup proceed but filters out every
+	// query (i.e. the target is skipped) until the first successful sync.
+	LabelFilterOnSyncErrorClosed LabelFilterOnSyncError = "closed"
+)
+
+// defaultSyncRetryInterval is how often the filter retries to obtain its first
+// successful sync when no explicit sync_interval is configured.
+const defaultSyncRetryInterval = 5 * time.Second
+
 // LabelFilterConfig is the configuration for the LabelFilterClient
 type LabelFilterConfig struct {
 	// DynamicLabels is a list of labels to dynamically maintain a filter from the downstream from
@@ -56,6 +78,16 @@ type LabelFilterConfig struct {
 	// StaticLabelsExclude is a set of labels to always exclude from the filter. This is done last
 	// so it will apply after the dynamic and static lists are added to the filter.
 	StaticLabelsExclude map[string][]string `yaml:"static_labels_exclude"`
+	// OnSyncError controls behavior while the filter has never successfully synced
+	// from the downstream (e.g. the target is unreachable at startup). This is
+	// distinct from the servergroup's `ignore_error`, which governs the query path.
+	//   abort  - fail the sync; this blocks servergroup startup until a sync
+	//            succeeds (default; preserves historical behavior)
+	//   open   - proceed without filtering; all queries are sent downstream until
+	//            the first successful sync
+	//   closed - proceed but filter out everything (skip this target) until the
+	//            first successful sync
+	OnSyncError LabelFilterOnSyncError `yaml:"on_sync_error"`
 }
 
 func (c *LabelFilterConfig) Validate() error {
@@ -67,6 +99,14 @@ func (c *LabelFilterConfig) Validate() error {
 
 	if c.SyncInterval > 0 && len(c.DynamicLabels) == 0 {
 		return fmt.Errorf("sync_interval requires `dynamic_labels_include` to be set")
+	}
+
+	switch c.OnSyncError {
+	case "":
+		c.OnSyncError = LabelFilterOnSyncErrorAbort
+	case LabelFilterOnSyncErrorAbort, LabelFilterOnSyncErrorOpen, LabelFilterOnSyncErrorClosed:
+	default:
+		return fmt.Errorf("invalid on_sync_error %q, must be one of: abort, open, closed", c.OnSyncError)
 	}
 
 	return nil
@@ -91,37 +131,69 @@ func NewLabelFilterClient(ctx context.Context, a API, cfg *LabelFilterConfig) (*
 		cfg: cfg,
 	}
 
-	// Do an initial sync
+	// Do an initial sync. If it fails, behavior depends on on_sync_error:
+	//   abort       -> return the error, which blocks servergroup startup until a
+	//                  sync succeeds (historical behavior, and the default).
+	//   open/closed -> log and continue with an unloaded filter; queries are
+	//                  passed through (open) or filtered out (closed) until a
+	//                  background sync succeeds.
 	if err := c.Sync(ctx); err != nil {
-		return nil, err
+		if cfg.OnSyncError != LabelFilterOnSyncErrorOpen && cfg.OnSyncError != LabelFilterOnSyncErrorClosed {
+			return nil, err
+		}
+		logrus.Errorf("error in initial label_filter sync from downstream (on_sync_error=%s), continuing and retrying in the background: %v", cfg.OnSyncError, err)
 	}
 
-	if cfg.SyncInterval > 0 {
-		go func() {
-			ticker := time.NewTicker(cfg.SyncInterval)
-			for {
-				select {
-				case <-ticker.C:
-					start := time.Now()
-					err := c.Sync(ctx)
-					took := time.Since(start)
-					status := "success"
-					if err != nil {
-						logrus.Errorf("error syncing in label_filter from downstream: %#v", err)
-						status = "error"
-					}
-					syncCount.WithLabelValues(status).Inc()
-					syncSummary.WithLabelValues(status).Observe(took.Seconds())
-
-				case <-ctx.Done():
-					ticker.Stop()
-					return
-				}
-			}
-		}()
+	// Run a background sync loop when either a periodic sync_interval is
+	// configured, or the initial sync failed and we need to keep retrying until
+	// the first successful sync.
+	if cfg.SyncInterval > 0 || c.LabelFilter() == nil {
+		go c.syncLoop(ctx)
 	}
 
 	return c, nil
+}
+
+// syncLoop periodically re-syncs the filter from the downstream. When a
+// sync_interval is configured it runs forever at that cadence; when it is not,
+// the loop only exists to obtain the first successful sync (e.g. after a failed
+// initial sync) and exits once a filter has been loaded.
+func (c *LabelFilterClient) syncLoop(ctx context.Context) {
+	for {
+		interval := c.cfg.SyncInterval
+		if interval <= 0 {
+			interval = defaultSyncRetryInterval
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(interval):
+			start := time.Now()
+			err := c.Sync(ctx)
+			took := time.Since(start)
+			status := "success"
+			if err != nil {
+				logrus.Errorf("error syncing in label_filter from downstream: %#v", err)
+				status = "error"
+			}
+			syncCount.WithLabelValues(status).Inc()
+			syncSummary.WithLabelValues(status).Observe(took.Seconds())
+
+			// With no configured sync_interval we're only retrying to obtain the
+			// first successful sync; stop once we have a filter loaded.
+			if c.cfg.SyncInterval <= 0 && c.LabelFilter() != nil {
+				return
+			}
+		}
+	}
+}
+
+// blocked reports whether the filter has never successfully synced and is
+// configured to fail closed, in which case all downstream calls are skipped
+// (the target is treated as "down" until the first successful sync).
+func (c *LabelFilterClient) blocked() bool {
+	return c.cfg != nil && c.cfg.OnSyncError == LabelFilterOnSyncErrorClosed && c.LabelFilter() == nil
 }
 
 // LabelFilterClient filters out calls to the downstream based on a label filter
@@ -193,6 +265,11 @@ func (c *LabelFilterClient) Sync(ctx context.Context) error {
 
 // Query performs a query for the given time.
 func (c *LabelFilterClient) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
+	if c.blocked() {
+		filteredCount.WithLabelValues("Query").Inc()
+		return storage.EmptySeriesSet()
+	}
+
 	// Parse out the promql query into expressions etc.
 	e, err := parser.ParseExpr(query)
 	if err != nil {
@@ -213,6 +290,11 @@ func (c *LabelFilterClient) Query(ctx context.Context, query string, ts time.Tim
 
 // QueryRange performs a query for the given range.
 func (c *LabelFilterClient) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
+	if c.blocked() {
+		filteredCount.WithLabelValues("QueryRange").Inc()
+		return storage.EmptySeriesSet()
+	}
+
 	// Parse out the promql query into expressions etc.
 	e, err := parser.ParseExpr(query)
 	if err != nil {
@@ -233,6 +315,10 @@ func (c *LabelFilterClient) QueryRange(ctx context.Context, query string, r v1.R
 
 // Series finds series by label matchers.
 func (c *LabelFilterClient) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
+	if c.blocked() {
+		filteredCount.WithLabelValues("Series").Inc()
+		return nil, nil, nil
+	}
 	for _, m := range matches {
 		matchers, err := parser.ParseMetricSelector(m)
 		if err != nil {
@@ -251,6 +337,10 @@ func (c *LabelFilterClient) Series(ctx context.Context, matches []string, startT
 
 // GetValue loads the raw data for a given set of matchers in the time range
 func (c *LabelFilterClient) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
+	if c.blocked() {
+		filteredCount.WithLabelValues("GetValue").Inc()
+		return storage.EmptySeriesSet()
+	}
 	// check if the matcher is excluded by our filter
 	for _, matcher := range matchers {
 		if !FilterLabelMatchers(c.LabelFilter(), matcher) {
@@ -263,6 +353,10 @@ func (c *LabelFilterClient) GetValue(ctx context.Context, start, end time.Time, 
 
 // Metadata returns metadata about metrics currently scraped by the metric name.
 func (c *LabelFilterClient) Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
+	if c.blocked() {
+		filteredCount.WithLabelValues("Metadata").Inc()
+		return nil, nil
+	}
 	matcher, err := labels.NewMatcher(labels.MatchEqual, labels.MetricName, metric)
 	if err != nil {
 		return nil, err
@@ -282,6 +376,10 @@ func (c *LabelFilterClient) Metadata(ctx context.Context, metric, limit string) 
 // still forwarded (we can't easily rewrite a PromQL string) — the
 // non-satisfiable side just returns no exemplars.
 func (c *LabelFilterClient) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
+	if c.blocked() {
+		filteredCount.WithLabelValues("QueryExemplars").Inc()
+		return nil, nil
+	}
 	expr, err := parser.ParseExpr(query)
 	if err != nil {
 		// Parse error: let the downstream return the canonical error rather
