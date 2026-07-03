@@ -105,6 +105,15 @@ promxy:
         # dial_timeout controls how long promxy will wait for a connection to the downstream
         # the default is 200ms.
         dial_timeout: 1s
+        # dial_network controls the address family used when dialing downstream hosts.
+        # "tcp" (default) does dual-stack dialing; "tcp4"/"tcp6" force IPv4/IPv6 respectively.
+        # Use "tcp4" to work around downstreams whose DNS resolves to an unreachable IPv6 address.
+        # dial_network: tcp
+        # fallback_delay tunes the dual-stack (RFC 6555 "Happy Eyeballs") dialer: how long to
+        # wait before trying the other address family. A zero value uses Go's default (300ms);
+        # a negative value disables the fallback attempt. To be effective it must be shorter
+        # than dial_timeout, otherwise the dial times out before the fallback is attempted.
+        # fallback_delay: 50ms
         tls_config:
           insecure_skip_verify: true
 

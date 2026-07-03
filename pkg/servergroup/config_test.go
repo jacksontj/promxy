@@ -2,6 +2,7 @@ package servergroup
 
 import (
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v2"
 )
@@ -536,6 +537,96 @@ static_configs:
 			}
 
 			t.Logf("Backward compatibility verified for test: %s", tt.name)
+		})
+	}
+}
+
+func TestDialNetworkConfig(t *testing.T) {
+	tests := []struct {
+		name            string
+		config          string
+		wantErr         bool
+		errMsg          string
+		wantDialNetwork string // expected result of DialNetworkOrDefault()
+		wantFallback    time.Duration
+	}{
+		{
+			name:            "unset defaults to tcp",
+			config:          "http_client: {}",
+			wantDialNetwork: "tcp",
+			wantFallback:    0,
+		},
+		{
+			name: "explicit tcp",
+			config: `
+http_client:
+  dial_network: tcp
+`,
+			wantDialNetwork: "tcp",
+		},
+		{
+			name: "force ipv4",
+			config: `
+http_client:
+  dial_network: tcp4
+  fallback_delay: 50ms
+`,
+			wantDialNetwork: "tcp4",
+			wantFallback:    50 * time.Millisecond,
+		},
+		{
+			name: "force ipv6",
+			config: `
+http_client:
+  dial_network: tcp6
+`,
+			wantDialNetwork: "tcp6",
+		},
+		{
+			name: "negative fallback delay disables happy eyeballs",
+			config: `
+http_client:
+  fallback_delay: -1ms
+`,
+			wantDialNetwork: "tcp",
+			wantFallback:    -1 * time.Millisecond,
+		},
+		{
+			name: "invalid dial_network rejected",
+			config: `
+http_client:
+  dial_network: udp
+`,
+			wantErr: true,
+			errMsg:  "invalid dial_network",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cfg Config
+			err := yaml.Unmarshal([]byte(tt.config), &cfg)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error but got none")
+				}
+				if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+					t.Errorf("expected error containing %q, got %q", tt.errMsg, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if got := cfg.HTTPConfig.DialNetworkOrDefault(); got != tt.wantDialNetwork {
+				t.Errorf("DialNetworkOrDefault() = %q, want %q", got, tt.wantDialNetwork)
+			}
+			if cfg.HTTPConfig.FallbackDelay != tt.wantFallback {
+				t.Errorf("FallbackDelay = %v, want %v", cfg.HTTPConfig.FallbackDelay, tt.wantFallback)
+			}
 		})
 	}
 }

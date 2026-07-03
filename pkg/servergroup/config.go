@@ -312,6 +312,10 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
+	if err := c.HTTPConfig.validate(); err != nil {
+		return err
+	}
+
 	// Validate inject_matchers parses at config-load time rather than failing later
 	// during a discovery sync.
 	if _, err := c.GetInjectMatchers(); err != nil {
@@ -359,9 +363,39 @@ func (c *Config) MarshalYAML() (interface{}, error) {
 
 // HTTPClientConfig extends prometheus' HTTPClientConfig
 type HTTPClientConfig struct {
-	DialTimeout time.Duration                `yaml:"dial_timeout"`
-	HTTPConfig  config_util.HTTPClientConfig `yaml:",inline"`
-	SigV4Config *sigv4.SigV4Config           `yaml:"sigv4,omitempty"`
+	DialTimeout time.Duration `yaml:"dial_timeout"`
+	// DialNetwork controls the address family used when dialing downstream hosts.
+	// It maps to the network passed to net.Dialer: "tcp" (default) does dual-stack
+	// dialing, while "tcp4"/"tcp6" force IPv4/IPv6 respectively. An empty value is
+	// treated as "tcp".
+	DialNetwork string `yaml:"dial_network,omitempty"`
+	// FallbackDelay maps to net.Dialer.FallbackDelay and controls how long the
+	// dual-stack (RFC 6555 "Happy Eyeballs") dialer waits before spawning a
+	// fallback connection to the other address family. A zero value uses Go's
+	// default (300ms); a negative value disables the fallback attempt entirely.
+	// Note: to be effective it must be shorter than DialTimeout, otherwise the
+	// dial times out before the fallback is ever attempted.
+	FallbackDelay time.Duration                `yaml:"fallback_delay,omitempty"`
+	HTTPConfig    config_util.HTTPClientConfig `yaml:",inline"`
+	SigV4Config   *sigv4.SigV4Config           `yaml:"sigv4,omitempty"`
+}
+
+// validate ensures the HTTPClientConfig has sane values.
+func (c *HTTPClientConfig) validate() error {
+	switch c.DialNetwork {
+	case "", "tcp", "tcp4", "tcp6":
+	default:
+		return fmt.Errorf("invalid dial_network %q: must be one of tcp, tcp4, tcp6", c.DialNetwork)
+	}
+	return nil
+}
+
+// DialNetworkOrDefault returns the configured dial network, defaulting to "tcp".
+func (c *HTTPClientConfig) DialNetworkOrDefault() string {
+	if c.DialNetwork == "" {
+		return "tcp"
+	}
+	return c.DialNetwork
 }
 
 // RelativeTimeRangeConfig configures durations relative from "now" to define
