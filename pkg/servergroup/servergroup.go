@@ -34,6 +34,16 @@ import (
 	//	sd_config "github.com/prometheus/prometheus/discovery/config"
 )
 
+// DiscoveryUpdateInterval controls how often each server group's discovery
+// manager coalesces and applies target updates. Prometheus defaults this to 5s
+// to throttle chatty service-discovery mechanisms; promxy keeps that default so
+// production behavior is unchanged. It is exposed as a var mainly so tests can
+// drive it low — the discovery manager only emits its first target set (and
+// thus lets the server group become Ready) on the first tick of this interval,
+// so a 5s value adds ~5s of startup latency to every proxy the tests spin up.
+// Must be > 0 (time.NewTicker panics on zero).
+var DiscoveryUpdateInterval = 5 * time.Second
+
 var (
 	// TODO: have a marker for "which" servergroup
 	serverGroupSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
@@ -73,7 +83,7 @@ func NewServerGroup() (*ServerGroup, error) {
 		return nil, err
 	}
 	sdLogger := logging.NewLogger(logrus.WithField("component", "servergroup-discovery"))
-	sg.targetManager = discovery.NewManager(ctx, sdLogger, prometheus.NewRegistry(), sdMetrics)
+	sg.targetManager = discovery.NewManager(ctx, sdLogger, prometheus.NewRegistry(), sdMetrics, discovery.Updatert(DiscoveryUpdateInterval))
 	if sg.targetManager == nil {
 		return nil, fmt.Errorf("failed to create discovery manager")
 	}
