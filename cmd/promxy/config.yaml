@@ -208,6 +208,17 @@ promxy:
         static_labels_exclude:
           __name__:
             - up
+        # (optional) on_sync_error controls behavior while the filter has never
+        # successfully synced from the downstream (e.g. the target is unreachable
+        # at startup). This is distinct from the server_group's `ignore_error`,
+        # which governs the query path.
+        #   abort  - fail the sync; this blocks promxy startup until a sync
+        #            succeeds (default; preserves historical behavior)
+        #   open   - proceed without filtering; all queries are sent downstream
+        #            until the first successful sync
+        #   closed - proceed but filter out everything (skip this target) until
+        #            the first successful sync
+        on_sync_error: abort
 
       # inject_matchers is a list of label matchers that are injected into every selector
       # of every request sent to this server_group. This effectively scopes the server_group
