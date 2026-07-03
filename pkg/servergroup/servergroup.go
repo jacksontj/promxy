@@ -433,6 +433,19 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	if err != nil {
 		return errors.Wrap(err, "error loading TLS client config")
 	}
+	// The dialer's address family and dual-stack (RFC 6555 "Happy Eyeballs")
+	// fallback timing are configurable so downstream hosts that resolve to both
+	// IPv4 and IPv6 can be reached even when one family is unreachable.
+	dialer := &net.Dialer{
+		Timeout:       cfg.HTTPConfig.DialTimeout,
+		FallbackDelay: cfg.HTTPConfig.FallbackDelay,
+	}
+	// http.Transport always calls DialContext with network "tcp"; override it so
+	// dial_network (tcp/tcp4/tcp6) can force a specific address family.
+	dialNetwork := cfg.HTTPConfig.DialNetworkOrDefault()
+	dialContext := func(ctx context.Context, _, addr string) (net.Conn, error) {
+		return dialer.DialContext(ctx, dialNetwork, addr)
+	}
 	// The only timeout we care about is the configured scrape timeout.
 	// It is applied on request. So we leave out any timings here.
 	var rt http.RoundTripper = &http.Transport{
@@ -444,7 +457,7 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 		// 5 minutes is typically above the maximum sane scrape interval. So we can
 		// use keepalive for all configurations.
 		IdleConnTimeout:       cfg.IdleConnTimeout,
-		DialContext:           (&net.Dialer{Timeout: cfg.HTTPConfig.DialTimeout}).DialContext,
+		DialContext:           dialContext,
 		ResponseHeaderTimeout: cfg.Timeout,
 	}
 
