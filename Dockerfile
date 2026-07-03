@@ -6,8 +6,13 @@ ARG TARGETOS
 ENV GOARCH=${TARGETARCH} GOOS=${TARGETOS}
 
 COPY . /go/src/github.com/jacksontj/promxy
-RUN cd /go/src/github.com/jacksontj/promxy/cmd/promxy && CGO_ENABLED=0 go build -mod=vendor -tags netgo,builtinassets
-RUN cd /go/src/github.com/jacksontj/promxy/cmd/remote_write_exporter && CGO_ENABLED=0 go build -mod=vendor
+# Persist the Go build cache across the per-platform cross-compiles (and, with the
+# gha buildx cache, across CI runs). Scope the build cache by target arch so the
+# parallel platform builds don't contend on a single shared cache mount.
+RUN --mount=type=cache,target=/root/.cache/go-build,id=gobuild-${TARGETARCH} \
+    cd /go/src/github.com/jacksontj/promxy/cmd/promxy && CGO_ENABLED=0 go build -mod=vendor -tags netgo,builtinassets
+RUN --mount=type=cache,target=/root/.cache/go-build,id=gobuild-${TARGETARCH} \
+    cd /go/src/github.com/jacksontj/promxy/cmd/remote_write_exporter && CGO_ENABLED=0 go build -mod=vendor
 
 FROM   alpine:3.21.3
 LABEL  org.opencontainers.image.authors="Thomas Jackson <jacksontj.89@gmail.com>"

@@ -25,7 +25,14 @@ jobs:
       - name: Available platforms
         run: 'echo ${{ steps.buildx.outputs.platforms }}'
       - name: Run Buildx
-        run: |
-          docker buildx build \
-            --platform linux/amd64,linux/386,linux/arm/v7,linux/arm64 \
-            --push -t quay.io/jacksontj/promxy:${GITHUB_REF_NAME//master/latest} .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/386,linux/arm/v7,linux/arm64
+          push: true
+          tags: quay.io/jacksontj/promxy:${{ github.ref_name == 'master' && 'latest' || github.ref_name }}
+          # Reuse the Go build cache (and image layers) across runs. Combined with
+          # the cache mounts in the Dockerfile this avoids recompiling promxy +
+          # vendor from scratch for all four platforms on every push.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
