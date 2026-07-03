@@ -17,15 +17,53 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.25'
+        # Disable setup-go's built-in cache: it keys only on go.sum, so the
+        # entry is written once and then frozen ("cache hit, not saving"),
+        # which means changed packages and go-test results never persist
+        # across runs. We manage the caches explicitly below instead.
+        cache: false
+
+    # Module download cache. Only changes when go.sum changes, so a stable
+    # key is correct and every branch may populate it.
+    - name: Module cache
+      uses: actions/cache@v4
+      with:
+        path: ~/go/pkg/mod
+        key: gomod-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          gomod-${{ runner.os }}-
+
+    # Build + go-test result cache. master runs write a fresh entry every
+    # time (github.run_id makes the key unique); PRs restore the most recent
+    # one via restore-keys but never write. GitHub cache scoping lets a PR
+    # read its base branch's (master's) caches, so every PR builds and tests
+    # off master's warm base and only recompiles / re-runs what it changed.
+    - name: Restore build cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.cache/go-build
+        key: gobuild-${{ runner.os }}-${{ hashFiles('**/go.sum') }}-
+        restore-keys: |
+          gobuild-${{ runner.os }}-${{ hashFiles('**/go.sum') }}-
+          gobuild-${{ runner.os }}-
 
     - name: install
       run: |
         go install -v golang.org/x/tools/cmd/goimports@latest
         go install -v honnef.co/go/tools/cmd/staticcheck@latest
-      
+
     - name: Test
       run: |
         make fmt && git diff --exit-code
         make imports && git diff --exit-code
         make static-check
         make test
+
+    - name: Save build cache
+      # Only master writes, so PR runs stay read-only and don't churn the
+      # cache budget with per-PR entries.
+      if: github.ref == 'refs/heads/master'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.cache/go-build
+        key: gobuild-${{ runner.os }}-${{ hashFiles('**/go.sum') }}-${{ github.run_id }}
