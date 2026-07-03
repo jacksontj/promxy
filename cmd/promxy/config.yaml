@@ -253,3 +253,35 @@ promxy:
       # meaning if this servergroup returns and error and others don't the overall
       # query can still succeed
       ignore_error: true
+
+  # alert_templates optionally customizes the GeneratorURL promxy sets on the
+  # alerts it sends to Alertmanager. By default promxy emits the same
+  # Prometheus-style URL as upstream (a link to promxy's own graph page for the
+  # alert expression). This block is entirely opt-in; omit it to keep that
+  # default. Each template is a Go text/template rendered per-alert with these
+  # fields: .ExternalURL, .Expr, .AlertName, .Labels (map), .Annotations (map).
+  # Two extra functions are available: `urlquery` and `urlpath`.
+  #
+  # alert_templates:
+  #   # default is used when no rule matches. It may be an inline template body
+  #   # or the name of one of the `named` templates below.
+  #   default: '{{.ExternalURL}}/graph?g0.expr={{.Expr | urlquery}}&g0.tab=1'
+  #
+  #   # named holds reusable templates addressable from `default` and `rules`.
+  #   named:
+  #     grafana: 'https://grafana.example.com/alerting/groups?queryString=alertname%3D%22{{.AlertName | urlquery}}%22'
+  #     pagerduty: 'https://example.pagerduty.com/incidents/new?title={{.AlertName | urlquery}}'
+  #
+  #   # rules select a template by alert labels, evaluated top-to-bottom;
+  #   # the first rule whose match_labels all match wins. `template` is a named
+  #   # template or an inline body.
+  #   rules:
+  #     - match_labels:
+  #         severity: critical
+  #       template: pagerduty
+  #     - match_labels:
+  #         team: frontend
+  #       template: grafana
+  #     - match_labels:
+  #         alertname: DatabaseDown
+  #       template: 'https://db.example.com/status?db={{.Labels.database | urlquery}}'
