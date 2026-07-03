@@ -354,9 +354,21 @@ func (p *ProxyStorage) Appender(ctx context.Context) storage.Appender {
 // Close releases the resources of the Querier.
 func (p *ProxyStorage) Close() error { return nil }
 
-// ChunkQuerier returns a new ChunkQuerier on the storage.
+// ChunkQuerier returns a new ChunkQuerier on the storage. Promxy has no native
+// chunk source, so this reuses the sample-based querier and re-encodes the
+// result into chunks (see proxyquerier.ProxyChunkQuerier). It backs promxy's
+// own remote_read endpoint for the STREAMED_XOR_CHUNKS response type that a
+// stock Prometheus remote_read client negotiates by default.
 func (p *ProxyStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
-	return nil, errors.New("not implemented")
+	state := p.GetState()
+	return &proxyquerier.ProxyChunkQuerier{
+		ProxyQuerier: &proxyquerier.ProxyQuerier{
+			Start:  timestamp.Time(mint).UTC(),
+			End:    timestamp.Time(maxt).UTC(),
+			Client: state.client,
+			Cfg:    &state.cfg.PromxyConfig,
+		},
+	}, nil
 }
 
 // Implement web.LocalStorage
