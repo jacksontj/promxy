@@ -236,6 +236,32 @@ promxy:
         #            the first successful sync
         on_sync_error: abort
 
+      # health_check enables an independent, periodic HTTP probe against each
+      # target in this server_group.
+      # While a target's probe(s) are failing, it is skipped on the query path rather
+      # than sent traffic. This matters for a target that accepts the TCP
+      # connection but never answers HTTP: without health_check, every query
+      # routed to it hangs until that query's own timeout/deadline; with it,
+      # the target is detected as down (in `timeout`, not the query timeout)
+      # and skipped.
+      health_check:
+        # (optional) path probed on the target, joined onto its base URL.
+        # Defaults to "/-/healthy".
+        path: /-/healthy
+        # (optional) how often the target is probed. Defaults to 10s.
+        interval: 10s
+        # (optional) bounds each individual probe request. Deliberately
+        # independent of `http_client.timeout` (which defaults to disabled) so
+        # an unresponsive target is detected quickly and predictably
+        # regardless of how the query-path timeout is configured. Defaults to 2s.
+        timeout: 2s
+        # (optional) number of consecutive failed probes required before the
+        # target is marked unhealthy. Defaults to 1.
+        failure_threshold: 1
+        # (optional) number of consecutive successful probes required before a
+        # previously-unhealthy target is marked healthy again. Defaults to 1.
+        success_threshold: 1
+
       # inject_matchers is a list of label matchers that are injected into every selector
       # of every request sent to this server_group. This effectively scopes the server_group
       # to the subset of downstream data matching these matchers -- even for queries that
