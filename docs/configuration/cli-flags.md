@@ -20,10 +20,10 @@ Everything below is from [`cmd/promxy/main.go`](../../cmd/promxy/main.go).
 | `--log-max-form-prefix` | `256` | Max length of form values recorded in log entries. |
 | `--access-log-destination` | `stdout` | `stdout`, `stderr`, or `none`. |
 
-Promxy routes the embedded Prometheus libraries' logging (notifier, discovery,
-web, rules) through the same logger, so these settings govern all output.
-Kubernetes client logging is clamped below the verbosity at which it would print
-bearer tokens in clear text.
+The embedded Prometheus libraries (notifier, discovery, web, rules) log through
+the same logger, so these settings govern all output. Kubernetes client logging
+is clamped below the verbosity at which it would print bearer tokens in clear
+text.
 
 ## Web server
 
@@ -51,16 +51,16 @@ bearer tokens in clear text.
 
 ## Storage
 
-Promxy has no TSDB. `--storage.path` is only a working directory, used for the
-active query tracker file and the `remote_write` WAL.
+Promxy has no TSDB. `--storage.path` is a working directory for the active
+query tracker file and the `remote_write` WAL.
 
 | Flag | Default | Description |
 | ---- | ------- | ----------- |
 | `--storage.path` | | Base directory for promxy's local working state. |
 | `--storage.tsdb.path` | | **Deprecated** alias for `--storage.path`. Setting both is a fatal error. |
 
-Without `--storage.path` the remote_write WAL goes to a temporary directory that
-is removed on shutdown, so buffered samples do not survive a restart.
+Without it the WAL goes to a temp directory removed on shutdown, so buffered
+samples don't survive a restart.
 
 ## Rules and alerting
 
@@ -87,11 +87,10 @@ See [Running promxy](../operations/running.md#graceful-shutdown).
 
 ## `remote_write_exporter`
 
-A small companion binary (shipped in the same container image) that receives
-`remote_write` and re-exposes the most recent value of each series on a
-`/metrics` endpoint. It is a convenient `remote_write` target when all you want
-is for recording-rule and alert-state metrics to be scrapeable again — see
-[Rules and alerting](../guides/rules-and-alerting.md).
+A companion binary (same container image) that receives `remote_write` and
+re-exposes the most recent value of each series on `/metrics` — a convenient
+target when you just want recording-rule and alert-state metrics scrapeable
+again. See [Rules and alerting](../guides/rules-and-alerting.md).
 
 | Flag | Default | Description |
 | ---- | ------- | ----------- |
@@ -102,4 +101,4 @@ is for recording-rule and alert-state metrics to be scrapeable again — see
 | `--metric-ttl` | *(required)* | How long a series is retained after its last sample. |
 | `--drop-stale` | `false` | Drop series written with a `StaleNaN`. |
 
-It keeps everything in memory with a TTL sweep; it is not a storage system.
+Everything is in memory behind a TTL sweep; it is not a storage system.

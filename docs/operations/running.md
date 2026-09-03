@@ -2,118 +2,104 @@
 
 ## HTTP endpoints
 
-Promxy serves the full Prometheus web UI and v1 API, plus a few endpoints of its
-own. Everything is under `--web.route-prefix` (which defaults to the path of
+Promxy serves the full Prometheus web UI and v1 API plus a few of its own
+endpoints, all under `--web.route-prefix` (defaults to the path of
 `--web.external-url`).
 
 | Endpoint | Notes |
 | -------- | ----- |
-| `/` and the rest of the UI | The Prometheus UI, served from assets embedded by the `builtinassets` build tag. |
-| `/api/v1/*` | The Prometheus v1 API — `query`, `query_range`, `series`, `labels`, `label/<name>/values`, `read`, `rules`, `alerts`, `targets`, … |
-| `/api/v1/status/config` | Promxy's own handler, returning promxy's config rather than a Prometheus one. |
-| `/api/v1/metadata` | Promxy's own handler, aggregating metadata across server groups. |
+| `/` and the UI | Prometheus UI, from assets embedded by the `builtinassets` build tag. |
+| `/api/v1/*` | Prometheus v1 API — `query`, `query_range`, `series`, `labels`, `label/<name>/values`, `read`, `rules`, `alerts`, `targets`, … |
+| `/api/v1/status/config` | Promxy's own handler, returning promxy's config. |
+| `/api/v1/metadata` | Promxy's own handler, aggregating metadata across groups. |
 | `/federate` | Promxy's own federation handler, with a faster text encoder. |
-| `/metrics` | Promxy's own metrics. Path configurable with `--metrics-path`. |
-| `/-/ready` | Readiness. Returns `503` once promxy is shutting down. |
-| `/debug/pprof/*` | Go pprof handlers. Restrict these if promxy is exposed. |
-| `/-/reload` | Config reload. Only with `--web.enable-lifecycle`. |
+| `/metrics` | Promxy's metrics. Path set by `--metrics-path`. |
+| `/-/ready` | Readiness. `503` once shutting down. |
+| `/debug/pprof/*` | Go pprof. Restrict if promxy is exposed. |
+| `/-/reload` | Config reload. Requires `--web.enable-lifecycle`. |
 
-Promxy also implements the **remote_read** API, so another Prometheus (or a
-second promxy) can use promxy as a remote_read backend. It serves the
-`STREAMED_XOR_CHUNKS` response type that a stock Prometheus client negotiates by
-default. `--remote-read.max-concurrency` (default `10`) bounds concurrent reads.
+Promxy also implements **remote_read**, so another Prometheus (or promxy) can
+use it as a remote_read backend. It serves the `STREAMED_XOR_CHUNKS` response
+type a stock Prometheus client negotiates by default;
+`--remote-read.max-concurrency` (default `10`) bounds concurrent reads.
 
-## Layering promxy
-
-Promxy aggregates Prometheus-compatible API endpoints, so a promxy can be a
-downstream of another promxy. You can also mix implementations in one
-deployment — Prometheus, promxy, VictoriaMetrics, Mimir, Thanos — since they all
-expose a compatible API.
+Promxy can be a downstream of another promxy, and you can mix implementations —
+Prometheus, promxy, VictoriaMetrics, Mimir, Thanos — since all expose a
+compatible API.
 
 ## Configuration reload
 
-Two ways to reload:
-
 ```
 kill -HUP $(pidof promxy)
-```
-
-```
 curl -XPOST http://localhost:8082/-/reload    # requires --web.enable-lifecycle
 ```
 
-Reloads are atomic and safe: promxy builds the entire new state (server groups,
+Reloads are atomic: promxy builds the entire new state (server groups,
 discovery, rule manager, remote_write, alert templates), waits for every group
-to become ready, and only then swaps it in and cancels the old one. If any part
-fails to apply, the new state is discarded and the previous configuration keeps
-serving.
+to be ready, then swaps it in and cancels the old one. If any part fails to
+apply, the new state is discarded and the previous config keeps serving.
 
-Two metrics track this:
+Metrics:
 
 - `prometheus_config_last_reload_successful` — `1`/`0`
 - `prometheus_config_last_reload_success_timestamp_seconds`
 - `process_reload_time_seconds` — timestamp of the last `SIGHUP`
 
-A failed reload also raises a banner in the UI via the notifications API, which
-is cleared on the next success.
+A failed reload also raises a UI banner via the notifications API, cleared on
+the next success.
 
-Validate before reloading:
-
-```
-promxy --config=config.yaml --check-config
-```
+Validate first with `promxy --config=config.yaml --check-config`.
 
 ## Graceful shutdown
 
-On `SIGTERM` or `SIGINT`, promxy shuts down in stages:
+On `SIGTERM` / `SIGINT`:
 
-1. Start failing `/-/ready` with `503`, and publish a "shutting down" notice to
+1. `/-/ready` starts returning `503`, and a "shutting down" notice goes to
    connected UIs.
-2. Stop the alert notifier and the rule manager.
-3. Sleep for `--http.shutdown-delay` (default `10s`) while still serving
-   traffic. This is the drain window — it gives load balancers time to notice
-   the failing health check and stop sending new requests.
-4. Shut the HTTP server down gracefully, waiting up to
+2. The alert notifier and rule manager stop.
+3. Promxy keeps serving for `--http.shutdown-delay` (default `10s`) — the drain
+   window, letting load balancers notice the failing health check.
+4. The HTTP server shuts down gracefully, waiting up to
    `--http.shutdown-timeout` (default `60s`) for in-flight requests.
 
-Match `--http.shutdown-delay` to your load balancer's health-check interval
-times its unhealthy threshold, or you will drop requests during rollouts. Make
-sure your orchestrator's termination grace period exceeds
-`shutdown-delay + shutdown-timeout` — in Kubernetes that is
-`terminationGracePeriodSeconds`, which defaults to 30s and is therefore *too
-short* for promxy's defaults.
+Two things to get right:
 
-Note that `/-/quit` is routed by the embedded Prometheus web handler when
-`--web.enable-lifecycle` is set, but promxy does not act on it. Use `SIGTERM`.
+- `--http.shutdown-delay` ≥ your health-check interval × unhealthy threshold,
+  or you drop requests during rollouts.
+- Your orchestrator's grace period must exceed
+  `shutdown-delay + shutdown-timeout`. Kubernetes'
+  `terminationGracePeriodSeconds` defaults to 30s — shorter than promxy's
+  `10s + 60s`.
+
+`/-/quit` is routed when `--web.enable-lifecycle` is set but promxy does not act
+on it. Use `SIGTERM`.
 
 ## Deployment shape
 
-Promxy is stateless, so run several replicas behind a load balancer and let them
-all share the same config.
+Promxy is stateless: run several replicas behind a load balancer sharing one
+config.
 
-The one caveat is **rules**. Every replica evaluates every rule independently, so
-N replicas send N copies of each alert. Alertmanager deduplicates identical
-alerts, so this is normally fine and is in fact how you get HA alerting — but it
-does multiply the query load of rule evaluation across your downstreams, and it
-multiplies recording-rule writes to `remote_write`.
+The caveat is **rules**. Every replica evaluates every rule, so N replicas send
+N copies of each alert. Alertmanager deduplicates them — this is how you get HA
+alerting — but it multiplies rule-evaluation query load on your downstreams and
+recording-rule writes to `remote_write`.
 
 ## Resource notes
 
-- **CPU** scales with query volume and with how much of each query promxy has to
-  evaluate locally rather than push down. See
+- **CPU** scales with query volume and with how much promxy evaluates locally
+  rather than pushing down. See
   [Architecture](../concepts/architecture.md#query-pushdown-nodereplacer).
-- **Memory** scales with the raw data pulled back for locally-evaluated queries.
+- **Memory** scales with raw data pulled back for local evaluation.
   `--query.max-samples` (default 50M) is the backstop.
-- **File descriptors**: each server group keeps up to `max_idle_conns` (default
-  20000) idle connections, `max_idle_conns_per_host` (default 1000) per host.
-  Raise your process limits accordingly, or lower these if you have many groups.
+- **File descriptors**: each group keeps up to `max_idle_conns` (default 20000)
+  idle connections, `max_idle_conns_per_host` (default 1000) per host. Raise
+  process limits, or lower these if you have many groups.
 
 ## Deployment manifests
 
-- [`deploy/docker`](../../deploy/docker) — docker-compose stack with
-  VictoriaMetrics and Alertmanager
-- [`deploy/k8s/promxy.yaml`](../../deploy/k8s/promxy.yaml) — plain Kubernetes
-  manifests (namespace, RBAC for `kubernetes_sd_configs`, ConfigMap, Deployment)
+- [`deploy/docker`](../../deploy/docker) — docker-compose with VictoriaMetrics
+  and Alertmanager
+- [`deploy/k8s/promxy.yaml`](../../deploy/k8s/promxy.yaml) — namespace, RBAC for
+  `kubernetes_sd_configs`, ConfigMap, Deployment
 - [`deploy/k8s/helm-charts/promxy`](../../deploy/k8s/helm-charts/promxy) — Helm
-  chart, with optional PDB, HPA, VPA, ingress, and a configmap-reload sidecar
-  that triggers promxy's reload when the config changes
+  chart with optional PDB, HPA, VPA, ingress, and a configmap-reload sidecar

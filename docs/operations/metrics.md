@@ -1,13 +1,11 @@
 # Metrics
 
-Promxy exposes its own metrics on `/metrics` (configurable with
-`--metrics-path`). They fall into three groups: promxy's own, the Prometheus
-libraries promxy embeds, and the usual Go/process metrics.
+Promxy exposes metrics on `/metrics` (path set by `--metrics-path`): its own,
+those of the Prometheus libraries it embeds, and the usual Go/process ones.
 
-Note that label-bearing metrics only appear **after their first observation** —
+Label-bearing metrics only appear **after their first observation**.
 `server_group_request_duration_seconds` is absent until promxy has made a
-downstream request, and the `promxy_label_filter_*` metrics are absent until a
-`label_filter` is configured and has run.
+downstream request; `promxy_label_filter_*` until a `label_filter` has run.
 
 ## Promxy's own
 
@@ -15,16 +13,15 @@ downstream request, and the `promxy_label_filter_*` metrics are absent until a
 
 Gauge. Number of targets currently discovered for a server group.
 
-Labels: `ordinal` (the group's index in the config, always unique), `name` (the
-optional `name:` from the config; empty when unset).
+Labels: `ordinal` (the group's index in the config, always unique) and `name`
+(the optional `name:`, empty when unset).
 
 ```
 server_group_targets{name="g1",ordinal="0"} 2
 ```
 
-This is the single most valuable promxy alert. A group that discovers zero
-targets answers every query with an error — or, with `ignore_error`, silently
-contributes nothing:
+The most valuable promxy alert. A group with zero targets errors every query,
+or with `ignore_error` silently contributes nothing:
 
 ```yaml
 - alert: PromxyServerGroupEmpty
@@ -34,8 +31,8 @@ contributes nothing:
     summary: "promxy server group {{ $labels.ordinal }} ({{ $labels.name }}) has no targets"
 ```
 
-Promxy also logs a warning whenever a group transitions to zero targets, and at
-startup if a group begins with none.
+Promxy also logs a warning when a group transitions to zero targets, and at
+startup if one begins with none.
 
 ### `server_group_request_duration_seconds`
 
@@ -60,9 +57,9 @@ sum(rate(server_group_request_duration_seconds_count{status="error"}[5m])) by (h
 sum(rate(server_group_request_duration_seconds_count[5m])) by (host)
 ```
 
-`get_value` is the raw-data fetch used when a query could not be pushed down. A
-high `get_value` share relative to `query`/`query_range` means promxy is pulling
-raw series back and evaluating locally — see
+`get_value` is the raw-data fetch used when a query couldn't be pushed down. A
+high `get_value` share relative to `query`/`query_range` means promxy is
+evaluating locally — see
 [Architecture](../concepts/architecture.md#query-pushdown-nodereplacer).
 
 ### `promxy_label_filter_sync_count_total`
@@ -75,9 +72,9 @@ Summary, labelled by `status`. Sync latency.
 
 ### `promxy_label_filter_filtered_count_total`
 
-Counter, labelled by `type` (query type). Requests the filter prevented from
-being sent downstream. If this stays at zero, your `label_filter` is buying
-nothing. See [Label filtering](../guides/label-filtering.md).
+Counter, labelled by `type` (query type). Requests the filter kept from going
+downstream. Zero means the filter is buying nothing. See
+[Label filtering](../guides/label-filtering.md).
 
 ### Config reload
 
@@ -99,8 +96,8 @@ Constant `1`, labelled with `version`, `revision`, `branch`, `goversion`,
 ## Inherited from the Prometheus libraries
 
 Promxy embeds Prometheus' query engine, rule manager, notifier, service
-discovery, and remote_write, and they register their usual metrics. These behave
-exactly as documented upstream.
+discovery, and remote_write; each registers its usual metrics, which behave as
+documented upstream.
 
 | Family | Covers |
 | ------ | ------ |
@@ -130,12 +127,11 @@ Useful alerts from these:
 
 ## Go and process metrics
 
-The standard `go_*`, `process_*`, and `promhttp_*` collectors. Watch
-`process_open_fds` against `process_max_fds` — each server group holds up to
+The standard `go_*`, `process_*`, `promhttp_*` collectors. Watch
+`process_open_fds` against `process_max_fds`: each group holds up to
 `max_idle_conns` (default 20000) idle connections.
 
 ## Dashboard
 
-A Grafana dashboard for promxy is included at the repo root:
-[`grafana.dashboard`](../../grafana.dashboard). It is marked WIP — treat it as a
-starting point rather than a finished product.
+[`grafana.dashboard`](../../grafana.dashboard) at the repo root. Marked WIP —
+a starting point, not a finished product.

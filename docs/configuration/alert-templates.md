@@ -1,12 +1,11 @@
 # Alert templates
 
-By default promxy sets the same Prometheus-style `GeneratorURL` on the alerts it
-sends to Alertmanager: a link to promxy's own graph page for the alert
-expression, built from `--web.external-url`.
+By default alerts carry a Prometheus-style `GeneratorURL`: a link to promxy's
+graph page for the alert expression, built from `--web.external-url`.
 
-`promxy.alert_templates` lets you replace that with your own URLs — a Grafana
-alert view, a PagerDuty incident form, an internal runbook — chosen per alert.
-The block is entirely opt-in; omit it to keep the default.
+`promxy.alert_templates` replaces that with your own URLs — a Grafana alert
+view, a PagerDuty incident form, a runbook — chosen per alert. Opt-in; omit the
+block to keep the default.
 
 ## Schema
 
@@ -65,7 +64,7 @@ Two extra functions are available beyond the `text/template` builtins:
 - `urlquery` — escape a value for use in a URL query string
 - `urlpath` — escape a value for use in a URL path segment
 
-Always pipe interpolated values through one of these; alert labels routinely
+Always pipe interpolated values through one of these — alert labels routinely
 contain characters that would otherwise produce a malformed URL.
 
 ```

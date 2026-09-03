@@ -1,12 +1,11 @@
 # Promxy documentation
 
-Promxy is an aggregating proxy that makes many shards of Prometheus appear as a
-single Prometheus API endpoint. It requires no sidecars, no custom builds, and
-no changes to your existing Prometheus infrastructure.
+Promxy makes many shards of Prometheus appear as a single Prometheus API
+endpoint, with no sidecars, custom builds, or changes to your existing
+infrastructure.
 
-New here? Start with the [project README](../README.md) for the high-level
-pitch and [MOTIVATION.md](../MOTIVATION.md) for the "why", then work through
-[Getting started](getting-started.md).
+For the pitch see the [project README](../README.md) and
+[MOTIVATION.md](../MOTIVATION.md).
 
 ## Getting started
 
