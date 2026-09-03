@@ -90,7 +90,7 @@ func TestHTTPClientIntegration(t *testing.T) {
 			}
 
 			// Verify the HTTP client was created
-			if sg.client == nil {
+			if sg.httpClient() == nil {
 				t.Errorf("expected HTTP client to be created")
 				return
 			}
@@ -107,7 +107,7 @@ func TestHTTPClientIntegration(t *testing.T) {
 				// Make the request through the servergroup's RoundTrip method
 				// Note: We can't easily test the actual SigV4 signing without AWS credentials
 				// but we can verify the round tripper chain is set up correctly
-				if sg.client.Transport != nil {
+				if sg.httpClient().Transport != nil {
 					// Just verify the transport exists
 					t.Logf("Transport chain configured successfully")
 				}
@@ -192,12 +192,12 @@ func TestSigV4RoundTripperPresence(t *testing.T) {
 			}
 
 			// Verify the transport chain is configured
-			if sg.client == nil {
+			if sg.httpClient() == nil {
 				t.Errorf("expected HTTP client to be created")
 				return
 			}
 
-			if sg.client.Transport == nil {
+			if sg.httpClient().Transport == nil {
 				t.Errorf("expected HTTP client transport to be configured")
 				return
 			}
@@ -355,13 +355,13 @@ func TestHTTPClientBackwardCompatibility(t *testing.T) {
 			}
 
 			// Verify the HTTP client was created
-			if sg.client == nil {
+			if sg.httpClient() == nil {
 				t.Errorf("expected HTTP client to be created")
 				return
 			}
 
 			// Verify the transport exists
-			if sg.client.Transport == nil {
+			if sg.httpClient().Transport == nil {
 				t.Errorf("expected HTTP client transport to be configured")
 				return
 			}
@@ -437,12 +437,12 @@ func TestSigV4RoundTripperErrorHandling(t *testing.T) {
 			}
 
 			// Verify the transport chain is configured
-			if sg.client == nil {
+			if sg.httpClient() == nil {
 				t.Errorf("expected HTTP client to be created")
 				return
 			}
 
-			if sg.client.Transport == nil {
+			if sg.httpClient().Transport == nil {
 				t.Errorf("expected HTTP client transport to be configured")
 				return
 			}
@@ -564,9 +564,9 @@ static_configs:
 
 			// With no auth configured the base transport is the client's
 			// round-tripper directly -- no wrapping to unwrap.
-			transport, ok := sg.client.Transport.(*http.Transport)
+			transport, ok := sg.httpClient().Transport.(*http.Transport)
 			if !ok {
-				t.Fatalf("expected *http.Transport, got %T", sg.client.Transport)
+				t.Fatalf("expected *http.Transport, got %T", sg.httpClient().Transport)
 			}
 
 			if transport.ForceAttemptHTTP2 != tt.want {

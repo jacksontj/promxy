@@ -113,9 +113,13 @@ type ServerGroup struct {
 	loaded bool
 	Ready  chan struct{}
 
-	// TODO: lock/atomics on cfg and client
-	Cfg           *Config
-	client        *http.Client
+	// cfg and client are published by ApplyConfig and read concurrently by
+	// RoundTrip and by the Sync goroutine (which is started before the first
+	// ApplyConfig ever runs), so both are held as atomic pointers. Readers must
+	// take a single snapshot per operation (via Config()/httpClient()) rather
+	// than re-loading per field, or they can straddle two configurations.
+	cfg           atomic.Pointer[Config]
+	client        atomic.Pointer[http.Client]
 	targetManager *discovery.Manager
 
 	OriginalURLs []string
@@ -123,9 +127,9 @@ type ServerGroup struct {
 	state atomic.Value
 
 	// histogramCache backs IsHistogramMetric. The background refresh loop is
-	// only started when Cfg.HistogramMetadataRefresh > 0; when zero, the
-	// cache stays empty and IsHistogramMetric always returns false (AST-only
-	// routing). See pkg/servergroup/histogram_cache.go.
+	// only started when the config's native_histogram metadata refresh interval
+	// is > 0; when zero, the cache stays empty and IsHistogramMetric always
+	// returns false (AST-only routing). See pkg/servergroup/histogram_cache.go.
 	histogramCache histogramMetadataCache
 }
 
@@ -141,32 +145,52 @@ func (s *ServerGroup) IsHistogramMetric(name string) bool {
 	return s.histogramCache.Contains(name)
 }
 
-// groupIdentifier returns a human-readable identifier for this server group for
-// use in logs. The ordinal is always included (it is guaranteed unique); the
-// optional, non-unique name is appended when set.
-func (s *ServerGroup) groupIdentifier() string {
-	if s.Cfg == nil {
-		return "unknown"
-	}
-	if s.Cfg.Name != "" {
-		return fmt.Sprintf("ord=%d name=%s", s.Cfg.Ordinal, s.Cfg.Name)
-	}
-	return fmt.Sprintf("ord=%d", s.Cfg.Ordinal)
+// Config returns the configuration most recently published by ApplyConfig. It
+// returns nil if ApplyConfig has not (successfully) run yet, so callers must
+// nil-check the result. The returned *Config must be treated as read-only; take
+// a single snapshot per operation instead of calling this repeatedly.
+func (s *ServerGroup) Config() *Config {
+	return s.cfg.Load()
 }
 
-func (s *ServerGroup) logTargetTransition(oldCount, newCount int, initial bool) {
+// httpClient returns the *http.Client most recently published by ApplyConfig,
+// or nil if ApplyConfig has not (successfully) run yet.
+func (s *ServerGroup) httpClient() *http.Client {
+	return s.client.Load()
+}
+
+// groupIdentifier returns a human-readable identifier for this server group for
+// use in logs.
+func (s *ServerGroup) groupIdentifier() string {
+	return configIdentifier(s.Config())
+}
+
+// configIdentifier returns a human-readable identifier for the given server
+// group config for use in logs. The ordinal is always included (it is
+// guaranteed unique); the optional, non-unique name is appended when set.
+func configIdentifier(cfg *Config) string {
+	if cfg == nil {
+		return "unknown"
+	}
+	if cfg.Name != "" {
+		return fmt.Sprintf("ord=%d name=%s", cfg.Ordinal, cfg.Name)
+	}
+	return fmt.Sprintf("ord=%d", cfg.Ordinal)
+}
+
+func (s *ServerGroup) logTargetTransition(cfg *Config, oldCount, newCount int, initial bool) {
 	fields := logrus.Fields{
 		"old_targets": oldCount,
 		"new_targets": newCount,
 	}
-	if s.Cfg != nil {
-		fields["ordinal"] = s.Cfg.Ordinal
-		if s.Cfg.Name != "" {
-			fields["name"] = s.Cfg.Name
+	if cfg != nil {
+		fields["ordinal"] = cfg.Ordinal
+		if cfg.Name != "" {
+			fields["name"] = cfg.Name
 		}
 	}
 
-	ident := s.groupIdentifier()
+	ident := configIdentifier(cfg)
 	switch {
 	case initial && newCount == 0:
 		logrus.WithFields(fields).Warnf("ServerGroup %s started with zero targets; check service discovery configuration and relabel rules", ident)
@@ -182,19 +206,29 @@ func (s *ServerGroup) Cancel() {
 
 // RoundTrip allows us to intercept and mutate downstream HTTP requests at the transport level
 func (s *ServerGroup) RoundTrip(r *http.Request) (*http.Response, error) {
+	// Snapshot the config and client once for this request; ApplyConfig may
+	// swap either one concurrently.
+	cfg := s.Config()
+	client := s.httpClient()
+	if client == nil {
+		return nil, fmt.Errorf("servergroup %s has no client; no configuration applied yet", configIdentifier(cfg))
+	}
+
 	for k, v := range middleware.GetHeaders(r.Context()) {
 		r.Header.Set(k, v)
 	}
-	for k, v := range s.Cfg.HTTPClientHeaders {
-		r.Header.Set(k, v)
-		logrus.Tracef("Set ServerGroup custom header %s: %s", k, v)
+	if cfg != nil {
+		for k, v := range cfg.HTTPClientHeaders {
+			r.Header.Set(k, v)
+			logrus.Tracef("Set ServerGroup custom header %s: %s", k, v)
+		}
 	}
 	// Ensure Body is non-nil so downstream transports (e.g. SigV4) that
 	// unconditionally read the body don't panic on GET requests.
 	if r.Body == nil {
 		r.Body = http.NoBody
 	}
-	return s.client.Transport.RoundTrip(r)
+	return client.Transport.RoundTrip(r)
 }
 
 // Sync updates the targets from our discovery manager
@@ -224,6 +258,13 @@ func (s *ServerGroup) Sync() {
 }
 
 func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgroup.Group) (err error) {
+	// Snapshot the config once for the whole load; ApplyConfig may publish a
+	// new one while we're building clients and we must not straddle two.
+	cfg := s.Config()
+	if cfg == nil {
+		return fmt.Errorf("no configuration applied to servergroup yet")
+	}
+
 	targets := make([]string, 0)
 	apiClients := make([]promclient.API, 0)
 
@@ -255,13 +296,13 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 					}
 				}
 
-				lbls = append(lbls, labels.Label{Name: model.SchemeLabel, Value: string(s.Cfg.Scheme)})
-				lbls = append(lbls, labels.Label{Name: PathPrefixLabel, Value: string(s.Cfg.PathPrefix)})
+				lbls = append(lbls, labels.Label{Name: model.SchemeLabel, Value: string(cfg.Scheme)})
+				lbls = append(lbls, labels.Label{Name: PathPrefixLabel, Value: string(cfg.PathPrefix)})
 
 				lset := labels.New(lbls...)
 
 				logrus.Tracef("Potential target pre-relabel: %v", lset)
-				lset, keep := relabel.Process(lset, s.Cfg.RelabelConfigs...)
+				lset, keep := relabel.Process(lset, cfg.RelabelConfigs...)
 				logrus.Tracef("Potential target post-relabel: %v", lset)
 				// Check if the target was dropped, if so we skip it
 				if !keep || lset.IsEmpty() {
@@ -286,8 +327,8 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 					return err
 				}
 
-				if len(s.Cfg.QueryParams) > 0 {
-					client = promclient.NewClientArgsWrap(client, s.Cfg.QueryParams)
+				if len(cfg.QueryParams) > 0 {
+					client = promclient.NewClientArgsWrap(client, cfg.QueryParams)
 				}
 
 				var apiClient promclient.API
@@ -300,12 +341,12 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 					apiClient = &promclient.DebugAPI{apiClient, u.String()}
 				}
 
-				if s.Cfg.RemoteRead {
-					u.Path = path.Join(u.Path, s.Cfg.RemoteReadPath)
+				if cfg.RemoteRead {
+					u.Path = path.Join(u.Path, cfg.RemoteReadPath)
 					cfg := &remote.ClientConfig{
 						URL:              &config_util.URL{u},
-						HTTPClientConfig: s.Cfg.HTTPConfig.HTTPConfig,
-						SigV4Config:      s.Cfg.HTTPConfig.SigV4Config,
+						HTTPClientConfig: cfg.HTTPConfig.HTTPConfig,
+						SigV4Config:      cfg.HTTPConfig.SigV4Config,
 						Timeout:          model.Duration(time.Minute * 2),
 						ChunkedReadLimit: prom_config.DefaultChunkedReadLimit,
 					}
@@ -318,28 +359,28 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				}
 
 				// Optionally add time range layers
-				if s.Cfg.AbsoluteTimeRangeConfig != nil {
+				if cfg.AbsoluteTimeRangeConfig != nil {
 					apiClient = &promclient.AbsoluteTimeFilter{
 						API:      apiClient,
-						Start:    s.Cfg.AbsoluteTimeRangeConfig.Start,
-						End:      s.Cfg.AbsoluteTimeRangeConfig.End,
-						Truncate: s.Cfg.AbsoluteTimeRangeConfig.Truncate,
+						Start:    cfg.AbsoluteTimeRangeConfig.Start,
+						End:      cfg.AbsoluteTimeRangeConfig.End,
+						Truncate: cfg.AbsoluteTimeRangeConfig.Truncate,
 					}
 				}
 
-				if s.Cfg.RelativeTimeRangeConfig != nil {
+				if cfg.RelativeTimeRangeConfig != nil {
 					apiClient = &promclient.RelativeTimeFilter{
 						API:      apiClient,
-						Start:    s.Cfg.RelativeTimeRangeConfig.Start,
-						End:      s.Cfg.RelativeTimeRangeConfig.End,
-						Truncate: s.Cfg.RelativeTimeRangeConfig.Truncate,
+						Start:    cfg.RelativeTimeRangeConfig.Start,
+						End:      cfg.RelativeTimeRangeConfig.End,
+						Truncate: cfg.RelativeTimeRangeConfig.Truncate,
 					}
 				}
 
 				// Optionally re-stamp step-aligned query_range results back onto the
 				// requested step grid. Enabled per-server-group for backends (e.g.
 				// Mimir/Cortex) that snap query_range output to the epoch grid; see #787.
-				if s.Cfg.AlignQueryRangeWithStep {
+				if cfg.AlignQueryRangeWithStep {
 					apiClient = &promclient.StepAlignClient{API: apiClient}
 				}
 
@@ -355,7 +396,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				// applied beneath the label-manipulation wrappers below so the matchers
 				// reach the downstream verbatim, without interacting with label_filter's
 				// query filtering or metrics_relabel's matcher reversal.
-				if injectMatchers, err := s.Cfg.GetInjectMatchers(); err != nil {
+				if injectMatchers, err := cfg.GetInjectMatchers(); err != nil {
 					return err
 				} else if len(injectMatchers) > 0 {
 					apiClient, err = promclient.NewInjectMatchersClient(apiClient, injectMatchers)
@@ -365,11 +406,11 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				}
 
 				// Add labels
-				apiClient = &promclient.AddLabelClient{apiClient, modelLabelSet.Merge(s.Cfg.Labels)}
+				apiClient = &promclient.AddLabelClient{apiClient, modelLabelSet.Merge(cfg.Labels)}
 
 				// Add MetricRelabel if set
-				if len(s.Cfg.MetricsRelabelConfigs) > 0 {
-					tmp, err := promclient.NewMetricsRelabelClient(apiClient, s.Cfg.MetricsRelabelConfigs)
+				if len(cfg.MetricsRelabelConfigs) > 0 {
+					tmp, err := promclient.NewMetricsRelabelClient(apiClient, cfg.MetricsRelabelConfigs)
 					if err != nil {
 						return err
 					}
@@ -378,8 +419,8 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				}
 
 				// Add LabelFilter if configured
-				if s.Cfg.LabelFilterConfig != nil {
-					apiClient, err = promclient.NewLabelFilterClient(ctx, apiClient, s.Cfg.LabelFilterConfig)
+				if cfg.LabelFilterConfig != nil {
+					apiClient, err = promclient.NewLabelFilterClient(ctx, apiClient, cfg.LabelFilterConfig)
 					if err != nil {
 						return err
 					}
@@ -396,7 +437,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 	}
 
 	logrus.Debugf("Updating targets from discovery manager: %v", targets)
-	apiClient, err := promclient.NewMultiAPI(apiClients, s.Cfg.GetAntiAffinity(), s.Cfg.AntiAffinityDynamic, apiClientMetricFunc, 1, s.Cfg.GetPreferMax())
+	apiClient, err := promclient.NewMultiAPI(apiClients, cfg.GetAntiAffinity(), cfg.AntiAffinityDynamic, apiClientMetricFunc, 1, cfg.GetPreferMax())
 	if err != nil {
 		return err
 	}
@@ -404,21 +445,21 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 	newState := &ServerGroupState{
 		Targets: targets,
 		// Add error wrap for this specific servergroup
-		apiClient: &promclient.ErrorWrap{apiClient, fmt.Sprintf("error in servergroup ord=%d", s.Cfg.Ordinal)},
+		apiClient: &promclient.ErrorWrap{apiClient, fmt.Sprintf("error in servergroup ord=%d", cfg.Ordinal)},
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
 	}
 
-	if s.Cfg.IgnoreError {
+	if cfg.IgnoreError {
 		newState.apiClient = &promclient.IgnoreErrorAPI{newState.apiClient}
 	}
 
-	if s.Cfg.DowngradeError {
+	if cfg.DowngradeError {
 		newState.apiClient = &promclient.DowngradeErrorAPI{newState.apiClient}
 	}
 
-	s.logTargetTransition(oldCount, len(targets), !s.loaded)
-	serverGroupTargets.WithLabelValues(strconv.Itoa(s.Cfg.Ordinal), s.Cfg.Name).Set(float64(len(targets)))
+	s.logTargetTransition(cfg, oldCount, len(targets), !s.loaded)
+	serverGroupTargets.WithLabelValues(strconv.Itoa(cfg.Ordinal), cfg.Name).Set(float64(len(targets)))
 
 	s.state.Store(newState) // Store new state
 	if oldState != nil {
@@ -485,10 +526,7 @@ func newDownstreamTransport(cfg *Config) (*http.Transport, error) {
 }
 
 // ApplyConfig applies new configuration to the ServerGroup
-// TODO: move config + client into state object to be swapped with atomics
 func (s *ServerGroup) ApplyConfig(cfg *Config) error {
-	s.Cfg = cfg
-
 	transport, err := newDownstreamTransport(cfg)
 	if err != nil {
 		return err
@@ -526,7 +564,10 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 		)
 	}
 
-	s.client = &http.Client{Transport: rt}
+	// Publish the client before the config so that any reader which sees the
+	// new config also sees the client that was built from it.
+	s.client.Store(&http.Client{Transport: rt})
+	s.cfg.Store(cfg)
 
 	if err := s.targetManager.ApplyConfig(map[string]discovery.Configs{"foo": cfg.ServiceDiscoveryConfigs}); err != nil {
 		return err

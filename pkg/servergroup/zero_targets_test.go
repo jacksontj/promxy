@@ -36,7 +36,8 @@ func TestGroupIdentifier(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sg := &ServerGroup{Cfg: tt.cfg}
+			sg := &ServerGroup{}
+			sg.cfg.Store(tt.cfg)
 			if got := sg.groupIdentifier(); got != tt.want {
 				t.Fatalf("groupIdentifier() = %q, want %q", got, tt.want)
 			}
@@ -80,7 +81,7 @@ func TestServerGroupTargetsMetric(t *testing.T) {
 				t.Fatalf("NewServerGroup: %v", err)
 			}
 			defer sg.Cancel()
-			sg.Cfg = &Config{Ordinal: tt.ordinal, Name: tt.groupName, Scheme: "http"}
+			sg.cfg.Store(&Config{Ordinal: tt.ordinal, Name: tt.groupName, Scheme: "http"})
 
 			if err := sg.loadTargetGroupMap(tt.targetGroup); err != nil {
 				t.Fatalf("loadTargetGroupMap: %v", err)
