@@ -487,7 +487,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	// step-invariant even when an inner @ modifier pins the input — e.g.
 	// timestamp() returns the evaluation-time timestamp, predict_linear
 	// extrapolates from evalTime, etc. Their presence in the subtree
-	// disqualifies the instant-query optimization in queryRangeAt below.
+	// disqualifies the instant-query optimization in queryDownstream below.
 	isAtModifierUnsafeCall := func(node parser.Node) bool {
 		c, ok := node.(*parser.Call)
 		if !ok {
@@ -512,11 +512,11 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 	timestampFinder := &promclient.BooleanFinder{Func: hasTimestamp}
 	// atTimestampFinder records the @ timestamp itself (in ms) so we can
 	// issue an instant query at a guaranteed-safe time when pushing down
-	// step-invariant subtrees — see queryRangeAt.
+	// step-invariant subtrees — see queryDownstream.
 	atTimestampFinder := &promclient.TimestampFinder{}
 	// atUnsafeFinder counts Call nodes whose result depends on the
 	// evaluation timestamp regardless of any inner @; if any are present
-	// queryRangeAt cannot use the instant-query optimization.
+	// queryDownstream cannot use the instant-query optimization.
 	atUnsafeFinder := &promclient.BooleanFinder{Func: isAtModifierUnsafeCall}
 	// histFinder rides along on the same tree walk to detect histogram-
 	// bearing subtrees: histogram-only function calls (always) plus
@@ -619,20 +619,31 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 	state := p.GetState()
 
-	// queryRangeAt issues a step-aware downstream request for queryStr. When
-	// the subtree below us pins evaluation to a single timestamp via @, the
-	// result at every step is identical (step-invariant); in that case we
-	// issue a single instant Query at the @ timestamp and replicate the
-	// returned vector across each step in [s.Start, s.End]. This avoids
-	// sending QueryRange with a pre-epoch sub-second start time, which the
-	// upstream prometheus/common model.Time.UnmarshalJSON mis-decodes on
-	// the way back (see api_query.go hasNegativeFractionalSecond). When the
-	// subtree has no @, or it contains a Call whose result depends on the
-	// evaluation timestamp even with @ pinning (timestamp, predict_linear,
-	// time, etc. — see promql.AtModifierUnsafeFunctions), falls back to the
-	// regular QueryRange.
-	queryRangeAt := func(queryStr string) storage.SeriesSet {
-		if subtreeHasAt && atTimestampFinder.Found && atUnsafeFinder.Found == 0 && s.Interval > 0 {
+	// queryDownstream issues the downstream request for queryStr on behalf of
+	// every pushdown site, so they all get the same three behaviors:
+	//
+	// An instant request (s.Interval == 0) is a plain Query at the request
+	// time.
+	//
+	// A range request whose subtree pins evaluation to a single timestamp via
+	// @ is step-invariant: the result at every step is identical. Those are
+	// issued as a single instant Query at the @ timestamp and replicated
+	// across each step in [s.Start, s.End], rather than making the downstream
+	// evaluate the same instant once per step and ship an identical sample
+	// back for each. It also avoids sending QueryRange with a pre-epoch
+	// sub-second start time, which the upstream prometheus/common
+	// model.Time.UnmarshalJSON mis-decodes on the way back (see api_query.go
+	// hasNegativeFractionalSecond).
+	//
+	// Anything else — no @ in the subtree, or a Call whose result depends on
+	// the evaluation timestamp even with @ pinning (timestamp, predict_linear,
+	// time, etc.; see promql.AtModifierUnsafeFunctions) — is a regular
+	// QueryRange.
+	queryDownstream := func(queryStr string) storage.SeriesSet {
+		if s.Interval <= 0 {
+			return state.client.Query(ctx, queryStr, s.Start.Add(-reqOffset))
+		}
+		if subtreeHasAt && atTimestampFinder.Found && atUnsafeFinder.Found == 0 {
 			at := timestamp.Time(atTimestampFinder.Timestamp)
 			result := state.client.Query(ctx, queryStr, at)
 			if err := result.Err(); err != nil {
@@ -665,7 +676,6 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		logrus.Debugf("AggregateExpr %v %s", n, n.Op)
 
 		var result storage.SeriesSet
-		var err error
 		var lossy bool
 
 		// Not all Aggregation functions are composable, so we'll do what we can
@@ -674,17 +684,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		case parser.SUM, parser.MIN, parser.MAX, parser.TOPK, parser.BOTTOMK, parser.GROUP:
 			removeOffsetFn()
 
-			if s.Interval > 0 {
-				result = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-reqOffset),
-					End:   s.End.Add(-reqOffset),
-					Step:  s.Interval,
-				})
-			} else {
-				result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
-			}
+			result = queryDownstream(n.String())
 
-			if err != nil {
+			if err := result.Err(); err != nil {
 				return nil, err
 			}
 			result, lossy = containsLossyHistogram(result)
@@ -764,17 +766,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		case parser.COUNT:
 			removeOffsetFn()
 
-			if s.Interval > 0 {
-				result = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-reqOffset),
-					End:   s.End.Add(-reqOffset),
-					Step:  s.Interval,
-				})
-			} else {
-				result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
-			}
+			result = queryDownstream(n.String())
 
-			if err != nil {
+			if err := result.Err(); err != nil {
 				return nil, err
 			}
 			result, lossy = containsLossyHistogram(result)
@@ -787,17 +781,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		case parser.COUNT_VALUES:
 
 			// First we must fetch the data into a vectorselector
-			if s.Interval > 0 {
-				result = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-reqOffset),
-					End:   s.End.Add(-reqOffset),
-					Step:  s.Interval,
-				})
-			} else {
-				result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
-			}
+			result = queryDownstream(n.String())
 
-			if err != nil {
+			if err := result.Err(); err != nil {
 				return nil, err
 			}
 			result, lossy := containsLossyHistogram(result)
@@ -885,15 +871,9 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		// For all the Call's we actually will work on, we need to remove the offset
 		removeOffsetFn()
 
-		var result storage.SeriesSet
-		var err error
-		if s.Interval > 0 {
-			result = queryRangeAt(n.String())
-		} else {
-			result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
-		}
+		result := queryDownstream(n.String())
 
-		if err != nil {
+		if err := result.Err(); err != nil {
 			return nil, err
 		}
 		// For range queries, fill StaleNaN at step timestamps the downstream
@@ -964,18 +944,11 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		logrus.Debugf("VectorSelector: %v", n)
 		removeOffsetFn()
 
-		var result storage.SeriesSet
 		origLookback := n.LookbackDelta
 		if s.Interval > 0 {
 			n.LookbackDelta = s.Interval - time.Duration(1)
-			result = state.client.QueryRange(ctx, n.String(), v1.Range{
-				Start: s.Start.Add(-reqOffset),
-				End:   s.End.Add(-reqOffset),
-				Step:  s.Interval,
-			})
-		} else {
-			result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 		}
+		result := queryDownstream(n.String())
 
 		if err := result.Err(); err != nil {
 			return nil, err
@@ -1085,17 +1058,10 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 			logrus.Debugf("BinaryExpr (VectorSelector + Literal): %v", n)
 			removeOffsetFn()
 
-			var result storage.SeriesSet
 			if s.Interval > 0 {
 				vs.LookbackDelta = s.Interval - time.Duration(1)
-				result = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-reqOffset),
-					End:   s.End.Add(-reqOffset),
-					Step:  s.Interval,
-				})
-			} else {
-				result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
 			}
+			result := queryDownstream(n.String())
 
 			if err := result.Err(); err != nil {
 				return nil, err
@@ -1121,17 +1087,7 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 
 			removeOffsetFn()
 
-			var result storage.SeriesSet
-
-			if s.Interval > 0 {
-				result = state.client.QueryRange(ctx, n.String(), v1.Range{
-					Start: s.Start.Add(-reqOffset),
-					End:   s.End.Add(-reqOffset),
-					Step:  s.Interval,
-				})
-			} else {
-				result = state.client.Query(ctx, n.String(), s.Start.Add(-reqOffset))
-			}
+			result := queryDownstream(n.String())
 			if err := result.Err(); err != nil {
 				return nil, err
 			}

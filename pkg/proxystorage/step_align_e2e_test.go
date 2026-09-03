@@ -39,6 +39,18 @@ func (a *stepAlignStub) QueryRange(ctx context.Context, query string, r v1.Range
 	return promapi.NewSeriesSet([]storage.Series{s}, nil, nil)
 }
 
+// Query answers an instant query. A step-aligning backend snaps the grid of a
+// range query; an instant query has no grid to snap, so the sample comes back
+// at exactly the requested timestamp.
+func (a *stepAlignStub) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
+	t := ts.UnixMilli()
+	s := promapi.NewSeries(
+		labels.FromStrings(model.MetricNameLabel, "foo"),
+		[]chunks.Sample{promapi.FloatSample(t, float64(t)/1000)},
+	)
+	return promapi.NewSeriesSet([]storage.Series{s}, nil, nil)
+}
+
 const (
 	e2eStep   = int64(3600)       // 1h
 	e2eGridT0 = int64(1781654400) // multiple of 3600
@@ -141,21 +153,28 @@ func TestStepAlign_E2E_Offset(t *testing.T) {
 
 // TestStepAlign_E2E_AtModifier confirms the re-stamp does not break the @-pinned
 // pushdown path: the result is step-invariant and still returns data (rather
-// than the no-data the bug would produce). The pinned value is the backend's
-// grid-snapped sample, which is the step-aligning backend's own behavior.
+// than the no-data the bug would produce).
+//
+// An @-pinned subtree is pushed down as a single instant query and replicated
+// across the step grid, so it never reaches StepAlignClient's range re-stamp at
+// all. That also means the pinned value is the backend's sample at exactly the
+// @ timestamp, with none of the grid-snap skew a range query would suffer.
 func TestStepAlign_E2E_AtModifier(t *testing.T) {
 	startSec, endSec := e2eGridT0+e2eOffR, e2eGridT0+e2eOffR+(e2eN-1)*e2eStep
+	at := e2eGridT0 + e2eOffR
 
 	ps, eng := newProxyStorage(t, &promclient.StepAlignClient{API: &stepAlignStub{}})
 	// @ pinned off-grid -- the path most likely to interact with the re-stamp.
-	m := runRange(t, ps, eng, "foo @ "+strconv.FormatInt(e2eGridT0+e2eOffR, 10), startSec, endSec)
+	m := runRange(t, ps, eng, "foo @ "+strconv.FormatInt(at, 10), startSec, endSec)
 	if got := countPoints(m); got != e2eN {
 		t.Fatalf("with step_align + @: expected %d points, got %d", e2eN, got)
 	}
-	// step-invariant: every point carries the same (pinned) value.
+	// step-invariant: every point carries the same (pinned) value, and that
+	// value is the sample at the @ timestamp itself rather than the grid-
+	// snapped one a range query would have returned.
 	for _, fp := range m[0].Floats {
-		if fp.F != m[0].Floats[0].F {
-			t.Fatalf("@-pinned result not step-invariant: %v vs %v", fp.F, m[0].Floats[0].F)
+		if fp.F != float64(at) {
+			t.Errorf("point t=%d: value=%v want %v (the sample at @ %d)", fp.T, fp.F, float64(at), at)
 		}
 	}
 }
