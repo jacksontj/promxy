@@ -69,13 +69,13 @@ func TestDynamicAntiAffinity(t *testing.T) {
 	}
 }
 
-// TestMergeValues_FixesMixedScrapeIntervals reproduces the case in
+// TestMergeMatrix_FixesMixedScrapeIntervals reproduces the case in
 // jacksontj/promxy#734: with a single static anti-affinity, low-frequency
 // series get gap-filled with samples from the other downstream because their
 // natural gap exceeds 2×buffer. count_over_time on the merged result then
 // reports too many samples. With dynamic mode on, each series picks its own
 // buffer and no gap-fill happens.
-func TestMergeValues_FixesMixedScrapeIntervals(t *testing.T) {
+func TestMergeMatrix_FixesMixedScrapeIntervals(t *testing.T) {
 	// 60s-scrape series: a has samples at 0, 60s, 120s. b has 60s-scrape
 	// samples too, offset enough that they fall OUTSIDE the static
 	// buffer of a's samples but INSIDE the gap between consecutive a
@@ -109,11 +109,7 @@ func TestMergeValues_FixesMixedScrapeIntervals(t *testing.T) {
 	// each gap gets filled with the corresponding b sample. Result: a's
 	// samples plus b's samples interleaved. count_over_time over this
 	// would double. This is the bug from #734.
-	staticRes, err := MergeValues(staticBuffer, false, a, b, false)
-	if err != nil {
-		t.Fatalf("static MergeValues: %v", err)
-	}
-	staticMatrix := staticRes.(model.Matrix)
+	staticMatrix := mergeMatrix(staticBuffer, false, a, b, false)
 	if got := len(staticMatrix[0].Values); got != 6 {
 		t.Fatalf("static merge sanity check: expected 6 samples (the bug), got %d", got)
 	}
@@ -122,11 +118,7 @@ func TestMergeValues_FixesMixedScrapeIntervals(t *testing.T) {
 	// is the gap-fill threshold. The 60s gaps no longer trigger fill
 	// (they're at the threshold, not above it). Result: a's 3 samples,
 	// no spurious fills.
-	dynamicRes, err := MergeValues(staticBuffer, true, a, b, false)
-	if err != nil {
-		t.Fatalf("dynamic MergeValues: %v", err)
-	}
-	dynamicMatrix := dynamicRes.(model.Matrix)
+	dynamicMatrix := mergeMatrix(staticBuffer, true, a, b, false)
 	gotTimes := make([]int64, 0, len(dynamicMatrix[0].Values))
 	for _, p := range dynamicMatrix[0].Values {
 		gotTimes = append(gotTimes, int64(p.Timestamp))
@@ -137,10 +129,10 @@ func TestMergeValues_FixesMixedScrapeIntervals(t *testing.T) {
 	}
 }
 
-// TestMergeValues_FallbackWithFewSamples covers the safety net: when
+// TestMergeMatrix_FallbackWithFewSamples covers the safety net: when
 // a series has too few samples to estimate, the configured static buffer is
 // used unchanged, so existing behavior is preserved for short queries.
-func TestMergeValues_FallbackWithFewSamples(t *testing.T) {
+func TestMergeMatrix_FallbackWithFewSamples(t *testing.T) {
 	a := model.Matrix{
 		{
 			Metric: model.Metric{model.MetricNameLabel: "x"},
@@ -164,23 +156,19 @@ func TestMergeValues_FallbackWithFewSamples(t *testing.T) {
 	}
 
 	for _, dyn := range []bool{false, true} {
-		got, err := MergeValues(model.Time(15_000), dyn, a, b, false)
-		if err != nil {
-			t.Fatalf("dyn=%v: MergeValues: %v", dyn, err)
-		}
-		mat := got.(model.Matrix)
+		mat := mergeMatrix(model.Time(15_000), dyn, a, b, false)
 		if n := len(mat[0].Values); n != 2 {
 			t.Fatalf("dyn=%v: want 2 samples, got %d", dyn, n)
 		}
 	}
 }
 
-// TestMergeValues_PerSeriesBuffer makes sure two series in one
+// TestMergeMatrix_PerSeriesBuffer makes sure two series in one
 // matrix with different scrape intervals each get their own dynamically-
 // inferred buffer. A 60s-scrape series and a 10s-scrape series share the
 // same merge call, and we want neither to be touched by the other's
 // buffer choice.
-func TestMergeValues_PerSeriesBuffer(t *testing.T) {
+func TestMergeMatrix_PerSeriesBuffer(t *testing.T) {
 	slow := model.Metric{model.MetricNameLabel: "slow"}
 	fast := model.Metric{model.MetricNameLabel: "fast"}
 
@@ -209,11 +197,7 @@ func TestMergeValues_PerSeriesBuffer(t *testing.T) {
 
 	staticBuffer := model.Time(15_000) // 15s — wrong for both, illustrative
 
-	got, err := MergeValues(staticBuffer, true, a, b, false)
-	if err != nil {
-		t.Fatalf("MergeValues: %v", err)
-	}
-	matrix := got.(model.Matrix)
+	matrix := mergeMatrix(staticBuffer, true, a, b, false)
 	if len(matrix) != 2 {
 		t.Fatalf("want 2 series, got %d", len(matrix))
 	}
@@ -241,12 +225,12 @@ func TestMergeValues_PerSeriesBuffer(t *testing.T) {
 	}
 }
 
-// TestMergeValues_NarrowerThanStatic exercises the direction the
+// TestMergeMatrix_NarrowerThanStatic exercises the direction the
 // other tests don't: a fast (10s) scrape with a wide configured buffer.
 // The static buffer's gap-fill threshold is wide enough to suppress a
 // genuine missed-scrape fill from b; the dynamic estimate is tight
 // enough to splice it in.
-func TestMergeValues_NarrowerThanStatic(t *testing.T) {
+func TestMergeMatrix_NarrowerThanStatic(t *testing.T) {
 	// 10s scrape on a, with a single missed scrape between t=20 and
 	// t=40 (gap = 20s instead of 10s).
 	a := model.Matrix{
@@ -275,33 +259,27 @@ func TestMergeValues_NarrowerThanStatic(t *testing.T) {
 	// well under that, so b's filler never triggers — count_over_time
 	// undercounts.
 	staticBuffer := model.Time(30_000)
-	sv, err := MergeValues(staticBuffer, false, a, b, false)
-	if err != nil {
-		t.Fatalf("static MergeValues: %v", err)
-	}
-	if got := len(sv.(model.Matrix)[0].Values); got != 5 {
+	sv := mergeMatrix(staticBuffer, false, a, b, false)
+	if got := len(sv[0].Values); got != 5 {
 		t.Fatalf("static sanity: expected 5 (no fill), got %d", got)
 	}
 
 	// Dynamic: median gap 10s → buffer 5s. Gap-fill threshold 10s; a's
 	// 20s gap exceeds it, so b's filler at t=30 splices in.
-	dv, err := MergeValues(staticBuffer, true, a, b, false)
-	if err != nil {
-		t.Fatalf("dynamic MergeValues: %v", err)
-	}
-	if got := len(dv.(model.Matrix)[0].Values); got != 6 {
+	dv := mergeMatrix(staticBuffer, true, a, b, false)
+	if got := len(dv[0].Values); got != 6 {
 		t.Fatalf("dynamic should have spliced b's filler, got %d (want 6)", got)
 	}
 }
 
-// TestMergeValues_PreferMax confirms preferMax merge logic and
+// TestMergeMatrix_PreferMax confirms preferMax merge logic and
 // dynamic buffer inference are independent — turning dynamic on with
 // preferMax=true should still pick the larger value when a/b overlap.
 //
 // Note: the merge code unconditionally appends a's first sample without
 // running the preferMax check (line "if len(newValues) == 0"), so we only
 // assert the property on samples 2..N.
-func TestMergeValues_PreferMax(t *testing.T) {
+func TestMergeMatrix_PreferMax(t *testing.T) {
 	a := model.Matrix{{
 		Metric: model.Metric{model.MetricNameLabel: "x"},
 		Values: []model.SamplePair{
@@ -316,11 +294,7 @@ func TestMergeValues_PreferMax(t *testing.T) {
 		},
 	}}
 
-	got, err := MergeValues(model.Time(15_000), true, a, b, true)
-	if err != nil {
-		t.Fatalf("MergeValues: %v", err)
-	}
-	mat := got.(model.Matrix)
+	mat := mergeMatrix(model.Time(15_000), true, a, b, true)
 	if len(mat[0].Values) != 3 {
 		t.Fatalf("want 3 samples, got %d", len(mat[0].Values))
 	}
@@ -331,11 +305,11 @@ func TestMergeValues_PreferMax(t *testing.T) {
 	}
 }
 
-// TestMergeValues_MismatchedScrapeIntervals: a is scraped at 60s,
+// TestMergeMatrix_MismatchedScrapeIntervals: a is scraped at 60s,
 // b at 30s. The estimator anchors on the longer side (b, since after
 // the swap-for-longer-base it becomes a) and should pick b's interval.
 // Behavior we want: no spurious gap-fill, no double-counting.
-func TestMergeValues_MismatchedScrapeIntervals(t *testing.T) {
+func TestMergeMatrix_MismatchedScrapeIntervals(t *testing.T) {
 	a := model.Matrix{{
 		Metric: model.Metric{model.MetricNameLabel: "x"},
 		Values: []model.SamplePair{
@@ -350,11 +324,7 @@ func TestMergeValues_MismatchedScrapeIntervals(t *testing.T) {
 		},
 	}}
 
-	got, err := MergeValues(model.Time(15_000), true, a, b, false)
-	if err != nil {
-		t.Fatalf("MergeValues: %v", err)
-	}
-	mat := got.(model.Matrix)
+	mat := mergeMatrix(model.Time(15_000), true, a, b, false)
 	// b is the longer side → becomes the base. Median gap is 30s,
 	// buffer = 15s. a's samples fall within b's buffer so they all
 	// dedupe; result is just b's 5 samples.
@@ -363,11 +333,11 @@ func TestMergeValues_MismatchedScrapeIntervals(t *testing.T) {
 	}
 }
 
-// TestMergeValues_Histograms confirms the same dynamic estimate
+// TestMergeMatrix_Histograms confirms the same dynamic estimate
 // is applied to histogram merges, not just floats. Without this the
 // histogram-only series would still hit the original bug under mixed
 // scrape intervals.
-func TestMergeValues_Histograms(t *testing.T) {
+func TestMergeMatrix_Histograms(t *testing.T) {
 	mkH := func(ts model.Time, v float64) model.SampleHistogramPair {
 		return model.SampleHistogramPair{
 			Timestamp: ts,
@@ -391,14 +361,14 @@ func TestMergeValues_Histograms(t *testing.T) {
 	staticBuffer := model.Time(15_000) // wrong for 60s scrape
 
 	// Static: buggy fill, ends up with 6 histograms.
-	staticRes, _ := MergeValues(staticBuffer, false, a, b, false)
-	if got := len(staticRes.(model.Matrix)[0].Histograms); got != 6 {
+	staticRes := mergeMatrix(staticBuffer, false, a, b, false)
+	if got := len(staticRes[0].Histograms); got != 6 {
 		t.Fatalf("static sanity: expected 6 histograms (the bug), got %d", got)
 	}
 
 	// Dynamic: estimate from histogram timestamps directly, no fill.
-	dynRes, _ := MergeValues(staticBuffer, true, a, b, false)
-	if got := len(dynRes.(model.Matrix)[0].Histograms); got != 3 {
+	dynRes := mergeMatrix(staticBuffer, true, a, b, false)
+	if got := len(dynRes[0].Histograms); got != 3 {
 		t.Fatalf("dynamic histograms: want 3, got %d", got)
 	}
 }
