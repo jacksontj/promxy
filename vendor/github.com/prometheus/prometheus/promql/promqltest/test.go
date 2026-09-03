@@ -24,7 +24,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -1212,16 +1211,11 @@ func atModifierTestCases(exprStr string, evalTime time.Time) ([]atModifierTestCa
 	}
 	ts := timestamp.FromTime(evalTime)
 
-	var (
-		// Fork: parser.Inspect can call the visitor concurrently from
-		// per-child goroutines. Lock the shared bookkeeping accordingly.
-		mu                       sync.Mutex
-		containsNonStepInvariant bool
-	)
+	containsNonStepInvariant := false
 	// Setting the @ timestamp for all selectors to be evalTime.
 	// If there is a subquery, then the selectors inside it don't get the @ timestamp.
 	// If any selector already has the @ timestamp set, then it is untouched.
-	parser.Inspect(context.TODO(), &parser.EvalStmt{Expr: expr}, func(node parser.Node, path []parser.Node) error {
+	_, _ = parser.Inspect(context.TODO(), &parser.EvalStmt{Expr: expr}, func(node parser.Node, path []parser.Node) error {
 		if hasAtModifier(path) {
 			// There is a subquery with timestamp in the path,
 			// hence don't change any timestamps further.
@@ -1229,33 +1223,23 @@ func atModifierTestCases(exprStr string, evalTime time.Time) ([]atModifierTestCa
 		}
 		switch n := node.(type) {
 		case *parser.VectorSelector:
-			mu.Lock()
 			if n.Timestamp == nil {
 				n.Timestamp = makeInt64Pointer(ts)
 			}
-			mu.Unlock()
 
 		case *parser.MatrixSelector:
-			mu.Lock()
 			if vs := n.VectorSelector.(*parser.VectorSelector); vs.Timestamp == nil {
 				vs.Timestamp = makeInt64Pointer(ts)
 			}
-			mu.Unlock()
 
 		case *parser.SubqueryExpr:
-			mu.Lock()
 			if n.Timestamp == nil {
 				n.Timestamp = makeInt64Pointer(ts)
 			}
-			mu.Unlock()
 
 		case *parser.Call:
 			_, ok := promql.AtModifierUnsafeFunctions[n.Func.Name]
-			if ok {
-				mu.Lock()
-				containsNonStepInvariant = true
-				mu.Unlock()
-			}
+			containsNonStepInvariant = containsNonStepInvariant || ok
 		}
 		return nil
 	}, nil)

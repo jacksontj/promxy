@@ -230,9 +230,9 @@ type VectorSelector struct {
 	PosRange posrange.PositionRange
 }
 
-func (m *VectorSelector) GetLookbackDelta(d time.Duration) time.Duration {
-	if m.LookbackDelta > 0 {
-		return m.LookbackDelta
+func (e *VectorSelector) GetLookbackDelta(d time.Duration) time.Duration {
+	if e.LookbackDelta > 0 {
+		return e.LookbackDelta
 	}
 	return d
 }
@@ -353,7 +353,6 @@ func Walk(ctx context.Context, v Visitor, s *EvalStmt, node Node, path []Node, n
 		if err != nil {
 			return node, err
 		}
-
 	}
 
 	var err error
@@ -362,49 +361,62 @@ func Walk(ctx context.Context, v Visitor, s *EvalStmt, node Node, path []Node, n
 	}
 	path = append(path, node)
 
-	// Walk children. When a NodeReplacer is installed we may rewrite the
-	// AST, so we have to wait for each child to return before installing
-	// the (possibly new) value via SetChild — and we have to do it
-	// sequentially to avoid concurrent SetChild writes racing against
-	// PositionRange / Children reads on shared parents.
+	// Walk children. Which traversal we use is decided by the NodeReplacer:
 	//
-	// When there is no NodeReplacer the visit is read-only: we don't need
-	// SetChild at all and can fan out children to goroutines for the I/O
-	// parallelism that promxy depends on (e.g. populateSeries firing one
-	// downstream HTTP request per VectorSelector).
+	//   - NodeReplacer installed: this is the path that does I/O. promxy's
+	//     NodeReplacer issues one downstream query per pushed-down subtree
+	//     and populateSeries calls querier.Select per selector, so sibling
+	//     subtrees are walked in parallel to overlap those fetches. Each
+	//     goroutine gets its own copy of path, and SetChild only runs once
+	//     every child has returned -- nothing mutates a node while a sibling
+	//     goroutine can still read it.
+	//
+	//   - No NodeReplacer: the walk is read-only and does no I/O, so there
+	//     is nothing to overlap. Stay sequential, because visitors all over
+	//     prometheus keep unsynchronised per-walk state -- e.g. upstream's
+	//     rules.buildDependencyMap, which crashed with "concurrent map
+	//     writes" while these walks were parallel (promxy#809).
 	children := Children(node)
-	if nr != nil {
-		for i, e := range children {
-			childNode, err := Walk(ctx, v, s, e, path, nr)
-			if err != nil {
+	switch {
+	case nr == nil:
+		for _, e := range children {
+			if _, err := Walk(ctx, v, s, e, path, nr); err != nil {
 				return node, err
 			}
-			SetChild(node, i, childNode)
 		}
-	} else if len(children) == 1 {
-		// Single-child fast path: avoid spawning a goroutine for the
-		// linear chains (UnaryExpr / ParenExpr / StepInvariantExpr /
-		// MatrixSelector) that dominate AST shapes.
-		if _, err := Walk(ctx, v, s, children[0], path, nr); err != nil {
+
+	case len(children) == 1:
+		// Single-child fast path: no goroutine for the linear chains
+		// (UnaryExpr / ParenExpr / StepInvariantExpr / MatrixSelector)
+		// that dominate AST shapes.
+		childNode, err := Walk(ctx, v, s, children[0], path, nr)
+		if err != nil {
 			return node, err
 		}
-	} else {
-		wg := &sync.WaitGroup{}
+		SetChild(node, 0, childNode)
+
+	default:
+		var wg sync.WaitGroup
+		newChildren := make([]Node, len(children))
 		errs := make([]error, len(children))
 		for i, e := range children {
 			wg.Add(1)
 			go func(i int, e Node) {
 				defer wg.Done()
-				if _, childErr := Walk(ctx, v, s, e, append([]Node{}, path...), nr); childErr != nil {
-					errs[i] = childErr
-				}
+				newChildren[i], errs[i] = Walk(ctx, v, s, e, append([]Node{}, path...), nr)
 			}(i, e)
 		}
 		wg.Wait()
+
+		// If there was an error we return the first one
 		for _, err := range errs {
 			if err != nil {
 				return node, err
 			}
+		}
+
+		for i, childNode := range newChildren {
+			SetChild(node, i, childNode)
 		}
 	}
 
@@ -417,7 +429,7 @@ func ExtractSelectors(expr Expr) [][]*labels.Matcher {
 		selectors [][]*labels.Matcher
 		l         sync.Mutex
 	)
-	Inspect(context.TODO(), &EvalStmt{Expr: expr}, func(node Node, _ []Node) error {
+	_, _ = Inspect(context.TODO(), &EvalStmt{Expr: expr}, func(node Node, _ []Node) error {
 		vs, ok := node.(*VectorSelector)
 		if ok {
 			l.Lock()
@@ -443,8 +455,7 @@ func (f inspector) Visit(node Node, path []Node) (Visitor, error) {
 // f(node, path); node must not be nil. If f returns a nil error, Inspect invokes f
 // for all the non-nil children of node, recursively.
 func Inspect(ctx context.Context, s *EvalStmt, f inspector, nr NodeReplacer) (Node, error) {
-	//nolint: errcheck
-	return Walk(ctx, inspector(f), s, s.Expr, nil, nr)
+	return Walk(ctx, f, s, s.Expr, nil, nr)
 }
 
 func SetChild(node Node, i int, child Node) {
@@ -457,12 +468,13 @@ func SetChild(node Node, i int, child Node) {
 	case *AggregateExpr:
 		// While this does not look nice, it should avoid unnecessary allocations
 		// caused by slice resizing
-		if n.Expr == nil && n.Param == nil {
-		} else if n.Expr == nil {
+		switch {
+		case n.Expr == nil && n.Param == nil:
+		case n.Expr == nil:
 			n.Param = child.(Expr)
-		} else if n.Param == nil {
+		case n.Param == nil:
 			n.Expr = child.(Expr)
-		} else {
+		default:
 			switch i {
 			case 0:
 				n.Expr = child.(Expr)
