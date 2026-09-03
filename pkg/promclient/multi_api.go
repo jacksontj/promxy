@@ -139,11 +139,12 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string, matchers []str
 		ls       model.Fingerprint
 	}
 
-	resultChans := make([]chan chanResult, len(m.apis))
+	// Buffered to len(apis): the loop below can return before draining, and a
+	// blocked sender would leak its goroutine.
+	resultChan := make(chan chanResult, len(m.apis))
 	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
-		resultChans[i] = make(chan chanResult, 1)
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API, label string) {
 			start := time.Now()
@@ -160,10 +161,9 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string, matchers []str
 				err:      NormalizePromError(err),
 				ls:       m.apiFingerprints[i],
 			}
-		}(i, resultChans[i], api, label)
+		}(i, resultChan, api, label)
 	}
 
-	// Wait for results as we get them
 	var result []model.LabelValue
 	warnings := make(promhttputil.WarningSet)
 	var lastError error
@@ -173,7 +173,7 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string, matchers []str
 		case <-ctx.Done():
 			return nil, warnings.Warnings(), ctx.Err()
 
-		case ret := <-resultChans[i]:
+		case ret := <-resultChan:
 			warnings.AddWarnings(ret.warnings)
 			outstandingRequests[ret.ls]--
 			if ret.err != nil {
@@ -217,11 +217,12 @@ func (m *MultiAPI) LabelNames(ctx context.Context, matchers []string, startTime 
 		ls       model.Fingerprint
 	}
 
-	resultChans := make([]chan chanResult, len(m.apis))
+	// Buffered to len(apis): the loop below can return before draining, and a
+	// blocked sender would leak its goroutine.
+	resultChan := make(chan chanResult, len(m.apis))
 	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
-		resultChans[i] = make(chan chanResult, 1)
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API) {
 			start := time.Now()
@@ -238,10 +239,9 @@ func (m *MultiAPI) LabelNames(ctx context.Context, matchers []string, startTime 
 				err:      NormalizePromError(err),
 				ls:       m.apiFingerprints[i],
 			}
-		}(i, resultChans[i], api)
+		}(i, resultChan, api)
 	}
 
-	// Wait for results as we get them
 	result := make(map[string]struct{})
 	warnings := make(promhttputil.WarningSet)
 	var lastError error
@@ -251,7 +251,7 @@ func (m *MultiAPI) LabelNames(ctx context.Context, matchers []string, startTime 
 		case <-ctx.Done():
 			return nil, warnings.Warnings(), ctx.Err()
 
-		case ret := <-resultChans[i]:
+		case ret := <-resultChan:
 			warnings.AddWarnings(ret.warnings)
 			outstandingRequests[ret.ls]--
 			if ret.err != nil {
@@ -295,14 +295,16 @@ func (m *MultiAPI) scatterMerge(ctx context.Context, op string, call func(contex
 	defer childContextCancel()
 
 	type chanResult struct {
+		i  int // index of the API that produced this result
 		ss storage.SeriesSet
 		ls model.Fingerprint
 	}
-	resultChans := make([]chan chanResult, len(m.apis))
+	// Buffered to len(apis): the loop below can return before draining, and a
+	// blocked sender would leak its goroutine.
+	resultChan := make(chan chanResult, len(m.apis))
 	outstandingRequests := make(map[model.Fingerprint]int)
 
 	for i, api := range m.apis {
-		resultChans[i] = make(chan chanResult, 1)
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API) {
 			start := time.Now()
@@ -313,11 +315,14 @@ func (m *MultiAPI) scatterMerge(ctx context.Context, op string, call func(contex
 				status = "error"
 			}
 			m.recordMetric(i, op, status, took.Seconds())
-			retChan <- chanResult{ss: ss, ls: m.apiFingerprints[i]}
-		}(i, resultChans[i], api)
+			retChan <- chanResult{i: i, ss: ss, ls: m.apiFingerprints[i]}
+		}(i, resultChan, api)
 	}
 
-	var sets []storage.SeriesSet
+	// Parked in slots and merged below in API order: mergeAntiAffinity
+	// resolves duplicate samples in the order it receives the sets, so the
+	// result must not depend on which replica answered first.
+	slots := make([]storage.SeriesSet, len(m.apis))
 	var warnings annotations.Annotations
 	var lastError error
 	successMap := make(map[model.Fingerprint]int)
@@ -326,7 +331,7 @@ func (m *MultiAPI) scatterMerge(ctx context.Context, op string, call func(contex
 		case <-ctx.Done():
 			return promapi.NewSeriesSet(nil, warnings, ctx.Err())
 
-		case ret := <-resultChans[i]:
+		case ret := <-resultChan:
 			outstandingRequests[ret.ls]--
 			warnings = MergeAnnotations(warnings, ret.ss.Warnings())
 			if err := NormalizePromError(ret.ss.Err()); err != nil {
@@ -336,7 +341,7 @@ func (m *MultiAPI) scatterMerge(ctx context.Context, op string, call func(contex
 				lastError = err
 			} else {
 				successMap[ret.ls]++
-				sets = append(sets, ret.ss)
+				slots[ret.i] = ret.ss
 			}
 		}
 	}
@@ -344,6 +349,13 @@ func (m *MultiAPI) scatterMerge(ctx context.Context, op string, call func(contex
 	for k := range outstandingRequests {
 		if successMap[k] < m.requiredCount {
 			return promapi.NewSeriesSet(nil, warnings, errors.Wrap(lastError, "Unable to fetch from downstream servers"))
+		}
+	}
+
+	sets := make([]storage.SeriesSet, 0, len(slots))
+	for _, ss := range slots {
+		if ss != nil {
+			sets = append(sets, ss)
 		}
 	}
 
@@ -369,17 +381,19 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 	defer childContextCancel()
 
 	type chanResult struct {
+		i        int // index of the API that produced this result
 		v        []model.LabelSet
 		warnings v1.Warnings
 		err      error
 		ls       model.Fingerprint
 	}
 
-	resultChans := make([]chan chanResult, len(m.apis))
+	// Buffered to len(apis): the loop below can return before draining, and a
+	// blocked sender would leak its goroutine.
+	resultChan := make(chan chanResult, len(m.apis))
 	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
-		resultChans[i] = make(chan chanResult, 1)
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API) {
 			start := time.Now()
@@ -391,16 +405,20 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 				m.recordMetric(i, "series", "success", took.Seconds())
 			}
 			retChan <- chanResult{
+				i:        i,
 				v:        result,
 				warnings: w,
 				err:      NormalizePromError(err),
 				ls:       m.apiFingerprints[i],
 			}
-		}(i, resultChans[i], api)
+		}(i, resultChan, api)
 	}
 
-	// Wait for results as we get them
-	var result []model.LabelSet
+	// Parked in slots and merged below in API order: the result is unsorted
+	// and MergeLabelSets keeps the first labelset per fingerprint, so the
+	// merge order is observable.
+	slots := make([][]model.LabelSet, len(m.apis))
+	responded := make([]bool, len(m.apis))
 	warnings := make(promhttputil.WarningSet)
 	var lastError error
 	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
@@ -409,7 +427,7 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 		case <-ctx.Done():
 			return nil, warnings.Warnings(), ctx.Err()
 
-		case ret := <-resultChans[i]:
+		case ret := <-resultChan:
 			warnings.AddWarnings(ret.warnings)
 			outstandingRequests[ret.ls]--
 			if ret.err != nil {
@@ -420,11 +438,8 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 				lastError = ret.err
 			} else {
 				successMap[ret.ls]++
-				if result == nil {
-					result = ret.v
-				} else {
-					result = MergeLabelSets(result, ret.v)
-				}
+				slots[ret.i] = ret.v
+				responded[ret.i] = true
 			}
 		}
 	}
@@ -433,6 +448,20 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 	for k := range outstandingRequests {
 		if successMap[k] < m.requiredCount {
 			return nil, warnings.Warnings(), errors.Wrap(lastError, "Unable to fetch from downstream servers")
+		}
+	}
+
+	var result []model.LabelSet
+	var haveResult bool
+	for i, v := range slots {
+		if !responded[i] {
+			continue
+		}
+		if !haveResult {
+			result = v
+			haveResult = true
+		} else {
+			result = MergeLabelSets(result, v)
 		}
 	}
 
@@ -452,16 +481,18 @@ func (m *MultiAPI) Metadata(ctx context.Context, metric, limit string) (map[stri
 	defer childContextCancel()
 
 	type chanResult struct {
+		i   int // index of the API that produced this result
 		v   map[string][]v1.Metadata
 		err error
 		ls  model.Fingerprint
 	}
 
-	resultChans := make([]chan chanResult, len(m.apis))
+	// Buffered to len(apis): the loop below can return before draining, and a
+	// blocked sender would leak its goroutine.
+	resultChan := make(chan chanResult, len(m.apis))
 	outstandingRequests := make(map[model.Fingerprint]int) // fingerprint -> outstanding
 
 	for i, api := range m.apis {
-		resultChans[i] = make(chan chanResult, 1)
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API, metric, limit string) {
 			start := time.Now()
@@ -473,15 +504,19 @@ func (m *MultiAPI) Metadata(ctx context.Context, metric, limit string) (map[stri
 				m.recordMetric(i, "query", "success", took.Seconds())
 			}
 			retChan <- chanResult{
+				i:   i,
 				v:   result,
 				err: NormalizePromError(err),
 				ls:  m.apiFingerprints[i],
 			}
-		}(i, resultChans[i], api, metric, limit)
+		}(i, resultChan, api, metric, limit)
 	}
 
-	// Wait for results as we get them
-	var result map[string][]v1.Metadata
+	// Parked in slots and merged below in API order: the merge is
+	// first-writer-wins per metric name, so the merge order decides which
+	// downstream's metadata wins.
+	slots := make([]map[string][]v1.Metadata, len(m.apis))
+	responded := make([]bool, len(m.apis))
 	var lastError error
 	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
 	for i := 0; i < len(m.apis); i++ {
@@ -489,7 +524,7 @@ func (m *MultiAPI) Metadata(ctx context.Context, metric, limit string) (map[stri
 		case <-ctx.Done():
 			return nil, ctx.Err()
 
-		case ret := <-resultChans[i]:
+		case ret := <-resultChan:
 			outstandingRequests[ret.ls]--
 			if ret.err != nil {
 				// If there aren't enough outstanding requests to possibly succeed, no reason to wait
@@ -499,16 +534,8 @@ func (m *MultiAPI) Metadata(ctx context.Context, metric, limit string) (map[stri
 				lastError = ret.err
 			} else {
 				successMap[ret.ls]++
-				if result == nil {
-					result = ret.v
-				} else {
-					// Merge metadata!
-					for k, v := range ret.v {
-						if _, ok := result[k]; !ok {
-							result[k] = v
-						}
-					}
-				}
+				slots[ret.i] = ret.v
+				responded[ret.i] = true
 			}
 		}
 	}
@@ -520,13 +547,47 @@ func (m *MultiAPI) Metadata(ctx context.Context, metric, limit string) (map[stri
 		}
 	}
 
+	var result map[string][]v1.Metadata
+	var haveResult bool
+	for i, v := range slots {
+		if !responded[i] {
+			continue
+		}
+		if !haveResult {
+			result = v
+			haveResult = true
+		} else {
+			// Merge metadata!
+			for k, vv := range v {
+				if _, ok := result[k]; !ok {
+					result[k] = vv
+				}
+			}
+		}
+	}
+
 	return result, nil
 }
 
+// exemplarKey is the identity of a single exemplar within a series. Prometheus
+// identifies an exemplar by its timestamp, value and labels; a series may
+// legitimately carry multiple exemplars at the same timestamp (with different
+// trace IDs), so all three are part of the key.
+type exemplarKey struct {
+	ts     model.Time
+	value  model.SampleValue
+	labels string
+}
+
+func newExemplarKey(e v1.Exemplar) exemplarKey {
+	// model.LabelSet.String() sorts label names, so it is a stable key.
+	return exemplarKey{ts: e.Timestamp, value: e.Value, labels: e.Labels.String()}
+}
+
 // QueryExemplars performs a query for exemplars by the given query and time range.
-// We fan the query out to every server-group and concatenate the per-series
-// exemplar lists, deduplicating by series labels (sum-style merge — the union of
-// exemplars from all server-groups for the same series).
+// We fan the query out to every server-group and merge the per-series exemplar
+// lists (set-style union -- the same exemplar returned by multiple downstreams,
+// e.g. HA replicas of the same prometheus, is returned only once).
 func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
 	childContext, childContextCancel := context.WithCancel(ctx)
 	defer childContextCancel()
@@ -537,11 +598,12 @@ func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, 
 		ls  model.Fingerprint
 	}
 
-	resultChans := make([]chan chanResult, len(m.apis))
+	// Buffered to len(apis): the loop below can return before draining, and a
+	// blocked sender would leak its goroutine.
+	resultChan := make(chan chanResult, len(m.apis))
 	outstandingRequests := make(map[model.Fingerprint]int)
 
 	for i, api := range m.apis {
-		resultChans[i] = make(chan chanResult, 1)
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API) {
 			start := time.Now()
@@ -557,11 +619,14 @@ func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, 
 				err: NormalizePromError(err),
 				ls:  m.apiFingerprints[i],
 			}
-		}(i, resultChans[i], api)
+		}(i, resultChan, api)
 	}
 
-	// Wait for results, merging by series labels.
+	// Merge by series labels.
 	merged := map[model.Fingerprint]*v1.ExemplarQueryResult{}
+	// Per-series set of exemplars we've already collected, used to drop the
+	// duplicates that the fan-out across HA replicas necessarily returns.
+	seen := map[model.Fingerprint]map[exemplarKey]struct{}{}
 	var lastError error
 	successMap := make(map[model.Fingerprint]int)
 	for i := 0; i < len(m.apis); i++ {
@@ -569,7 +634,7 @@ func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, 
 		case <-ctx.Done():
 			return nil, ctx.Err()
 
-		case ret := <-resultChans[i]:
+		case ret := <-resultChan:
 			outstandingRequests[ret.ls]--
 			if ret.err != nil {
 				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
@@ -584,11 +649,19 @@ func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, 
 				fp := qr.SeriesLabels.Fingerprint()
 				existing, ok := merged[fp]
 				if !ok {
-					cp := qr
-					merged[fp] = &cp
-					continue
+					existing = &v1.ExemplarQueryResult{SeriesLabels: qr.SeriesLabels}
+					merged[fp] = existing
+					seen[fp] = make(map[exemplarKey]struct{}, len(qr.Exemplars))
 				}
-				existing.Exemplars = append(existing.Exemplars, qr.Exemplars...)
+				seenSeries := seen[fp]
+				for _, e := range qr.Exemplars {
+					k := newExemplarKey(e)
+					if _, dup := seenSeries[k]; dup {
+						continue
+					}
+					seenSeries[k] = struct{}{}
+					existing.Exemplars = append(existing.Exemplars, e)
+				}
 			}
 		}
 	}
@@ -601,7 +674,30 @@ func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, 
 
 	out := make([]v1.ExemplarQueryResult, 0, len(merged))
 	for _, qr := range merged {
+		// The downstream API returns exemplars ordered by timestamp; preserve
+		// that ordering after merging results from multiple downstreams.
+		SortExemplars(qr.Exemplars)
 		out = append(out, *qr)
 	}
+	// Map iteration order is random, so sort by series labels to make repeated
+	// identical requests return identical results.
+	sort.Slice(out, func(i, j int) bool { return out[i].SeriesLabels.String() < out[j].SeriesLabels.String() })
 	return out, nil
+}
+
+// SortExemplars orders exemplars by timestamp, then value, then labels. The
+// ordering must be total -- over exactly the fields exemplarKey identifies an
+// exemplar by -- because downstream responses are merged in completion order,
+// so timestamp alone would leave ties resolved by whichever replica was first.
+func SortExemplars(exemplars []v1.Exemplar) {
+	sort.Slice(exemplars, func(i, j int) bool {
+		a, b := exemplars[i], exemplars[j]
+		if a.Timestamp != b.Timestamp {
+			return a.Timestamp < b.Timestamp
+		}
+		if a.Value != b.Value {
+			return a.Value < b.Value
+		}
+		return a.Labels.String() < b.Labels.String()
+	})
 }
