@@ -66,6 +66,31 @@ func init() {
 	prometheus.MustRegister(serverGroupTargets)
 }
 
+// DefaultRemoteReadTimeout bounds a remote_read request for a server group that
+// sets no explicit timeout.
+const DefaultRemoteReadTimeout = 2 * time.Minute
+
+// newRemoteReadConfig builds the remote_read client config for a server group.
+//
+// Note that remote.ClientConfig.Timeout becomes a deadline on the whole read,
+// while cfg.Timeout bounds only the response headers on the HTTP path (it is
+// wired to Transport.ResponseHeaderTimeout). Reusing the knob here is therefore
+// a stricter bound than it is there, which is deliberate: remote_read carries
+// the largest payloads, so it is the path where a stuck request costs the most.
+func newRemoteReadConfig(cfg *Config, u *url.URL) *remote.ClientConfig {
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = DefaultRemoteReadTimeout
+	}
+	return &remote.ClientConfig{
+		URL:              &config_util.URL{URL: u},
+		HTTPClientConfig: cfg.HTTPConfig.HTTPConfig,
+		SigV4Config:      cfg.HTTPConfig.SigV4Config,
+		Timeout:          model.Duration(timeout),
+		ChunkedReadLimit: prom_config.DefaultChunkedReadLimit,
+	}
+}
+
 // New creates a new servergroup
 func NewServerGroup() (*ServerGroup, error) {
 	ctx, ctxCancel := context.WithCancel(context.Background())
@@ -343,14 +368,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 
 				if cfg.RemoteRead {
 					u.Path = path.Join(u.Path, cfg.RemoteReadPath)
-					cfg := &remote.ClientConfig{
-						URL:              &config_util.URL{u},
-						HTTPClientConfig: cfg.HTTPConfig.HTTPConfig,
-						SigV4Config:      cfg.HTTPConfig.SigV4Config,
-						Timeout:          model.Duration(time.Minute * 2),
-						ChunkedReadLimit: prom_config.DefaultChunkedReadLimit,
-					}
-					remoteStorageClient, err := remote.NewReadClient("foo", cfg)
+					remoteStorageClient, err := remote.NewReadClient("foo", newRemoteReadConfig(cfg, u))
 					if err != nil {
 						return err
 					}

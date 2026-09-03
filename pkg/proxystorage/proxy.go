@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"sort"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -269,6 +270,30 @@ func (p *ProxyStorage) ConfigHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// trimMetadataToLimit drops entries from metadata until at most limit remain,
+// keeping the lowest metric names by byte order.
+//
+// The ordering matters: map iteration is randomized, so picking survivors as
+// they come out of the range would leave two identical requests against an
+// unchanged downstream returning different subsets. The API guarantees no
+// particular ordering, but it should at least be reproducible.
+func trimMetadataToLimit(metadata map[string][]v1.Metadata, limit int) {
+	if limit < 0 {
+		limit = 0
+	}
+	if len(metadata) <= limit {
+		return
+	}
+	names := make([]string, 0, len(metadata))
+	for name := range metadata {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names[limit:] {
+		delete(metadata, name)
+	}
+}
+
 // MetadataHandler is an implementation of the metadata handler within the prometheus API
 func (p *ProxyStorage) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	// Check that "limit" is valid
@@ -287,15 +312,8 @@ func (p *ProxyStorage) MetadataHandler(w http.ResponseWriter, r *http.Request) {
 	metadata, err := state.client.Metadata(r.Context(), r.FormValue("metric"), r.FormValue("limit"))
 
 	// Trim the results to the requested limit
-	if limit != nil && len(metadata) > *limit {
-		count := 0
-		for k := range metadata {
-			if count < *limit {
-				count++
-			} else {
-				delete(metadata, k)
-			}
-		}
+	if limit != nil {
+		trimMetadataToLimit(metadata, *limit)
 	}
 
 	var v map[string]interface{}
