@@ -152,10 +152,13 @@ func mergeAntiAffinity(antiAffinity model.Time, dynamic bool, preferMax bool) st
 	}
 }
 
-// sortedSeriesSet materializes ss and returns it sorted by labels, which
-// storage.NewMergeSeriesSet requires of its inputs. Warnings and errors are
-// preserved.
-func sortedSeriesSet(ss storage.SeriesSet) storage.SeriesSet {
+// SortSeriesSet materializes ss and returns it sorted by labels, which is what
+// storage.NewMergeSeriesSet requires of its inputs and what a
+// Querier.Select(sortSeries=true) must return. Only the series handles are
+// collected -- samples stay behind their iterators -- so the cost is a slice of
+// pointers plus the sort. Warnings and errors are preserved; both are read
+// after draining, when they are final.
+func SortSeriesSet(ss storage.SeriesSet) storage.SeriesSet {
 	var series []storage.Series
 	for ss.Next() {
 		series = append(series, ss.At())
@@ -179,7 +182,7 @@ func MergeSeriesSets(antiAffinity model.Time, dynamic bool, preferMax bool, sets
 	}
 	sorted := make([]storage.SeriesSet, len(sets))
 	for i, s := range sets {
-		sorted[i] = sortedSeriesSet(s)
+		sorted[i] = SortSeriesSet(s)
 	}
 	// limit 0 = unlimited; the merge func applies anti-affinity to same-labeled
 	// series across the sets.

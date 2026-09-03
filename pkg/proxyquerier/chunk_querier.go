@@ -2,7 +2,6 @@ package proxyquerier
 
 import (
 	"context"
-	"sort"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
@@ -25,21 +24,7 @@ type ProxyChunkQuerier struct {
 
 // Select fetches the matching series as samples and re-encodes them as chunks.
 // The remote-read streaming API requires series to be sorted by label set, so
-// the result is always sorted here (ProxyQuerier.Select does not guarantee an
-// order); the sortSeries hint is therefore honored unconditionally.
-func (h *ProxyChunkQuerier) Select(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.ChunkSeriesSet {
-	ss := h.ProxyQuerier.Select(ctx, sortSeries, hints, matchers...)
-
-	// ProxyQuerier already materializes the full result, so collecting and
-	// sorting here adds no extra round-trips.
-	var series []storage.Series
-	for ss.Next() {
-		series = append(series, ss.At())
-	}
-	sort.Slice(series, func(i, j int) bool {
-		return labels.Compare(series[i].Labels(), series[j].Labels()) < 0
-	})
-
-	// ss.Err()/ss.Warnings() are only final once iteration is drained above.
-	return storage.NewSeriesSetToChunkSet(NewSeriesSet(series, ss.Warnings(), ss.Err()))
+// the sort is requested unconditionally regardless of the caller's hint.
+func (h *ProxyChunkQuerier) Select(ctx context.Context, _ bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.ChunkSeriesSet {
+	return storage.NewSeriesSetToChunkSet(h.ProxyQuerier.Select(ctx, true, hints, matchers...))
 }
