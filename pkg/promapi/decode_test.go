@@ -254,3 +254,74 @@ func BenchmarkDecodeModelValueStdlib(b *testing.B) {
 		}
 	}
 }
+
+// TestDecodeVectorMissingSample covers vector entries carrying neither a
+// "value" nor a "histogram". Such an entry must surface as a decode error: the
+// series it would otherwise produce holds a nil chunks.Sample, which panics the
+// moment anything iterates it.
+func TestDecodeVectorMissingSample(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "only_metric",
+			body: `{"status":"success","data":{"resultType":"vector","result":[` +
+				`{"metric":{"__name__":"foo"}}]}}`,
+		},
+		{
+			name: "null_entry",
+			body: `{"status":"success","data":{"resultType":"vector","result":[null]}}`,
+		},
+		{
+			name: "matrix_shaped_entry",
+			body: `{"status":"success","data":{"resultType":"vector","result":[` +
+				`{"metric":{"__name__":"foo"},"values":[[100.000,"1"]]}]}}`,
+		},
+		{
+			// The whole response is rejected rather than silently truncated to
+			// the entries that happened to be well-formed.
+			name: "one_bad_entry_among_good",
+			body: `{"status":"success","data":{"resultType":"vector","result":[` +
+				`{"metric":{"__name__":"up","job":"a"},"value":[100.000,"1"]},` +
+				`{"metric":{"__name__":"up","job":"b"}}]}}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ss := DecodeSeriesSet([]byte(tc.body))
+			n, samples := 0, 0
+			for ss.Next() {
+				n++
+				// Iterating is what panics on a nil sample.
+				it := ss.At().Iterator(nil)
+				for it.Next() != chunkenc.ValNone {
+					samples++
+				}
+			}
+			if n != 0 || samples != 0 {
+				t.Errorf("expected no series from a malformed response, got %d series / %d samples", n, samples)
+			}
+			if ss.Err() == nil {
+				t.Fatal("expected a decode error, got nil")
+			}
+			if !strings.Contains(ss.Err().Error(), `neither a "value" nor a "histogram"`) {
+				t.Fatalf("error does not name the missing fields: %v", ss.Err())
+			}
+		})
+	}
+}
+
+// TestDecodeMatrixMissingSamples pins the matrix counterpart: an entry with
+// neither "values" nor "histograms" yields a sample-less series rather than an
+// error. No nil sample is ever built there, and a caller can tell an empty
+// series from real data -- which is also what prometheus/common's
+// model.SampleStream decoding produces for the same body.
+func TestDecodeMatrixMissingSamples(t *testing.T) {
+	body := `{"status":"success","data":{"resultType":"matrix","result":[` +
+		`{"metric":{"__name__":"foo"}}]}}`
+	got := dumpSeriesSet(t, DecodeSeriesSet([]byte(body)))
+	if len(got) != 1 || got[`{__name__="foo"}`] != "" {
+		t.Fatalf("expected one sample-less series, got %v", got)
+	}
+}
