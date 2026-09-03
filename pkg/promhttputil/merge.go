@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
@@ -454,6 +454,19 @@ func mergeHistogramSamples(antiAffinityBuffer model.Time, a, b []model.SampleHis
 	return newValues
 }
 
+// minDynamicGaps is the smallest number of inter-sample gaps we'll accept
+// before trusting a dynamic estimate; below that a single odd gap would
+// dominate the median.
+const minDynamicGaps = 3
+
+// sampleTimestamp and histogramTimestamp are the timestamp accessors handed
+// to dynamicAntiAffinityFrom. They're plain (non-capturing) functions so the
+// estimator can walk either sample type without materialising a
+// []model.Time copy of the series.
+func sampleTimestamp(p model.SamplePair) model.Time { return p.Timestamp }
+
+func histogramTimestamp(p model.SampleHistogramPair) model.Time { return p.Timestamp }
+
 // dynamicAntiAffinity infers a per-series anti-affinity buffer from the
 // inter-sample spacing of the longer side. Returns half the median gap and
 // ok=true when at least minDynamicGaps gaps are available; returns ok=false
@@ -465,45 +478,46 @@ func mergeHistogramSamples(antiAffinityBuffer model.Time, a, b []model.SampleHis
 // gap models "scrape interval / 2" — the same value the existing static
 // `anti_affinity` is documented to want.
 func dynamicAntiAffinity(a, b []model.SamplePair) (model.Time, bool) {
-	at := make([]model.Time, len(a))
-	for i, p := range a {
-		at[i] = p.Timestamp
-	}
-	bt := make([]model.Time, len(b))
-	for i, p := range b {
-		bt[i] = p.Timestamp
-	}
-	return dynamicAntiAffinityFromTimes(at, bt)
+	return dynamicAntiAffinityFrom(a, b, sampleTimestamp)
 }
 
-// dynamicAntiAffinityFromTimes is the timestamp-only worker behind
-// dynamicAntiAffinity. Lets the histogram path (which carries
-// SampleHistogramPair, not SamplePair) share the same estimator.
-func dynamicAntiAffinityFromTimes(a, b []model.Time) (model.Time, bool) {
-	const minDynamicGaps = 3
-
-	gaps := make([]model.Time, 0, len(a))
-	for i := 1; i < len(a); i++ {
-		if d := a[i] - a[i-1]; d > 0 {
-			gaps = append(gaps, d)
-		}
-	}
+// dynamicAntiAffinityFrom is the worker behind dynamicAntiAffinity, generic
+// over the sample type so the histogram path (which carries
+// SampleHistogramPair, not SamplePair) shares the same estimator. ts reads
+// the timestamp out of one sample; nothing else about a sample is touched,
+// so neither side is ever copied. This runs per-series on every HA merge, so
+// the gaps slice is deliberately the only allocation it makes.
+func dynamicAntiAffinityFrom[T any](a, b []T, ts func(T) model.Time) (model.Time, bool) {
+	gaps := make([]model.Time, 0, max(len(a)-1, 0))
+	gaps = appendGaps(gaps, a, ts)
 	// Borrow gaps from b only when a is too short — keeps the estimate
 	// rooted in the longer series rather than averaging across two
-	// possibly-different scrape rates.
+	// possibly-different scrape rates. a's gaps are kept, not discarded,
+	// when we do borrow.
 	if len(gaps) < minDynamicGaps {
-		for i := 1; i < len(b); i++ {
-			if d := b[i] - b[i-1]; d > 0 {
-				gaps = append(gaps, d)
-			}
-		}
+		gaps = appendGaps(gaps, b, ts)
 	}
 	if len(gaps) < minDynamicGaps {
 		return 0, false
 	}
-	sort.Slice(gaps, func(i, j int) bool { return gaps[i] < gaps[j] })
+	// gaps holds at most one entry per sample and slices.Sort allocates
+	// nothing, so a full sort is cheap enough here; keep it allocation-free
+	// (TestDynamicAntiAffinity_Allocs pins the count).
+	slices.Sort(gaps)
 	median := gaps[len(gaps)/2]
 	return median / 2, true
+}
+
+// appendGaps appends the deltas between consecutive samples of s. Only
+// positive deltas count: duplicate or out-of-order timestamps say nothing
+// about the scrape interval and shouldn't drag the median down.
+func appendGaps[T any](gaps []model.Time, s []T, ts func(T) model.Time) []model.Time {
+	for i := 1; i < len(s); i++ {
+		if d := ts(s[i]) - ts(s[i-1]); d > 0 {
+			gaps = append(gaps, d)
+		}
+	}
+	return gaps
 }
 
 // dynamicBufferForStream picks the dynamic buffer for a SampleStream pair.
@@ -521,18 +535,9 @@ func dynamicBufferForStream(a, b *model.SampleStream) (model.Time, bool) {
 		return dyn, true
 	}
 
-	ha := histogramTimestamps(a.Histograms)
-	hb := histogramTimestamps(b.Histograms)
+	ha, hb := a.Histograms, b.Histograms
 	if len(hb) > len(ha) {
 		ha, hb = hb, ha
 	}
-	return dynamicAntiAffinityFromTimes(ha, hb)
-}
-
-func histogramTimestamps(s []model.SampleHistogramPair) []model.Time {
-	ts := make([]model.Time, len(s))
-	for i, p := range s {
-		ts[i] = p.Timestamp
-	}
-	return ts
+	return dynamicAntiAffinityFrom(ha, hb, histogramTimestamp)
 }
