@@ -80,32 +80,6 @@ func (s WarningSet) Warnings() v1.Warnings {
 	return w
 }
 
-// ValueAddLabelSet adds the labelset `l` to the value `a`
-func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
-	switch aTyped := a.(type) {
-	case model.Vector:
-		for _, item := range aTyped {
-			for k, v := range l {
-				item.Metric[k] = v
-			}
-		}
-
-	case model.Matrix:
-		for _, item := range aTyped {
-			// If the current metric has no labels, set them
-			if item.Metric == nil {
-				item.Metric = model.Metric(model.LabelSet(make(map[model.LabelName]model.LabelValue)))
-			}
-			for k, v := range l {
-				item.Metric[k] = v
-			}
-		}
-	}
-
-	return nil
-
-}
-
 // MergeSampleStream merges SampleStreams `a` and `b` with the given
 // antiAffinityBuffer. When combining series from 2 different prometheus
 // hosts we can run into clock-skew / scrape-skew issues (the timestamp
