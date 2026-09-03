@@ -18,6 +18,18 @@ func (e *ErrorWrap) wrap(err error) error {
 	return nil
 }
 
+// ErrorWrap annotates every error from the wrapped API with Msg.
+//
+// It deliberately does not implement APILabels, and must not be given a Key()
+// that forwards to A. A server group wraps each of its targets in one of these
+// before handing them to NewMultiAPI, so swallowing Key() is what collapses the
+// targets into a single fingerprint bucket. MultiAPI applies requiredCount per
+// bucket, and a server group passes requiredCount=1, so one bucket means "any
+// one replica answering is enough" -- the HA property the whole server group
+// exists to provide. Forwarding Key() would split targets whose discovered
+// labels differ into a bucket each, and requiring one success per bucket means
+// requiring all of them, so a single down replica would fail every query.
+// TestMultiAPIToleratesDownReplica pins this.
 type ErrorWrap struct {
 	A   API
 	Msg string
