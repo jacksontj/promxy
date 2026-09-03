@@ -433,15 +433,16 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 	return nil
 }
 
-// ApplyConfig applies new configuration to the ServerGroup
-// TODO: move config + client into state object to be swapped with atomics
-func (s *ServerGroup) ApplyConfig(cfg *Config) error {
-	s.Cfg = cfg
-
+// newDownstreamTransport builds the base *http.Transport used to talk to the
+// hosts in this server group. It is split out from ApplyConfig so it can be
+// exercised directly by tests -- once ApplyConfig has layered the auth
+// round-trippers (sigv4/bearer/basic-auth) on top, the underlying transport is
+// no longer reachable without reflection.
+func newDownstreamTransport(cfg *Config) (*http.Transport, error) {
 	// Copy/paste from upstream prometheus/common until https://github.com/prometheus/common/issues/144 is resolved
 	tlsConfig, err := config_util.NewTLSConfig(&cfg.HTTPConfig.HTTPConfig.TLSConfig)
 	if err != nil {
-		return errors.Wrap(err, "error loading TLS client config")
+		return nil, errors.Wrap(err, "error loading TLS client config")
 	}
 	// The dialer's address family and dual-stack (RFC 6555 "Happy Eyeballs")
 	// fallback timing are configurable so downstream hosts that resolve to both
@@ -458,18 +459,41 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	}
 	// The only timeout we care about is the configured scrape timeout.
 	// It is applied on request. So we leave out any timings here.
-	var rt http.RoundTripper = &http.Transport{
-		Proxy:               http.ProxyURL(cfg.HTTPConfig.HTTPConfig.ProxyURL.URL),
+	return &http.Transport{
+		Proxy: http.ProxyURL(cfg.HTTPConfig.HTTPConfig.ProxyURL.URL),
+		// NOTE: these two bound idle *connections*, which only means what you'd
+		// expect under HTTP/1.1. With http_client.enable_http2 all requests to a
+		// host are multiplexed over a single connection, so per-host concurrency
+		// is then governed by the peer's SETTINGS_MAX_CONCURRENT_STREAMS instead
+		// of MaxIdleConnsPerHost.
 		MaxIdleConns:        cfg.MaxIdleConns,
 		MaxIdleConnsPerHost: cfg.MaxIdleConnsPerHost, // see https://github.com/golang/go/issues/13801
 		DisableKeepAlives:   false,
 		TLSClientConfig:     tlsConfig,
+		// Setting TLSClientConfig and DialContext both make net/http
+		// conservatively skip its automatic HTTP/2 wiring, so HTTP/2 is only
+		// ever negotiated (via TLS ALPN, i.e. for https targets) when the
+		// operator opts in with http_client.enable_http2. See the field docs on
+		// HTTPClientConfig.HTTP2Enabled for the trade-offs.
+		ForceAttemptHTTP2: cfg.HTTPConfig.HTTP2Enabled(),
 		// 5 minutes is typically above the maximum sane scrape interval. So we can
 		// use keepalive for all configurations.
 		IdleConnTimeout:       cfg.IdleConnTimeout,
 		DialContext:           dialContext,
 		ResponseHeaderTimeout: cfg.Timeout,
+	}, nil
+}
+
+// ApplyConfig applies new configuration to the ServerGroup
+// TODO: move config + client into state object to be swapped with atomics
+func (s *ServerGroup) ApplyConfig(cfg *Config) error {
+	s.Cfg = cfg
+
+	transport, err := newDownstreamTransport(cfg)
+	if err != nil {
+		return err
 	}
+	var rt http.RoundTripper = transport
 
 	// If SigV4 is configured, wrap the transport with SigV4 round tripper
 	if cfg.HTTPConfig.SigV4Config != nil {

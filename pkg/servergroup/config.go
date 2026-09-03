@@ -375,9 +375,57 @@ type HTTPClientConfig struct {
 	// default (300ms); a negative value disables the fallback attempt entirely.
 	// Note: to be effective it must be shorter than DialTimeout, otherwise the
 	// dial times out before the fallback is ever attempted.
-	FallbackDelay time.Duration                `yaml:"fallback_delay,omitempty"`
-	HTTPConfig    config_util.HTTPClientConfig `yaml:",inline"`
-	SigV4Config   *sigv4.SigV4Config           `yaml:"sigv4,omitempty"`
+	FallbackDelay time.Duration `yaml:"fallback_delay,omitempty"`
+	// HTTPConfig is prometheus' HTTPClientConfig, inlined -- so its keys
+	// (tls_config, proxy_url, basic_auth, bearer_token, enable_http2, ...) sit
+	// directly under `http_client`. Note that promxy builds its own
+	// http.Transport rather than calling config_util.NewRoundTripperFromConfig,
+	// so only the subset of these fields that promxy explicitly reads has any
+	// effect. `enable_http2` is one that it does read -- see HTTP2Enabled.
+	HTTPConfig  config_util.HTTPClientConfig `yaml:",inline"`
+	SigV4Config *sigv4.SigV4Config           `yaml:"sigv4,omitempty"`
+}
+
+// HTTP2Enabled reports whether promxy should negotiate HTTP/2 with this server
+// group's downstream hosts. It is the inlined `http_client.enable_http2` key,
+// and defaults to false -- which preserves promxy's historical behavior of
+// HTTP/1.1 only. (Note this default differs from prometheus'
+// DefaultHTTPClientConfig, which enables HTTP/2; promxy never seeds that
+// default onto this struct, and the field is deliberately left off so an
+// upgrade doesn't silently change the downstream protocol.)
+//
+// Why a knob is needed at all: promxy always sets both TLSClientConfig and
+// DialContext on the downstream http.Transport (for TLS options and for
+// dial_network/dial_timeout/fallback_delay). Go's transport conservatively
+// disables its automatic HTTP/2 wiring whenever any of TLSClientConfig, Dial,
+// DialTLS or DialContext is set, unless ForceAttemptHTTP2 is explicitly true
+// (see net/http.Transport.protocols). So without this option every server group
+// speaks HTTP/1.1, no matter the scheme.
+//
+// This only takes effect for `https` targets: HTTP/2 is negotiated over TLS via
+// ALPN, so a `scheme: http` server group is unaffected by this setting.
+//
+// Trade-offs -- HTTP/2 is not unambiguously better for promxy's traffic shape,
+// which is a modest number of large, sequential response bodies per target:
+//   - Pro: one multiplexed connection per target instead of up to
+//     max_idle_conns_per_host sockets, so far fewer file descriptors and TLS
+//     handshakes, and much less connection churn against downstreams (and any
+//     LB/proxy in between).
+//   - Con: h2's per-stream flow-control window can make large response bodies
+//     *slower* than HTTP/1.1 over a warm connection pool.
+//   - Con: every concurrent query for a target shares one TCP connection, so
+//     one stalled or lossy connection affects all in-flight queries to that
+//     host, rather than just the one using that socket.
+//
+// Measure before enabling it in production.
+//
+// Note also that max_idle_conns/max_idle_conns_per_host mean something quite
+// different once HTTP/2 is in play: they bound idle *connections*, but h2
+// multiplexes all requests to a host over a single connection, so the effective
+// per-host concurrency limit becomes the peer's SETTINGS_MAX_CONCURRENT_STREAMS
+// rather than max_idle_conns_per_host.
+func (c *HTTPClientConfig) HTTP2Enabled() bool {
+	return c.HTTPConfig.EnableHTTP2
 }
 
 // validate ensures the HTTPClientConfig has sane values.
