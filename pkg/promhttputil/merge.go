@@ -3,7 +3,6 @@ package promhttputil
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -105,122 +104,6 @@ func ValueAddLabelSet(a model.Value, l model.LabelSet) error {
 
 	return nil
 
-}
-
-// MergeValues merges values `a` and `b` with the given antiAffinityBuffer.
-// When dynamic is true, each merged SampleStream infers its own anti-
-// affinity from the inter-sample spacing of the longer series and uses
-// antiAffinityBuffer only as a fallback when there isn't enough data to
-// estimate. See #734.
-func MergeValues(antiAffinityBuffer model.Time, dynamic bool, a, b model.Value, preferMax bool) (model.Value, error) {
-	if a == nil {
-		return b, nil
-	}
-	if b == nil {
-		return a, nil
-	}
-	if a.Type() != b.Type() {
-		return nil, fmt.Errorf("mismatch type %v!=%v", a.Type(), b.Type())
-	}
-
-	switch aTyped := a.(type) {
-	// TODO: more logic? for now we assume both are correct if they exist
-	// In the case where it is a single datapoint, we're going to assume that
-	// either is valid, we just need one
-	case *model.Scalar:
-		bTyped := b.(*model.Scalar)
-
-		if preferMax && bTyped.Value > aTyped.Value && bTyped.Timestamp != 0 {
-			return bTyped, nil
-		}
-
-		if aTyped.Value != 0 && aTyped.Timestamp != 0 {
-			return aTyped, nil
-		}
-		return bTyped, nil
-
-	// In the case where it is a single datapoint, we're going to assume that
-	// either is valid, we just need one
-	case *model.String:
-		bTyped := b.(*model.String)
-
-		if aTyped.Value != "" && aTyped.Timestamp != 0 {
-			return aTyped, nil
-		}
-		return bTyped, nil
-
-	// List of *model.Sample -- only 1 value (guaranteed same timestamp)
-	case model.Vector:
-		bTyped := b.(model.Vector)
-
-		newValue := make(model.Vector, 0, len(aTyped)+len(bTyped))
-		fingerPrintMap := make(map[model.Fingerprint]int)
-
-		addItem := func(item *model.Sample) {
-			finger := item.Metric.Fingerprint()
-
-			// If we've seen this fingerPrint before, lets make sure that a value exists
-			if index, ok := fingerPrintMap[finger]; ok {
-				existing := newValue[index]
-				// If either side carries a histogram (Value/Histogram are
-				// mutually exclusive on a Sample), keep the first non-empty
-				// observation. preferMax only applies to float-vs-float.
-				if existing.Histogram != nil || item.Histogram != nil {
-					if existing.Histogram == nil && existing.Value == 0 && item.Histogram != nil {
-						newValue[index] = item
-					}
-					return
-				}
-				// Only replace if we have no value (which seems reasonable)
-				// Or we prefer max value and there is a bigger value
-				if existing.Value == model.SampleValue(0) || preferMax && existing.Value < item.Value {
-					newValue[index].Value = item.Value
-				}
-			} else {
-				newValue = append(newValue, item)
-				fingerPrintMap[finger] = len(newValue) - 1
-			}
-		}
-
-		for _, item := range aTyped {
-			addItem(item)
-		}
-
-		for _, item := range bTyped {
-			addItem(item)
-		}
-		return newValue, nil
-
-	case model.Matrix:
-		bTyped := b.(model.Matrix)
-
-		newValue := make(model.Matrix, 0, len(aTyped)+len(bTyped))
-		fingerPrintMap := make(map[model.Fingerprint]int)
-
-		addStream := func(stream *model.SampleStream) {
-			finger := stream.Metric.Fingerprint()
-
-			// If we've seen this fingerPrint before, lets make sure that a value exists
-			if index, ok := fingerPrintMap[finger]; ok {
-				// TODO: check this error? For now the only one is sig collision, which we check
-				newValue[index], _ = MergeSampleStream(antiAffinityBuffer, dynamic, newValue[index], stream, preferMax)
-			} else {
-				newValue = append(newValue, stream)
-				fingerPrintMap[finger] = len(newValue) - 1
-			}
-		}
-
-		for _, item := range aTyped {
-			addStream(item)
-		}
-
-		for _, item := range bTyped {
-			addStream(item)
-		}
-		return newValue, nil
-	}
-
-	return nil, fmt.Errorf("unknown type! %v", reflect.TypeOf(a))
 }
 
 // MergeSampleStream merges SampleStreams `a` and `b` with the given

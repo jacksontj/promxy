@@ -3,6 +3,7 @@ package promclient
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -78,11 +79,36 @@ func stream(name string, pts ...float64) *model.SampleStream {
 	return ss
 }
 
-// TestMergeSeriesSetsMatchesMergeValues asserts the SeriesSet adapter produces
-// the same merged result as the existing model.Value MergeValues, across the
-// anti-affinity behaviours (overlap, holes, base-by-point-count, preferMax,
-// disjoint series).
-func TestMergeSeriesSetsMatchesMergeValues(t *testing.T) {
+// mergeMatrix is the model.Matrix-side reference merge: group streams by
+// fingerprint and hand each collision to promhttputil.MergeSampleStream --
+// the same primitive MergeSeriesSets folds with, reached without any of the
+// SeriesSet plumbing.
+func mergeMatrix(antiAffinity model.Time, dynamic bool, a, b model.Matrix, preferMax bool) model.Matrix {
+	merged := make(model.Matrix, 0, len(a)+len(b))
+	index := make(map[model.Fingerprint]int, len(a)+len(b))
+
+	for _, stream := range slices.Concat(a, b) {
+		finger := stream.Metric.Fingerprint()
+		if i, ok := index[finger]; ok {
+			// The only error MergeSampleStream returns is a fingerprint
+			// mismatch, which the index makes impossible here.
+			merged[i], _ = promhttputil.MergeSampleStream(antiAffinity, dynamic, merged[i], stream, preferMax)
+			continue
+		}
+		merged = append(merged, stream)
+		index[finger] = len(merged) - 1
+	}
+
+	return merged
+}
+
+// TestMergeSeriesSetsMatchesMatrixMerge asserts the SeriesSet adapter produces
+// the same merged result as folding the equivalent model.Matrix through
+// MergeSampleStream directly, across the anti-affinity behaviours (overlap,
+// holes, base-by-point-count, preferMax, disjoint series). What it pins is the
+// SeriesSet plumbing -- conversion, grouping, iteration -- since both sides
+// share the merge primitive itself.
+func TestMergeSeriesSetsMatchesMatrixMerge(t *testing.T) {
 	cases := []struct {
 		name         string
 		antiAffinity model.Time
@@ -118,11 +144,7 @@ func TestMergeSeriesSetsMatchesMergeValues(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			want, err := promhttputil.MergeValues(tc.antiAffinity, false, tc.a, tc.b, tc.preferMax)
-			if err != nil {
-				t.Fatalf("MergeValues: %v", err)
-			}
-			wantDump := dumpMatrix(want.(model.Matrix))
+			wantDump := dumpMatrix(mergeMatrix(tc.antiAffinity, false, tc.a, tc.b, tc.preferMax))
 
 			got := MergeSeriesSets(tc.antiAffinity, false, tc.preferMax, matrixToSeriesSet(tc.a), matrixToSeriesSet(tc.b))
 			gotDump := dumpSS(t, got)
@@ -230,8 +252,8 @@ func TestMaterializeSeriesSetDecouplesFromSource(t *testing.T) {
 // TestMergeSeriesSetsDynamic_FixesMixedScrapeIntervals proves the dynamic
 // anti-affinity flag (#734) actually takes effect through the live SeriesSet
 // merge path — MergeSeriesSets -> mergeAntiAffinity -> MergeSampleStream — and
-// not just the legacy model.Value MergeValues path the promhttputil tests
-// cover. Mirrors promhttputil.TestMergeValues_FixesMixedScrapeIntervals.
+// not just the model.Matrix fold the promhttputil tests cover. Mirrors
+// promhttputil.TestMergeMatrix_FixesMixedScrapeIntervals.
 func TestMergeSeriesSetsDynamic_FixesMixedScrapeIntervals(t *testing.T) {
 	// Two 60s-scrape sides of the same series; b is offset so its samples
 	// land inside a's 60s gaps but outside a tight static buffer — exactly
