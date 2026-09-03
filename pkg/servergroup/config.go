@@ -520,6 +520,12 @@ type NativeHistogramConfig struct {
 	// of all groups' caches when classifying queries. The cache is
 	// name-keyed (typically <2% of the total metric-name space) so
 	// memory is bounded by histogram-name count, not series cardinality.
+	//
+	// Cost: each refresh pulls a full /api/v1/metadata body (every
+	// metric name, help string and unit) from one target of the group,
+	// not from every replica — but that body can still be tens of MB in
+	// a large deployment, so pick the interval accordingly. Metric
+	// names change on deploys, not on scrapes; minutes, not seconds.
 	MetadataRefresh time.Duration `yaml:"metadata_refresh,omitempty"`
 
 	// AllowLossy controls what happens when a histogram-bearing query

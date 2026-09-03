@@ -87,6 +87,9 @@ promxy:
         # queries which touch histogram metrics WITHOUT invoking one of
         # the histogram-only functions (e.g. rate(my_hist[5m])) are also
         # routed via remote_read. When unset, detection is pure AST.
+        # Each refresh pulls a full metadata dump from *one* target of
+        # this group (not from every replica); that is still a large
+        # response in a big deployment, so keep the interval in minutes.
         metadata_refresh: 5m
         # allow_lossy controls behavior when a histogram-bearing query
         # hits this group with no remote_read configured. Default false:

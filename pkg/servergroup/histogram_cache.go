@@ -8,15 +8,24 @@ import (
 
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/sirupsen/logrus"
-
-	"github.com/jacksontj/promxy/pkg/promclient"
 )
+
+// metadataSource is the slice of the server group's client that the cache
+// needs: a metadata fetch that talks to one target per HA key rather than
+// fanning out to every replica. Implemented by *promclient.MultiAPI.
+type metadataSource interface {
+	MetadataOnePerKey(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error)
+}
 
 // histogramMetadataCache holds the set of metric names whose upstream type
 // is HISTOGRAM, refreshed periodically from /api/v1/metadata. It exists so
 // that promxy can route any query referencing a histogram metric via
 // remote_read even when the query doesn't use one of the histogram-only
 // PromQL functions (which the AST walker can detect on its own).
+//
+// Each refresh reads the metadata of a single target per HA key rather than
+// every target: within a key the targets are replicas of each other, so their
+// metadata is the same set of names, and /api/v1/metadata bodies are large.
 //
 // The cache is name-keyed, not series-keyed: a deployment with millions of
 // active series typically has only thousands of distinct metric names, and
@@ -53,7 +62,7 @@ func (c *histogramMetadataCache) Contains(name string) bool {
 // Subsequent calls are no-ops. getAPI is called on each tick to fetch the
 // current API client (which can change as service discovery updates the
 // server group's target set).
-func (c *histogramMetadataCache) start(ctx context.Context, getAPI func() promclient.API, refresh time.Duration, logger *logrus.Entry) {
+func (c *histogramMetadataCache) start(ctx context.Context, getAPI func() metadataSource, refresh time.Duration, logger *logrus.Entry) {
 	if c == nil || refresh <= 0 {
 		return
 	}
@@ -62,7 +71,7 @@ func (c *histogramMetadataCache) start(ctx context.Context, getAPI func() promcl
 	})
 }
 
-func (c *histogramMetadataCache) run(ctx context.Context, getAPI func() promclient.API, refresh time.Duration, logger *logrus.Entry) {
+func (c *histogramMetadataCache) run(ctx context.Context, getAPI func() metadataSource, refresh time.Duration, logger *logrus.Entry) {
 	// One immediate refresh so the first query after startup can already
 	// benefit; the ticker takes over after that.
 	c.refresh(ctx, getAPI(), logger)
@@ -78,7 +87,7 @@ func (c *histogramMetadataCache) run(ctx context.Context, getAPI func() promclie
 	}
 }
 
-func (c *histogramMetadataCache) refresh(ctx context.Context, api promclient.API, logger *logrus.Entry) {
+func (c *histogramMetadataCache) refresh(ctx context.Context, api metadataSource, logger *logrus.Entry) {
 	if api == nil {
 		// Service discovery hasn't populated targets yet. Skip silently;
 		// the next tick will retry. Keep the previous snapshot in place.
@@ -86,7 +95,7 @@ func (c *histogramMetadataCache) refresh(ctx context.Context, api promclient.API
 	}
 	fctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	md, err := api.Metadata(fctx, "", "")
+	md, err := api.MetadataOnePerKey(fctx, "", "")
 	if err != nil {
 		logger.WithError(err).Warn("histogram metadata cache refresh failed; keeping previous snapshot")
 		return

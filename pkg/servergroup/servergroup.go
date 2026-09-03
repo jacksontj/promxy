@@ -126,6 +126,11 @@ type ServerGroupState struct {
 	Targets   []string
 	apiClient promclient.API
 
+	// multiAPI is the fan-out client that apiClient is built on top of, kept
+	// unwrapped for the callers that need its per-target view (the histogram
+	// metadata cache, which fetches from one target per HA key).
+	multiAPI *promclient.MultiAPI
+
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 }
@@ -464,6 +469,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 		Targets: targets,
 		// Add error wrap for this specific servergroup
 		apiClient: &promclient.ErrorWrap{apiClient, fmt.Sprintf("error in servergroup ord=%d", cfg.Ordinal)},
+		multiAPI:  apiClient,
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
 	}
@@ -596,12 +602,14 @@ func (s *ServerGroup) ApplyConfig(cfg *Config) error {
 	// spawn duplicate goroutines.
 	s.histogramCache.start(
 		s.ctx,
-		func() promclient.API {
+		func() metadataSource {
 			st := s.State()
-			if st == nil {
+			// Returned explicitly as nil rather than as a typed nil pointer
+			// wrapped in the interface, which the cache can't detect.
+			if st == nil || st.multiAPI == nil {
 				return nil
 			}
-			return st.apiClient
+			return st.multiAPI
 		},
 		cfg.NativeHistogram.MetadataRefresh,
 		logrus.WithFields(logrus.Fields{
