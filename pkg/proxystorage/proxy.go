@@ -896,11 +896,6 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		if err != nil {
 			return nil, err
 		}
-		result, lossy := containsLossyHistogram(result)
-		if lossy {
-			return nil, nil
-		}
-
 		// For range queries, fill StaleNaN at step timestamps the downstream
 		// did not return a value for. The engine's per-step VectorSelector
 		// eval uses ev.lookbackDelta (5m default, not our ret.LookbackDelta
@@ -908,10 +903,21 @@ func (p *ProxyStorage) NodeReplacer(ctx context.Context, s *parser.EvalStmt, nod
 		// sample from a sparse range output (e.g. present_over_time returning
 		// 1 at one step only) otherwise bleeds forward into every later step
 		// within the lookback window.
+		//
+		// The fill walks the whole set anyway, so it also reports whether any
+		// sample was a native histogram; a lossy result abandons pushdown and
+		// the filled set is discarded.
+		var lossy bool
 		if s.Interval > 0 {
 			startMs := timestamp.FromTime(s.Start.Add(-reqOffset))
 			endMs := timestamp.FromTime(s.End.Add(-reqOffset))
-			result = fillStaleNaNGaps(result, startMs, endMs, int64(s.Interval/time.Millisecond))
+			result, lossy = fillStaleNaNGapsDetectHistogram(result, startMs, endMs, int64(s.Interval/time.Millisecond))
+		} else {
+			// Instant query: no step grid, so no fill — detect on its own.
+			result, lossy = containsLossyHistogram(result)
+		}
+		if lossy {
+			return nil, nil
 		}
 
 		ret := &parser.VectorSelector{OriginalOffset: synthOffset}
@@ -1195,64 +1201,82 @@ func durationMilliseconds(d time.Duration) int64 {
 // set is materialized into a fresh, re-iterable copy with the StaleNaN markers
 // added — the source cursor is consumed, and the result still flows on to
 // UnexpandedSeriesSet.
+//
+// The fill is a linear merge over the step grid: we walk the steps and the
+// (already timestamp-ordered) source samples together, emitting a StaleNaN
+// only at the steps the source didn't cover. Samples that don't land on the
+// step grid are preserved, in timestamp order, alongside the markers —
+// promapi.NewSeries' list iterator requires the output be sorted by timestamp.
 func fillStaleNaNGaps(ss storage.SeriesSet, startTs, endTs, interval int64) storage.SeriesSet {
 	if interval <= 0 {
 		return ss
 	}
+	out, _ := fillStaleNaNGapsDetectHistogram(ss, startTs, endTs, interval)
+	return out
+}
+
+// fillStaleNaNGapsDetectHistogram fills the StaleNaN gaps and reports whether
+// any source sample carried a native histogram. The *parser.Call pushdown
+// branch needs both answers and each requires walking the whole set, so they
+// share one pass.
+//
+// The returned set must be a fresh copy rather than the source: reading the
+// samples drains the source cursor, and the caller still has to hand the data
+// to UnexpandedSeriesSet for the engine to read.
+//
+// interval <= 0 (instant query) has no step grid to fill against, so that case
+// defers to containsLossyHistogram.
+func fillStaleNaNGapsDetectHistogram(ss storage.SeriesSet, startTs, endTs, interval int64) (storage.SeriesSet, bool) {
+	if interval <= 0 {
+		return containsLossyHistogram(ss)
+	}
 	stale := math.Float64frombits(value.StaleNaN)
-	var out []storage.Series
+	steps := (endTs-startTs)/interval + 1
+	var (
+		out     []storage.Series
+		hasHist bool
+	)
 	for ss.Next() {
 		s := ss.At()
 		lbls := s.Labels().Copy()
-		var samples []chunks.Sample
-		present := make(map[int64]struct{})
+
+		// Source samples are already timestamp-ordered, so advancing the step
+		// cursor alongside the iterator emits everything in order — which
+		// promapi.NewSeries' list iterator requires — without buffering the
+		// source or sorting afterwards.
+		samples := make([]chunks.Sample, 0, int(steps))
+		ts := startTs
 		it := s.Iterator(nil)
 		for vt := it.Next(); vt != chunkenc.ValNone; vt = it.Next() {
+			var sample chunks.Sample
 			switch vt {
 			case chunkenc.ValFloat:
 				t, v := it.At()
-				samples = append(samples, promapi.FloatSample(t, v))
-				present[t] = struct{}{}
+				sample = promapi.FloatSample(t, v)
 			case chunkenc.ValHistogram, chunkenc.ValFloatHistogram:
+				hasHist = true
 				t, fh := it.AtFloatHistogram(nil)
-				samples = append(samples, promapi.HistogramSample(t, fh))
-				present[t] = struct{}{}
+				sample = promapi.HistogramSample(t, fh)
+			default:
+				continue
+			}
+			// Steps strictly before this sample got no value at all.
+			for ; ts <= endTs && ts < sample.T(); ts += interval {
+				samples = append(samples, promapi.FloatSample(ts, stale))
+			}
+			samples = append(samples, sample)
+			if ts <= endTs && ts == sample.T() {
+				ts += interval
 			}
 		}
 		if err := it.Err(); err != nil {
-			return promapi.NewSeriesSet(nil, ss.Warnings(), err)
+			return promapi.NewSeriesSet(nil, ss.Warnings(), err), hasHist
 		}
-
-		// Bound the fill defensively: a bogus start/end from upstream
-		// shouldn't make us allocate a giant slice. If the eval window is
-		// far larger than the actual returned data, skip the fill — the
-		// existing samples stay correct (the engine's lookback can still
-		// misbehave, but that's strictly no worse than before).
-		expected := (endTs-startTs)/interval + 1
-		if expected > 0 && expected <= int64(len(present))+10_000 {
-			for ts := startTs; ts <= endTs; ts += interval {
-				if _, ok := present[ts]; ok {
-					continue
-				}
-				samples = append(samples, promapi.FloatSample(ts, stale))
-			}
-			// promapi.NewSeries' list iterator must walk samples in
-			// timestamp order; the appended StaleNaN points can sit out of
-			// order relative to the originals.
-			sortSamplesByTime(samples)
+		// Trailing steps past the last source sample.
+		for ; ts <= endTs; ts += interval {
+			samples = append(samples, promapi.FloatSample(ts, stale))
 		}
 		out = append(out, promapi.NewSeries(lbls, samples))
 	}
-	return promapi.NewSeriesSet(out, ss.Warnings(), ss.Err())
-}
-
-// sortSamplesByTime sorts samples by timestamp using insertion sort — a step
-// range is typically a handful of points, so a stdlib sort.Slice would pay
-// disproportionate cost for the closure call.
-func sortSamplesByTime(vs []chunks.Sample) {
-	for i := 1; i < len(vs); i++ {
-		for j := i; j > 0 && vs[j-1].T() > vs[j].T(); j-- {
-			vs[j-1], vs[j] = vs[j], vs[j-1]
-		}
-	}
+	return promapi.NewSeriesSet(out, ss.Warnings(), ss.Err()), hasHist
 }
