@@ -1,0 +1,49 @@
+{{- if .Values.route.enabled }}
+{{- $fullName := include "chart.fullname" . -}}
+{{- $svcPort := .Values.service.servicePort -}}
+{{- $labels := include "chart.labels" . -}}
+{{- range $name, $route := .Values.route.routes }}
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: {{ $fullName }}-{{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- $labels | nindent 4 }}
+    {{- with $route.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $route.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $route.parentRefs }}
+  parentRefs:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $route.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range $rule := $route.rules }}
+    - {{- with $rule.matches }}
+      matches:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $rule.filters }}
+      filters:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      backendRefs:
+        {{- if $rule.backendRefs }}
+        {{- toYaml $rule.backendRefs | nindent 8 }}
+        {{- else }}
+        - name: {{ $fullName }}
+          port: {{ $svcPort }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}

@@ -1,19 +1,25 @@
 {{- if .Values.hpa.enabled -}}
-apiVersion: autoscaling/v2beta2
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
+  name: {{ template "chart.fullname" . }}-hpa
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "chart.labels" . | nindent 4 }}
-    {{- if .Values.extraLabels}}
-    {{ toYaml .Values.extraLabels | nindent 4 }}
-    {{- end}}
-  name: {{ template "chart.fullname" . }}-vpa
+    {{- with .Values.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: {{ template "chart.fullname" . }}
-  minReplicas: 1
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 50
-{{- end -}} {{/* if .Values.hpa.enabled */}}
+  minReplicas: {{ .Values.hpa.minReplicas }}
+  maxReplicas: {{ .Values.hpa.maxReplicas }}
+  metrics:
+    {{- toYaml .Values.hpa.metrics | nindent 4 }}
+  {{- with .Values.hpa.behavior }}
+  behavior:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end -}}

@@ -1,0 +1,9 @@
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+    - promxy.example.com
+  tls:
+    - secretName: promxy-tls
+      hosts:
+        - promxy.example.com

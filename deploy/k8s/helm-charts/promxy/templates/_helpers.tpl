@@ -63,7 +63,7 @@ Create the name of the service account to use
 {{- end -}}
 
 {{/*
-Defins the name of configuratiob map
+Defines the name of the configuration map
 */}}
 {{- define "chart.configname" -}}
 {{- if .Values.configMap -}}
@@ -73,7 +73,18 @@ Defins the name of configuratiob map
 {{- end -}}
 {{- end -}}
 
-{{- define "split-host-port" -}}
-{{- $hp := split ":" . -}}
-{{- printf "%s" $hp._1 -}}
+{{/*
+Returns the volume spec for the promxy config (Secret or ConfigMap based on configStorageType).
+*/}}
+{{- define "chart.configVolume" -}}
+{{- if eq .Values.configStorageType "Secret" -}}
+secret:
+  secretName: {{ include "chart.configname" . }}
+{{- else -}}
+configMap:
+  name: {{ include "chart.configname" . }}
+  items:
+    - key: config.yaml
+      path: config.yaml
+{{- end -}}
 {{- end -}}

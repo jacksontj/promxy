@@ -1,0 +1,26 @@
+{{- if eq .Values.configMap "" }}
+apiVersion: v1
+{{- if eq .Values.configStorageType "Secret" }}
+kind: Secret
+{{- else }}
+kind: ConfigMap
+{{- end }}
+metadata:
+  name: {{ include "chart.configname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+    {{- with .Values.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- if eq .Values.configStorageType "Secret" }}
+type: Opaque
+stringData:
+{{- else }}
+data:
+{{- end }}
+  config.yaml: |
+    {{- with .Values.config }}
+    {{- tpl (toYaml .) $ | nindent 4 }}
+    {{- end }}
+{{- end }}
