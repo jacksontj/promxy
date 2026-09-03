@@ -10,6 +10,22 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
+// truncateWindow clamps the requested [start, end] range to the server group's
+// configured window [winStart, winEnd]. A zero winStart or winEnd means that
+// edge is unbounded and the caller's bound is left alone.
+//
+// Truncation may only ever narrow: a request that already sits inside the
+// window is passed through untouched.
+func truncateWindow(start, end, winStart, winEnd time.Time) (time.Time, time.Time) {
+	if !winStart.IsZero() && start.Before(winStart) {
+		start = winStart
+	}
+	if !winEnd.IsZero() && end.After(winEnd) {
+		end = winEnd
+	}
+	return start, end
+}
+
 // AbsoluteTimeFilter will filter queries out (return nil,nil) for all queries outside the given times
 type AbsoluteTimeFilter struct {
 	API
@@ -24,12 +40,7 @@ func (tf *AbsoluteTimeFilter) LabelNames(ctx context.Context, matchers []string,
 	}
 
 	if tf.Truncate {
-		if startTime.Before(tf.Start) {
-			startTime = tf.Start
-		}
-		if endTime.After(tf.End) {
-			endTime = tf.End
-		}
+		startTime, endTime = truncateWindow(startTime, endTime, tf.Start, tf.End)
 	}
 
 	return tf.API.LabelNames(ctx, matchers, startTime, endTime)
@@ -42,12 +53,7 @@ func (tf *AbsoluteTimeFilter) LabelValues(ctx context.Context, label string, mat
 	}
 
 	if tf.Truncate {
-		if !tf.Start.IsZero() && startTime.Before(tf.Start) {
-			startTime = tf.Start
-		}
-		if !tf.End.IsZero() && endTime.After(tf.End) {
-			endTime = tf.End
-		}
+		startTime, endTime = truncateWindow(startTime, endTime, tf.Start, tf.End)
 	}
 
 	return tf.API.LabelValues(ctx, label, matchers, startTime, endTime)
@@ -92,12 +98,7 @@ func (tf *AbsoluteTimeFilter) Series(ctx context.Context, matches []string, star
 	}
 
 	if tf.Truncate {
-		if !tf.Start.IsZero() && startTime.Before(tf.Start) {
-			startTime = tf.Start
-		}
-		if !tf.End.IsZero() && endTime.After(tf.End) {
-			endTime = tf.End
-		}
+		startTime, endTime = truncateWindow(startTime, endTime, tf.Start, tf.End)
 	}
 
 	return tf.API.Series(ctx, matches, startTime, endTime)
@@ -110,12 +111,7 @@ func (tf *AbsoluteTimeFilter) GetValue(ctx context.Context, start, end time.Time
 	}
 
 	if tf.Truncate {
-		if !tf.Start.IsZero() && start.Before(tf.Start) {
-			start = tf.Start
-		}
-		if !tf.End.IsZero() && end.After(tf.End) {
-			end = tf.End
-		}
+		start, end = truncateWindow(start, end, tf.Start, tf.End)
 	}
 
 	return tf.API.GetValue(ctx, start, end, matchers)
@@ -128,12 +124,7 @@ func (tf *AbsoluteTimeFilter) QueryExemplars(ctx context.Context, query string, 
 	}
 
 	if tf.Truncate {
-		if !tf.Start.IsZero() && startTime.Before(tf.Start) {
-			startTime = tf.Start
-		}
-		if !tf.End.IsZero() && endTime.After(tf.End) {
-			endTime = tf.End
-		}
+		startTime, endTime = truncateWindow(startTime, endTime, tf.Start, tf.End)
 	}
 
 	return tf.API.QueryExemplars(ctx, query, startTime, endTime)
@@ -168,12 +159,7 @@ func (tf *RelativeTimeFilter) LabelNames(ctx context.Context, matchers []string,
 	}
 
 	if tf.Truncate {
-		if !tfStart.IsZero() && startTime.Before(tfStart) {
-			startTime = tfStart
-		}
-		if !tfEnd.IsZero() && endTime.After(tfEnd) {
-			endTime = tfEnd
-		}
+		startTime, endTime = truncateWindow(startTime, endTime, tfStart, tfEnd)
 	}
 
 	return tf.API.LabelNames(ctx, matchers, startTime, endTime)
@@ -187,12 +173,7 @@ func (tf *RelativeTimeFilter) LabelValues(ctx context.Context, label string, mat
 	}
 
 	if tf.Truncate {
-		if !tfStart.IsZero() && startTime.Before(tfStart) {
-			startTime = tfStart
-		}
-		if !tfEnd.IsZero() && endTime.After(tfEnd) {
-			endTime = tfEnd
-		}
+		startTime, endTime = truncateWindow(startTime, endTime, tfStart, tfEnd)
 	}
 
 	return tf.API.LabelValues(ctx, label, matchers, startTime, endTime)
@@ -240,12 +221,7 @@ func (tf *RelativeTimeFilter) Series(ctx context.Context, matches []string, star
 	}
 
 	if tf.Truncate {
-		if !tfStart.IsZero() && startTime.Before(tfStart) {
-			startTime = tfStart
-		}
-		if !tfEnd.IsZero() && endTime.Before(tfEnd) {
-			endTime = tfEnd
-		}
+		startTime, endTime = truncateWindow(startTime, endTime, tfStart, tfEnd)
 	}
 
 	return tf.API.Series(ctx, matches, startTime, endTime)
@@ -259,12 +235,7 @@ func (tf *RelativeTimeFilter) GetValue(ctx context.Context, start, end time.Time
 	}
 
 	if tf.Truncate {
-		if !tfStart.IsZero() && start.Before(tfStart) {
-			start = tfStart
-		}
-		if !tfEnd.IsZero() && end.Before(tfEnd) {
-			end = tfEnd
-		}
+		start, end = truncateWindow(start, end, tfStart, tfEnd)
 	}
 
 	return tf.API.GetValue(ctx, start, end, matchers)
@@ -278,12 +249,7 @@ func (tf *RelativeTimeFilter) QueryExemplars(ctx context.Context, query string, 
 	}
 
 	if tf.Truncate {
-		if !tfStart.IsZero() && startTime.Before(tfStart) {
-			startTime = tfStart
-		}
-		if !tfEnd.IsZero() && endTime.Before(tfEnd) {
-			endTime = tfEnd
-		}
+		startTime, endTime = truncateWindow(startTime, endTime, tfStart, tfEnd)
 	}
 
 	return tf.API.QueryExemplars(ctx, query, startTime, endTime)
