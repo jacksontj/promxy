@@ -203,13 +203,36 @@ func MetricFamilyToText(out io.Writer, mf *dto.MetricFamily) error {
 // default (UnderscoreEscaping) and legacy-valid names this is allocation-free.
 type Encoder struct {
 	w        *bufio.Writer
+	ew       *errWriter
 	scheme   model.EscapingScheme
 	lastName string
 	started  bool
 }
 
 func NewEncoder(w io.Writer, scheme model.EscapingScheme) *Encoder {
-	return &Encoder{w: bufio.NewWriter(w), scheme: scheme}
+	ew := &errWriter{w: w}
+	return &Encoder{w: bufio.NewWriter(ew), ew: ew, scheme: scheme}
+}
+
+// errWriter latches the first error returned by the underlying writer, so the
+// Encoder can report it without every write in the hot path having to be
+// checked. bufio.Writer already stops accepting data after its first error
+// ("all subsequent writes, and Flush, will return the error"), so once this
+// fires the remaining encoding work is pure waste -- see Encoder.Err.
+type errWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (ew *errWriter) Write(p []byte) (int, error) {
+	if ew.err != nil {
+		return 0, ew.err
+	}
+	n, err := ew.w.Write(p)
+	if err != nil {
+		ew.err = err
+	}
+	return n, err
 }
 
 // WriteFloatSample writes one untyped sample.
@@ -288,3 +311,11 @@ func (e *Encoder) WriteFloatSample(name string, lbls labels.Labels, external []l
 
 // Flush flushes any buffered output to the underlying writer.
 func (e *Encoder) Flush() error { return e.w.Flush() }
+
+// Err returns the first error the underlying writer returned, or nil. Writes
+// are buffered, so it only becomes non-nil once a buffer flush has actually hit
+// the underlying writer -- i.e. it reports "the destination is dead", not
+// "sample N failed". Callers streaming many samples should check it in the loop
+// (it is a single field read) and stop encoding once it is set, since after the
+// first error nothing more can reach the destination.
+func (e *Encoder) Err() error { return e.ew.err }

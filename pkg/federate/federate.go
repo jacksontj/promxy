@@ -15,11 +15,16 @@
 package federate
 
 import (
+	"context"
+	"errors"
+	"io"
+	"net"
 	"net/http"
 	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	commonexpfmt "github.com/prometheus/common/expfmt"
@@ -31,6 +36,7 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/http2"
 
 	promexpfmt "github.com/jacksontj/promxy/pkg/expfmt"
 )
@@ -169,12 +175,73 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	external := *h.extLabels.Load()
 	w.Header().Set("Content-Type", string(format))
-	enc := promexpfmt.NewEncoder(w, format.ToEscapingScheme())
+	if written, err := writeSamples(w, vec, external, format.ToEscapingScheme()); err != nil {
+		logWriteError(err, written, len(vec))
+	}
+}
+
+// writeSamples encodes vec to w and returns the number of samples encoded. It
+// stops at the first write error rather than formatting the rest of the payload
+// into a socket that can no longer accept it -- a client that hangs up mid-body
+// (scrape timeout, cancellation) otherwise costs a full render of the result
+// set. The returned count is samples handed to the encoder; because writes are
+// buffered, the tail of it may not have reached w.
+func writeSamples(w io.Writer, vec []floatSample, external []labels.Label, scheme model.EscapingScheme) (int, error) {
+	enc := promexpfmt.NewEncoder(w, scheme)
+	written := 0
 	for i := range vec {
 		s := &vec[i]
 		enc.WriteFloatSample(s.metric.Get(labels.MetricName), s.metric, external, s.f, s.t)
+		if err := enc.Err(); err != nil {
+			return written, err
+		}
+		written++
 	}
-	if err := enc.Flush(); err != nil {
-		logrus.WithError(err).Error("federation failed")
+	return written, enc.Flush()
+}
+
+// logWriteError reports a federation response that could not be fully written.
+// A client that went away mid-scrape is normal operation (scrape_timeout,
+// cancelled scrape, connection reset) and is logged at debug; anything else is
+// a real failure and stays at error. Both carry how far through the payload we
+// got, so an aborted scrape can be told apart from an empty/failed one.
+func logWriteError(err error, written, total int) {
+	e := logrus.WithError(err).WithFields(logrus.Fields{
+		"samples_written": written,
+		"samples_total":   total,
+	})
+	if isClientDisconnect(err) {
+		e.Debug("federation aborted: client went away")
+		return
 	}
+	e.Error("federation failed")
+}
+
+// isClientDisconnect reports whether err means the scraping client went away
+// (cancelled/timed-out scrape, closed connection or http2 stream) rather than a
+// genuine failure to serve the response.
+func isClientDisconnect(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, net.ErrClosed) {
+		return true
+	}
+	// golang.org/x/net/http2 surfaces peer resets as typed errors.
+	var streamErr http2.StreamError
+	if errors.As(err, &streamErr) {
+		return true
+	}
+	var connErr http2.ConnectionError
+	if errors.As(err, &connErr) {
+		return true
+	}
+	// net/http's bundled http2 server has its own (unexported) copies of those
+	// sentinels -- "http2: stream closed" and "client disconnected" -- which are
+	// only reachable by message. This is the shape seen in issue #781.
+	msg := err.Error()
+	return strings.Contains(msg, "http2: stream closed") || strings.Contains(msg, "client disconnected")
 }
