@@ -408,3 +408,278 @@ func TestLabelFilterOnSyncError(t *testing.T) {
 		}
 	})
 }
+
+// referenceFilterLabelMatchers is the naive (pre-optimization) implementation of
+// FilterLabelMatchers; it simply calls matcher.Matches() over every value in the
+// filter's value set. The optimized implementation must agree with this for
+// every input.
+func referenceFilterLabelMatchers(filter map[string]map[string]struct{}, matcher *labels.Matcher) bool {
+	for labelName, labelFilter := range filter {
+		if matcher.Name == labelName {
+			match := false
+			// Check that there is a match somewhere!
+			for v := range labelFilter {
+				if matcher.Matches(v) {
+					match = true
+					break
+				}
+			}
+			if !match {
+				return match
+			}
+		}
+	}
+
+	return true
+}
+
+func TestFilterLabelMatchers(t *testing.T) {
+	tests := []struct {
+		name    string
+		filter  map[string]map[string]struct{}
+		matcher *labels.Matcher
+		expect  bool
+	}{
+		{
+			name:    "nil filter",
+			filter:  nil,
+			matcher: labels.MustNewMatcher(labels.MatchEqual, "__name__", "a"),
+			expect:  true,
+		},
+		{
+			name:    "label absent from filter",
+			filter:  map[string]map[string]struct{}{"job": {"a": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchEqual, "__name__", "a"),
+			expect:  true,
+		},
+		{
+			name:    "label absent from filter, notequal",
+			filter:  map[string]map[string]struct{}{"job": {"a": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchNotEqual, "__name__", "a"),
+			expect:  true,
+		},
+		{
+			name:    "empty value set, equal",
+			filter:  map[string]map[string]struct{}{"__name__": {}},
+			matcher: labels.MustNewMatcher(labels.MatchEqual, "__name__", "a"),
+			expect:  false,
+		},
+		{
+			name:    "empty value set, notequal",
+			filter:  map[string]map[string]struct{}{"__name__": {}},
+			matcher: labels.MustNewMatcher(labels.MatchNotEqual, "__name__", "a"),
+			expect:  false,
+		},
+		{
+			name:    "empty value set, regexp matching everything",
+			filter:  map[string]map[string]struct{}{"__name__": {}},
+			matcher: labels.MustNewMatcher(labels.MatchRegexp, "__name__", ".*"),
+			expect:  false,
+		},
+		{
+			name:    "equal hit",
+			filter:  map[string]map[string]struct{}{"__name__": {"a": struct{}{}, "b": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchEqual, "__name__", "a"),
+			expect:  true,
+		},
+		{
+			name:    "equal miss",
+			filter:  map[string]map[string]struct{}{"__name__": {"a": struct{}{}, "b": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchEqual, "__name__", "z"),
+			expect:  false,
+		},
+		{
+			name:    "single element set, notequal that same value",
+			filter:  map[string]map[string]struct{}{"__name__": {"a": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchNotEqual, "__name__", "a"),
+			expect:  false,
+		},
+		{
+			name:    "single element set, notequal some other value",
+			filter:  map[string]map[string]struct{}{"__name__": {"a": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchNotEqual, "__name__", "z"),
+			expect:  true,
+		},
+		{
+			name:    "multi element set, notequal a member",
+			filter:  map[string]map[string]struct{}{"__name__": {"a": struct{}{}, "b": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchNotEqual, "__name__", "a"),
+			expect:  true,
+		},
+		{
+			name:    "empty string value, equal",
+			filter:  map[string]map[string]struct{}{"__name__": {"": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchEqual, "__name__", ""),
+			expect:  true,
+		},
+		{
+			name:    "empty string value, notequal empty string",
+			filter:  map[string]map[string]struct{}{"__name__": {"": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchNotEqual, "__name__", ""),
+			expect:  false,
+		},
+		{
+			name:    "empty string value, notequal something else",
+			filter:  map[string]map[string]struct{}{"__name__": {"": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchNotEqual, "__name__", "a"),
+			expect:  true,
+		},
+		{
+			name:    "regexp setmatches hit",
+			filter:  map[string]map[string]struct{}{"__name__": {"c": struct{}{}, "d": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchRegexp, "__name__", "a|b|c"),
+			expect:  true,
+		},
+		{
+			name:    "regexp setmatches miss",
+			filter:  map[string]map[string]struct{}{"__name__": {"x": struct{}{}, "y": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchRegexp, "__name__", "a|b|c"),
+			expect:  false,
+		},
+		{
+			name:    "regexp no match",
+			filter:  map[string]map[string]struct{}{"__name__": {"foo_a": struct{}{}, "foo_b": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchRegexp, "__name__", "bar_.+"),
+			expect:  false,
+		},
+		{
+			name:    "regexp match",
+			filter:  map[string]map[string]struct{}{"__name__": {"foo_a": struct{}{}, "foo_b": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchRegexp, "__name__", "foo_.+"),
+			expect:  true,
+		},
+		{
+			name:    "notregexp setmatches covering the whole set",
+			filter:  map[string]map[string]struct{}{"__name__": {"a": struct{}{}, "b": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchNotRegexp, "__name__", "a|b|c"),
+			expect:  false,
+		},
+		{
+			name:    "notregexp setmatches leaving something",
+			filter:  map[string]map[string]struct{}{"__name__": {"a": struct{}{}, "z": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchNotRegexp, "__name__", "a|b|c"),
+			expect:  true,
+		},
+		{
+			name:    "notregexp genuine regex",
+			filter:  map[string]map[string]struct{}{"__name__": {"foo_a": struct{}{}, "foo_b": struct{}{}}},
+			matcher: labels.MustNewMatcher(labels.MatchNotRegexp, "__name__", "foo_.+"),
+			expect:  false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := FilterLabelMatchers(test.filter, test.matcher); got != test.expect {
+				t.Fatalf("expected %v got %v", test.expect, got)
+			}
+			// And it must always agree with the naive implementation
+			if got, want := FilterLabelMatchers(test.filter, test.matcher), referenceFilterLabelMatchers(test.filter, test.matcher); got != want {
+				t.Fatalf("disagrees with reference implementation: got %v want %v", got, want)
+			}
+		})
+	}
+}
+
+// TestFilterLabelMatchersMatchesReference exhaustively compares the optimized
+// implementation against the naive one across a cross-product of filters and
+// matchers of all four matcher types.
+func TestFilterLabelMatchersMatchesReference(t *testing.T) {
+	newSet := func(vals ...string) map[string]struct{} {
+		s := make(map[string]struct{}, len(vals))
+		for _, v := range vals {
+			s[v] = struct{}{}
+		}
+		return s
+	}
+
+	filters := map[string]map[string]map[string]struct{}{
+		"nil":                nil,
+		"empty":              {},
+		"other label only":   {"job": newSet("a", "b")},
+		"empty set":          {"__name__": newSet()},
+		"single a":           {"__name__": newSet("a")},
+		"single empty":       {"__name__": newSet("")},
+		"single z":           {"__name__": newSet("z")},
+		"multi abc":          {"__name__": newSet("a", "b", "c")},
+		"multi with empty":   {"__name__": newSet("", "a")},
+		"multi foo":          {"__name__": newSet("foo_a", "foo_b")},
+		"multi mixed":        {"__name__": newSet("a", "foo_a", "")},
+		"multi plus other":   {"__name__": newSet("a", "b"), "job": newSet("x")},
+		"disjoint from case": {"__name__": newSet("x", "y", "z")},
+	}
+
+	values := []string{"", "a", "b", "z", "foo_a", "a|b"}
+	regexes := []string{"", ".*", ".+", "a", "z", "a|b|c", "(a|z)", "[ab]", "foo_.+", "bar_.+", "a.*", "^$"}
+
+	for filterName, filter := range filters {
+		for _, v := range values {
+			for _, mt := range []labels.MatchType{labels.MatchEqual, labels.MatchNotEqual} {
+				matcher := labels.MustNewMatcher(mt, "__name__", v)
+				t.Run(fmt.Sprintf("%s/%s", filterName, matcher.String()), func(t *testing.T) {
+					got := FilterLabelMatchers(filter, matcher)
+					want := referenceFilterLabelMatchers(filter, matcher)
+					if got != want {
+						t.Fatalf("got %v want %v", got, want)
+					}
+				})
+			}
+		}
+		for _, re := range regexes {
+			for _, mt := range []labels.MatchType{labels.MatchRegexp, labels.MatchNotRegexp} {
+				matcher, err := labels.NewMatcher(mt, "__name__", re)
+				if err != nil {
+					t.Fatalf("error building matcher for %q: %v", re, err)
+				}
+				t.Run(fmt.Sprintf("%s/%s", filterName, matcher.String()), func(t *testing.T) {
+					got := FilterLabelMatchers(filter, matcher)
+					want := referenceFilterLabelMatchers(filter, matcher)
+					if got != want {
+						t.Fatalf("got %v want %v", got, want)
+					}
+				})
+			}
+		}
+	}
+}
+
+func BenchmarkFilterLabelMatchers(b *testing.B) {
+	for _, size := range []int{1000, 10000, 100000} {
+		names := make(map[string]struct{}, size)
+		for i := 0; i < size; i++ {
+			names["metric_"+strconv.Itoa(i)] = struct{}{}
+		}
+		filter := map[string]map[string]struct{}{labels.MetricName: names}
+
+		// The last name added; a value which is definitely in the filter
+		present := "metric_" + strconv.Itoa(size-1)
+
+		matchers := []*labels.Matcher{
+			labels.MustNewMatcher(labels.MatchEqual, labels.MetricName, present),
+			labels.MustNewMatcher(labels.MatchEqual, labels.MetricName, "absent_metric"),
+			labels.MustNewMatcher(labels.MatchNotEqual, labels.MetricName, present),
+			labels.MustNewMatcher(labels.MatchRegexp, labels.MetricName, "absent_a|absent_b|absent_c"),
+			labels.MustNewMatcher(labels.MatchRegexp, labels.MetricName, "absent_a|absent_b|"+present),
+			labels.MustNewMatcher(labels.MatchNotRegexp, labels.MetricName, "absent_a|absent_b|absent_c"),
+			labels.MustNewMatcher(labels.MatchRegexp, labels.MetricName, "absent_.+"),
+		}
+		caseNames := []string{
+			"equal_hit",
+			"equal_miss",
+			"notequal_hit",
+			"regexp_set_miss",
+			"regexp_set_hit",
+			"notregexp_set_hit",
+			"regexp_scan_miss",
+		}
+
+		for i, matcher := range matchers {
+			b.Run(fmt.Sprintf("size=%d/%s", size, caseNames[i]), func(b *testing.B) {
+				b.ReportAllocs()
+				for n := 0; n < b.N; n++ {
+					FilterLabelMatchers(filter, matcher)
+				}
+			})
+		}
+	}
+}

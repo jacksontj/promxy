@@ -437,23 +437,96 @@ func (l *FilterLabelVisitor) Visit(node parser.Node, path []parser.Node) (w pars
 	return l, nil
 }
 
+// FilterLabelMatchers returns whether the given matcher can be satisfied by the
+// filter; meaning whether at least one value in the filter's value-set for
+// `matcher.Name` matches. If the filter has no entry at all for the matcher's
+// label name then we know nothing about that label, so we return true (meaning
+// "don't filter this out").
+//
+// This is semantically identical to scanning the value set calling
+// `matcher.Matches(v)` on every value, but avoids doing so wherever the answer
+// can be computed from map lookups instead -- the value sets here can be very
+// large (e.g. every `__name__` on the downstream) and this is called per
+// matcher, per target, per query, before any I/O is done.
+//
 // TODO: better name, this is to check if a matcher is in the filter
 func FilterLabelMatchers(filter map[string]map[string]struct{}, matcher *labels.Matcher) bool {
-	for labelName, labelFilter := range filter {
-		if matcher.Name == labelName {
-			match := false
-			// Check that there is a match somewhere!
-			for v := range labelFilter {
-				if matcher.Matches(v) {
-					match = true
-					break
+	labelFilter, ok := filter[matcher.Name]
+	// If we have no filter for this label; we have nothing to say about it
+	if !ok {
+		return true
+	}
+
+	switch matcher.Type {
+	// An equality matcher matches exactly one value; so this is a single lookup
+	case labels.MatchEqual:
+		_, ok := labelFilter[matcher.Value]
+		return ok
+
+	// A not-equal matcher matches every value *except* one; so it is satisfied
+	// as long as the set holds something other than that one value
+	case labels.MatchNotEqual:
+		switch len(labelFilter) {
+		case 0:
+			return false
+		case 1:
+			// The lone value in the set is either the excluded one (no match) or
+			// something else (match)
+			_, ok := labelFilter[matcher.Value]
+			return !ok
+		default:
+			// More than one distinct value; at least one of them isn't the
+			// excluded one
+			return true
+		}
+
+	// For regexes upstream can often tell us the exact set of literal values the
+	// pattern matches (e.g. `a|b|c`); which turns this back into map lookups
+	case labels.MatchRegexp:
+		if setMatches := matcher.SetMatches(); len(setMatches) > 0 {
+			for _, v := range setMatches {
+				if _, ok := labelFilter[v]; ok {
+					return true
 				}
 			}
-			if !match {
-				return match
-			}
+			return false
+		}
+
+	case labels.MatchNotRegexp:
+		if setMatches := matcher.SetMatches(); len(setMatches) > 0 {
+			// The matcher matches everything *except* setMatches; so it is
+			// satisfied iff the filter holds some value outside of that set
+			return countPresent(labelFilter, setMatches) < len(labelFilter)
 		}
 	}
 
-	return true
+	// A genuine regex; we have no choice but to check the values in the set
+	for v := range labelFilter {
+		if matcher.Matches(v) {
+			return true
+		}
+	}
+	return false
+}
+
+// countPresent returns how many *distinct* values from `values` are present in
+// `set`. `set` is never mutated (it is shared across goroutines).
+func countPresent(set map[string]struct{}, values []string) int {
+	count := 0
+	// Only allocated if we actually find duplicates worth tracking
+	var seen map[string]struct{}
+	for i, v := range values {
+		if _, ok := set[v]; !ok {
+			continue
+		}
+		if seen == nil {
+			// The first hit can't be a duplicate; subsequent ones might be
+			seen = make(map[string]struct{}, len(values)-i)
+		} else if _, dup := seen[v]; dup {
+			continue
+		}
+		seen[v] = struct{}{}
+		count++
+	}
+	return count
 }
