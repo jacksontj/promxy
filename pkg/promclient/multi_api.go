@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -119,6 +120,10 @@ type MultiAPI struct {
 	metricFunc          MultiAPIMetricFunc
 	requiredCount       int // number "per key" that we require to respond
 	preferMax           bool
+
+	// metadataRotation advances on every MetadataOnePerKey call so that
+	// consecutive calls start from a different member of each HA key.
+	metadataRotation atomic.Uint64
 }
 
 func (m *MultiAPI) recordMetric(i int, api, status string, took float64) {
@@ -700,4 +705,70 @@ func SortExemplars(exemplars []v1.Exemplar) {
 		}
 		return a.Labels.String() < b.Labels.String()
 	})
+}
+
+// MetadataOnePerKey returns metadata about metrics currently scraped, fetching
+// from a single API per HA key instead of fanning out to all of them.
+//
+// APIs sharing a Key() fingerprint are HA replicas of one another -- the same
+// grouping requiredCount is enforced over -- so any one of them can answer for
+// the whole group. Members of a group are tried in turn, starting at a rotating
+// offset so successive calls spread across replicas, until one answers; a group
+// with no reachable member fails the call. APIs that expose no Key() all share
+// the zero fingerprint and are therefore treated as a single group.
+//
+// Merging across groups is first-writer-wins per metric name, in group order,
+// matching Metadata.
+func (m *MultiAPI) MetadataOnePerKey(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
+	// Group API indexes by HA key, keeping first-seen order so the merge below
+	// is deterministic in the API ordering.
+	keyOrder := make([]model.Fingerprint, 0, len(m.apis))
+	groups := make(map[model.Fingerprint][]int, len(m.apis))
+	for i, fp := range m.apiFingerprints {
+		if _, ok := groups[fp]; !ok {
+			keyOrder = append(keyOrder, fp)
+		}
+		groups[fp] = append(groups[fp], i)
+	}
+
+	rotation := int(m.metadataRotation.Add(1) - 1)
+
+	var result map[string][]v1.Metadata
+	for _, fp := range keyOrder {
+		members := groups[fp]
+		var (
+			md       map[string][]v1.Metadata
+			lastErr  error
+			answered bool
+		)
+		for n := 0; n < len(members); n++ {
+			i := members[(rotation+n)%len(members)]
+			start := time.Now()
+			v, err := m.apis[i].Metadata(ctx, metric, limit)
+			took := time.Since(start)
+			if err != nil {
+				m.recordMetric(i, "metadata", "error", took.Seconds())
+				lastErr = NormalizePromError(err)
+				continue
+			}
+			m.recordMetric(i, "metadata", "success", took.Seconds())
+			md, answered = v, true
+			break
+		}
+		if !answered {
+			return nil, errors.Wrap(lastErr, "Unable to fetch metadata from downstream servers")
+		}
+
+		if result == nil {
+			result = md
+		} else {
+			for k, vv := range md {
+				if _, ok := result[k]; !ok {
+					result[k] = vv
+				}
+			}
+		}
+	}
+
+	return result, nil
 }
