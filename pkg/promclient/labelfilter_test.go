@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
+	"gopkg.in/yaml.v2"
 )
 
 func newCountAPI(a API) *countAPI {
@@ -682,4 +684,124 @@ func BenchmarkFilterLabelMatchers(b *testing.B) {
 			})
 		}
 	}
+}
+
+// syncRangeAPI records the time range that the label_filter sync asks the
+// downstream for.
+type syncRangeAPI struct {
+	*stubAPI
+
+	mu     sync.Mutex
+	starts []time.Time
+	ends   []time.Time
+}
+
+func (s *syncRangeAPI) LabelValues(ctx context.Context, label string, matchers []string, startTime, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
+	s.mu.Lock()
+	s.starts = append(s.starts, startTime)
+	s.ends = append(s.ends, endTime)
+	s.mu.Unlock()
+	return model.LabelValues{"knownmetric"}, nil, nil
+}
+
+func (s *syncRangeAPI) lastRange(t *testing.T) (time.Time, time.Time) {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.starts) == 0 {
+		t.Fatal("downstream LabelValues was never called")
+	}
+	return s.starts[len(s.starts)-1], s.ends[len(s.ends)-1]
+}
+
+func TestLabelFilterSyncLookback(t *testing.T) {
+	// Unset sync_lookback keeps the historical unbounded (epoch) start.
+	t.Run("unset", func(t *testing.T) {
+		api := &syncRangeAPI{stubAPI: &stubAPI{}}
+		cfg := &LabelFilterConfig{DynamicLabels: []string{"__name__"}}
+		if err := cfg.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewLabelFilterClient(context.Background(), api, cfg); err != nil {
+			t.Fatal(err)
+		}
+
+		start, _ := api.lastRange(t)
+		if want := model.Time(0).Time(); !start.Equal(want) {
+			t.Fatalf("expected unbounded (epoch) start with no sync_lookback, want=%v got=%v", want, start)
+		}
+	})
+
+	// A configured sync_lookback bounds the start to now-lookback.
+	t.Run("set", func(t *testing.T) {
+		const lookback = time.Hour
+
+		api := &syncRangeAPI{stubAPI: &stubAPI{}}
+		cfg := &LabelFilterConfig{DynamicLabels: []string{"__name__"}, SyncLookback: lookback}
+		if err := cfg.Validate(); err != nil {
+			t.Fatal(err)
+		}
+
+		before := time.Now()
+		if _, err := NewLabelFilterClient(context.Background(), api, cfg); err != nil {
+			t.Fatal(err)
+		}
+		after := time.Now()
+
+		start, end := api.lastRange(t)
+		// The sync uses model.Now(), which is millisecond-truncated, so give the
+		// bounds a millisecond of slack on either side.
+		slack := time.Millisecond
+		if start.Before(before.Add(-lookback - slack)) {
+			t.Fatalf("start=%v is further back than now-%v", start, lookback)
+		}
+		if start.After(after.Add(-lookback + slack)) {
+			t.Fatalf("start=%v is not as far back as now-%v", start, lookback)
+		}
+		if got := end.Sub(start); got < lookback-slack || got > lookback+slack {
+			t.Fatalf("expected a %v window, got %v (start=%v end=%v)", lookback, got, start, end)
+		}
+	})
+}
+
+func TestLabelFilterConfigSyncLookbackYAML(t *testing.T) {
+	t.Run("set", func(t *testing.T) {
+		cfg := &LabelFilterConfig{}
+		in := "dynamic_labels:\n  - __name__\nsync_lookback: 24h\n"
+		if err := yaml.Unmarshal([]byte(in), cfg); err != nil {
+			t.Fatal(err)
+		}
+		if cfg.SyncLookback != 24*time.Hour {
+			t.Fatalf("expected sync_lookback=24h, got %v", cfg.SyncLookback)
+		}
+	})
+
+	t.Run("unset", func(t *testing.T) {
+		cfg := &LabelFilterConfig{}
+		if err := yaml.Unmarshal([]byte("dynamic_labels:\n  - __name__\n"), cfg); err != nil {
+			t.Fatal(err)
+		}
+		if cfg.SyncLookback != 0 {
+			t.Fatalf("expected sync_lookback to default to 0 (unbounded), got %v", cfg.SyncLookback)
+		}
+	})
+
+	t.Run("negative", func(t *testing.T) {
+		cfg := &LabelFilterConfig{}
+		in := "dynamic_labels:\n  - __name__\nsync_lookback: -1h\n"
+		err := yaml.Unmarshal([]byte(in), cfg)
+		if err == nil {
+			t.Fatal("expected a negative sync_lookback to be rejected")
+		}
+		if !strings.Contains(err.Error(), "sync_lookback must not be negative") {
+			t.Fatalf("expected the validation error for a negative sync_lookback, got: %v", err)
+		}
+	})
+
+	t.Run("without_dynamic_labels", func(t *testing.T) {
+		cfg := &LabelFilterConfig{}
+		if err := yaml.Unmarshal([]byte("sync_lookback: 1h\n"), cfg); err == nil {
+			t.Fatal("expected sync_lookback without dynamic_labels to be rejected")
+		}
+	})
 }

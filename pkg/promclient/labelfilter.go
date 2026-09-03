@@ -68,6 +68,25 @@ type LabelFilterConfig struct {
 	DynamicLabels []string `yaml:"dynamic_labels"`
 	// SyncInterval defines how frequenlty to update the dynamic label filter
 	SyncInterval time.Duration `yaml:"sync_interval"`
+	// SyncLookback bounds how far back each dynamic label sync looks on the
+	// downstream; the sync asks for label values over `now-sync_lookback` to
+	// `now` instead of over all time.
+	//
+	// The default (unset/0) is unbounded: every sync asks the downstream for the
+	// values of each dynamic label from the epoch to now. That is correct
+	// regardless of the downstream's retention, but it is also the most
+	// expensive question you can ask -- the downstream has to consult every
+	// block on disk, for every dynamic label, for every target in the
+	// servergroup, once per `sync_interval`. For the common `__name__` case that
+	// is the complete set of metric names the downstream has ever held. Setting
+	// this to something comfortably larger than your scrape/staleness window
+	// (e.g. 1h or 24h) bounds that work to the recent blocks.
+	//
+	// NOTE: a label value that exists downstream but has had no samples within
+	// the lookback window will be absent from the filter, and queries matching
+	// only that value will be filtered out (not sent downstream) -- so keep this
+	// well above the age of data you expect to query from this target.
+	SyncLookback time.Duration `yaml:"sync_lookback"`
 	// StaticLabelsInclude is a set of labels to always add to the downstream filter
 	// this allows you to define some metrics to be included statically if you want to
 	// avoid polling the downstream.
@@ -99,6 +118,14 @@ func (c *LabelFilterConfig) Validate() error {
 
 	if c.SyncInterval > 0 && len(c.DynamicLabels) == 0 {
 		return fmt.Errorf("sync_interval requires `dynamic_labels_include` to be set")
+	}
+
+	if c.SyncLookback < 0 {
+		return fmt.Errorf("sync_lookback must not be negative")
+	}
+
+	if c.SyncLookback > 0 && len(c.DynamicLabels) == 0 {
+		return fmt.Errorf("sync_lookback requires `dynamic_labels` to be set")
 	}
 
 	switch c.OnSyncError {
@@ -223,10 +250,18 @@ func (c *LabelFilterClient) LabelFilter() map[string]map[string]struct{} {
 func (c *LabelFilterClient) Sync(ctx context.Context) error {
 	filter := make(map[string]map[string]struct{})
 
+	end := model.Now().Time()
+	// An unset sync_lookback means "all of time"; the epoch is as far back as a
+	// model.Time can express, so it stands in for an unbounded start.
+	start := model.Time(0).Time()
+	if c.cfg.SyncLookback > 0 {
+		start = end.Add(-c.cfg.SyncLookback)
+	}
+
 	for _, label := range c.cfg.DynamicLabels {
 		labelFilter := make(map[string]struct{})
 		// TODO: warn?
-		vals, _, err := c.LabelValues(ctx, label, nil, model.Time(0).Time(), model.Now().Time())
+		vals, _, err := c.LabelValues(ctx, label, nil, start, end)
 		if err != nil {
 			return err
 		}
