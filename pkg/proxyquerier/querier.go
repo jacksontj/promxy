@@ -2,6 +2,7 @@ package proxyquerier
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -25,8 +26,17 @@ type ProxyQuerier struct {
 }
 
 // Select returns a set of series that matches the given label matchers.
-// TODO: switch based on sortSeries bool(first arg)
-func (h *ProxyQuerier) Select(ctx context.Context, _ bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+//
+// When sortSeries is set the result is ordered by labels.Compare, as the
+// storage.Querier contract requires: callers such as the /federate and
+// /api/v1/series handlers feed several Select results into
+// storage.NewMergeSeriesSet, whose k-way merge silently emits duplicate series
+// if an input is out of order. Nothing below guarantees that order on its own
+// -- the downstream's ordering is only meaningful in terms of the labels it
+// sent, and promxy rewrites those (server-group labels, metric_relabel_configs)
+// after the fact. When sortSeries is unset (the promql engine's path) the
+// result is passed through untouched.
+func (h *ProxyQuerier) Select(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	start := time.Now()
 	defer func() {
 		logrus.WithFields(logrus.Fields{
@@ -61,12 +71,21 @@ func (h *ProxyQuerier) Select(ctx context.Context, _ bool, hints *storage.Select
 			lb.Sort()
 			series[j] = storage.NewListSeries(lb.Labels(), nil)
 		}
+		if sortSeries {
+			sort.Slice(series, func(i, j int) bool {
+				return labels.Compare(series[i].Labels(), series[j].Labels()) < 0
+			})
+		}
 		return NewSeriesSet(series, warnings, nil)
 	}
 
 	// Data path: the client already returns a storage.SeriesSet, decoded
 	// straight from the downstream response (no model.Value round-trip).
-	return h.Client.GetValue(ctx, timestamp.Time(hints.Start), timestamp.Time(hints.End), matchers)
+	ss := h.Client.GetValue(ctx, timestamp.Time(hints.Start), timestamp.Time(hints.End), matchers)
+	if sortSeries {
+		ss = promclient.SortSeriesSet(ss)
+	}
+	return ss
 }
 
 // LabelValues returns all potential values for a label name.
