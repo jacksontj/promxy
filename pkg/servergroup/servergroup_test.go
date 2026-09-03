@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/sigv4"
 	"gopkg.in/yaml.v2"
 )
@@ -447,6 +448,130 @@ func TestSigV4RoundTripperErrorHandling(t *testing.T) {
 			}
 
 			t.Logf("SigV4 round tripper configured successfully for test: %s", tt.name)
+		})
+	}
+}
+
+// TestDownstreamTransportForceAttemptHTTP2 covers the http_client.enable_http2
+// knob. Go's net/http conservatively disables its automatic HTTP/2 wiring when
+// TLSClientConfig or DialContext is set (both always are here), so
+// ForceAttemptHTTP2 is the only thing that can turn h2 negotiation on.
+func TestDownstreamTransportForceAttemptHTTP2(t *testing.T) {
+	tests := []struct {
+		name        string
+		enableHTTP2 bool
+		want        bool
+	}{
+		{
+			name:        "default (off) keeps HTTP/1.1 only",
+			enableHTTP2: false,
+			want:        false,
+		},
+		{
+			name:        "enable_http2 opts into h2 negotiation",
+			enableHTTP2: true,
+			want:        true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				Scheme:              "https",
+				MaxIdleConns:        20000,
+				MaxIdleConnsPerHost: 1000,
+				IdleConnTimeout:     5 * time.Minute,
+				Timeout:             30 * time.Second,
+				HTTPConfig: HTTPClientConfig{
+					DialTimeout: 200 * time.Millisecond,
+					HTTPConfig: config_util.HTTPClientConfig{
+						EnableHTTP2: tt.enableHTTP2,
+					},
+				},
+			}
+
+			transport, err := newDownstreamTransport(cfg)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if transport.ForceAttemptHTTP2 != tt.want {
+				t.Errorf("ForceAttemptHTTP2 = %v, want %v", transport.ForceAttemptHTTP2, tt.want)
+			}
+
+			// The reason the knob is needed at all: both of these are always set,
+			// and either one alone makes net/http skip HTTP/2 auto-configuration.
+			if transport.TLSClientConfig == nil {
+				t.Errorf("expected TLSClientConfig to be set")
+			}
+			if transport.DialContext == nil {
+				t.Errorf("expected DialContext to be set")
+			}
+		})
+	}
+}
+
+// TestDownstreamTransportForceAttemptHTTP2FromYAML checks the config value
+// actually reaches the transport built by ApplyConfig (rather than only the
+// helper), for a server group with no auth round-tripper wrapping.
+func TestDownstreamTransportForceAttemptHTTP2FromYAML(t *testing.T) {
+	tests := []struct {
+		name       string
+		yamlConfig string
+		want       bool
+	}{
+		{
+			name: "unset",
+			yamlConfig: `
+scheme: https
+http_client:
+  dial_timeout: 200ms
+static_configs:
+  - targets: ["127.0.0.1:9090"]
+`,
+			want: false,
+		},
+		{
+			name: "enabled",
+			yamlConfig: `
+scheme: https
+http_client:
+  dial_timeout: 200ms
+  enable_http2: true
+static_configs:
+  - targets: ["127.0.0.1:9090"]
+`,
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cfg Config
+			if err := yaml.Unmarshal([]byte(tt.yamlConfig), &cfg); err != nil {
+				t.Fatalf("failed to unmarshal config: %v", err)
+			}
+
+			sg, err := NewServerGroup()
+			if err != nil {
+				t.Fatalf("failed to create servergroup: %v", err)
+			}
+			defer sg.Cancel()
+
+			if err := sg.ApplyConfig(&cfg); err != nil {
+				t.Fatalf("unexpected error applying config: %v", err)
+			}
+
+			// With no auth configured the base transport is the client's
+			// round-tripper directly -- no wrapping to unwrap.
+			transport, ok := sg.client.Transport.(*http.Transport)
+			if !ok {
+				t.Fatalf("expected *http.Transport, got %T", sg.client.Transport)
+			}
+
+			if transport.ForceAttemptHTTP2 != tt.want {
+				t.Errorf("ForceAttemptHTTP2 = %v, want %v", transport.ForceAttemptHTTP2, tt.want)
+			}
 		})
 	}
 }

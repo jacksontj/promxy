@@ -630,3 +630,71 @@ http_client:
 		})
 	}
 }
+
+func TestEnableHTTP2Config(t *testing.T) {
+	tests := []struct {
+		name   string
+		config string
+		want   bool
+	}{
+		{
+			name:   "absent http_client block defaults to false",
+			config: "scheme: https",
+			want:   false,
+		},
+		{
+			name:   "empty http_client block defaults to false",
+			config: "http_client: {}",
+			want:   false,
+		},
+		{
+			name: "explicitly disabled",
+			config: `
+http_client:
+  enable_http2: false
+`,
+			want: false,
+		},
+		{
+			name: "explicitly enabled",
+			config: `
+http_client:
+  enable_http2: true
+`,
+			want: true,
+		},
+		{
+			name: "enabled alongside other http_client options",
+			config: `
+http_client:
+  dial_timeout: 500ms
+  dial_network: tcp4
+  enable_http2: true
+`,
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cfg Config
+			if err := yaml.Unmarshal([]byte(tt.config), &cfg); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := cfg.HTTPConfig.HTTP2Enabled(); got != tt.want {
+				t.Errorf("HTTP2Enabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEnableHTTP2Default asserts the package default (the base every
+// server_group config is unmarshaled onto) leaves HTTP/2 off, so upgrading
+// promxy never silently changes the downstream protocol. Note prometheus'
+// own DefaultHTTPClientConfig sets EnableHTTP2: true -- promxy deliberately
+// does not seed it.
+func TestEnableHTTP2Default(t *testing.T) {
+	if DefaultConfig.HTTPConfig.HTTP2Enabled() {
+		t.Errorf("DefaultConfig.HTTPConfig.HTTP2Enabled() = true, want false (opt-in only)")
+	}
+}
