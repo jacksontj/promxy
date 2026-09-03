@@ -120,11 +120,12 @@ func (p *ProxyStorage) strictMissingRemoteRead() []int {
 	}
 	var ords []int
 	for _, sg := range state.sgs {
-		if sg.Cfg == nil {
+		cfg := sg.Config()
+		if cfg == nil {
 			continue
 		}
-		if !sg.Cfg.RemoteRead && !sg.Cfg.NativeHistogram.AllowLossy {
-			ords = append(ords, sg.Cfg.Ordinal)
+		if !cfg.RemoteRead && !cfg.NativeHistogram.AllowLossy {
+			ords = append(ords, cfg.Ordinal)
 		}
 	}
 	return ords
@@ -145,7 +146,7 @@ func (p *ProxyStorage) histogramNamePredicate() func(string) bool {
 	}
 	var enabled bool
 	for _, sg := range state.sgs {
-		if sg.Cfg != nil && sg.Cfg.NativeHistogram.MetadataRefresh > 0 {
+		if cfg := sg.Config(); cfg != nil && cfg.NativeHistogram.MetadataRefresh > 0 {
 			enabled = true
 			break
 		}

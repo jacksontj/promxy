@@ -90,6 +90,22 @@ func TestIsHistogramExpr(t *testing.T) {
 	}
 }
 
+// sgWithConfig builds a ServerGroup carrying only the given configuration.
+// ServerGroup.Config is published atomically by ApplyConfig, so tests go
+// through the real constructor + ApplyConfig rather than setting a field.
+func sgWithConfig(t *testing.T, cfg *servergroup.Config) *servergroup.ServerGroup {
+	t.Helper()
+	sg, err := servergroup.NewServerGroup()
+	if err != nil {
+		t.Fatalf("NewServerGroup: %v", err)
+	}
+	t.Cleanup(sg.Cancel)
+	if err := sg.ApplyConfig(cfg); err != nil {
+		t.Fatalf("ApplyConfig: %v", err)
+	}
+	return sg
+}
+
 func TestStrictMissingRemoteRead(t *testing.T) {
 	cases := []struct {
 		name string
@@ -99,39 +115,39 @@ func TestStrictMissingRemoteRead(t *testing.T) {
 		{
 			name: "all remote_read configured",
 			sgs: []*servergroup.ServerGroup{
-				{Cfg: &servergroup.Config{Ordinal: 0, RemoteRead: true}},
-				{Cfg: &servergroup.Config{Ordinal: 1, RemoteRead: true}},
+				sgWithConfig(t, &servergroup.Config{Ordinal: 0, RemoteRead: true}),
+				sgWithConfig(t, &servergroup.Config{Ordinal: 1, RemoteRead: true}),
 			},
 			want: nil,
 		},
 		{
 			name: "remote_read missing, allow_lossy off — strict",
 			sgs: []*servergroup.ServerGroup{
-				{Cfg: &servergroup.Config{Ordinal: 0, RemoteRead: false}},
+				sgWithConfig(t, &servergroup.Config{Ordinal: 0, RemoteRead: false}),
 			},
 			want: []int{0},
 		},
 		{
 			name: "remote_read missing, allow_lossy on — not strict",
 			sgs: []*servergroup.ServerGroup{
-				{Cfg: &servergroup.Config{
+				sgWithConfig(t, &servergroup.Config{
 					Ordinal:         0,
 					RemoteRead:      false,
 					NativeHistogram: servergroup.NativeHistogramConfig{AllowLossy: true},
-				}},
+				}),
 			},
 			want: nil,
 		},
 		{
 			name: "mixed — only the strict one shows up",
 			sgs: []*servergroup.ServerGroup{
-				{Cfg: &servergroup.Config{Ordinal: 0, RemoteRead: true}},
-				{Cfg: &servergroup.Config{Ordinal: 1, RemoteRead: false}}, // strict
-				{Cfg: &servergroup.Config{
+				sgWithConfig(t, &servergroup.Config{Ordinal: 0, RemoteRead: true}),
+				sgWithConfig(t, &servergroup.Config{Ordinal: 1, RemoteRead: false}), // strict
+				sgWithConfig(t, &servergroup.Config{
 					Ordinal:         2,
 					RemoteRead:      false,
 					NativeHistogram: servergroup.NativeHistogramConfig{AllowLossy: true},
-				}},
+				}),
 			},
 			want: []int{1},
 		},
