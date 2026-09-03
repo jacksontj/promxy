@@ -568,7 +568,7 @@ func (ng *Engine) validateOpts(expr parser.Expr) error {
 		return nil
 	}
 
-	_, err := parser.Inspect(context.TODO(), &parser.EvalStmt{Expr: expr}, func(node parser.Node, path []parser.Node) error {
+	_, err := parser.Inspect(context.TODO(), &parser.EvalStmt{Expr: expr}, func(node parser.Node, _ []parser.Node) error {
 		var atModifierUsed, negativeOffsetUsed bool
 		switch n := node.(type) {
 		case *parser.VectorSelector:
@@ -886,7 +886,7 @@ func (ng *Engine) findMinMaxTime(s *parser.EvalStmt) (int64, int64) {
 	// Whenever a MatrixSelector is evaluated, evalRange is set to the corresponding range.
 	// The evaluation of the VectorSelector inside then evaluates the given range and unsets
 	// the variable.
-	//var evalRange time.Duration
+	// var evalRange time.Duration
 
 	// Since this fork allows for parallel execution of the tree Walk we need a more
 	// sophisticated datastructure (to avoid conflicts)
@@ -894,7 +894,7 @@ func (ng *Engine) findMinMaxTime(s *parser.EvalStmt) (int64, int64) {
 	// We are dual-purposing the lock for both the `ranges` and the `min/max` timestamp variables
 	l := sync.RWMutex{}
 
-	parser.Inspect(context.TODO(), s, func(node parser.Node, path []parser.Node) error {
+	_, _ = parser.Inspect(context.TODO(), s, func(node parser.Node, path []parser.Node) error {
 		switch n := node.(type) {
 		case *parser.VectorSelector:
 			l.RLock()
@@ -909,15 +909,12 @@ func (ng *Engine) findMinMaxTime(s *parser.EvalStmt) (int64, int64) {
 			if end > maxTimestamp {
 				maxTimestamp = end
 			}
-			evalRange = 0
 			l.Unlock()
 
 		case *parser.MatrixSelector:
 			l.Lock()
-			prefix := make([]posrange.PositionRange, len(path))
-			for i, p := range path {
-				prefix[i] = p.PositionRange()
-			}
+			prefix := make([]parser.Node, len(path))
+			copy(prefix, path)
 			ranges = append(ranges, evalRange{Prefix: prefix, Range: n.Range})
 			l.Unlock()
 		}
@@ -995,7 +992,7 @@ func (ng *Engine) populateSeries(ctx context.Context, querier storage.Querier, s
 	// Whenever a MatrixSelector is evaluated, evalRange is set to the corresponding range.
 	// The evaluation of the VectorSelector inside then evaluates the given range and unsets
 	// the variable.
-	//var evalRange time.Duration
+	// var evalRange time.Duration
 
 	// Since this fork allows for parallel execution of the tree Walk we need a more
 	// sophisticated datastructure (to avoid conflicts)
@@ -1029,16 +1026,13 @@ func (ng *Engine) populateSeries(ctx context.Context, querier storage.Querier, s
 
 		case *parser.MatrixSelector:
 			l.Lock()
-			prefix := make([]posrange.PositionRange, len(path))
-			for i, p := range path {
-				prefix[i] = p.PositionRange()
-			}
+			prefix := make([]parser.Node, len(path))
+			copy(prefix, path)
 			ranges = append(ranges, evalRange{Prefix: prefix, Range: n.Range})
 			l.Unlock()
 		}
 		return nil
 	}, ng.NodeReplacer)
-
 	if err != nil {
 		return err
 	}
@@ -3913,7 +3907,7 @@ func setOffsetForAtModifier(evalTime int64, expr parser.Expr) {
 		return originalOffset + offsetDiff
 	}
 
-	parser.Inspect(context.TODO(), &parser.EvalStmt{Expr: expr}, func(node parser.Node, path []parser.Node) error {
+	_, _ = parser.Inspect(context.TODO(), &parser.EvalStmt{Expr: expr}, func(node parser.Node, path []parser.Node) error {
 		switch n := node.(type) {
 		case *parser.VectorSelector:
 			n.Offset = getOffset(n.Timestamp, n.OriginalOffset, path)
@@ -3935,7 +3929,7 @@ func setOffsetForAtModifier(evalTime int64, expr parser.Expr) {
 // and buckets. The function can be treated as an optimization and is not
 // required for correctness.
 func detectHistogramStatsDecoding(expr parser.Expr) {
-	parser.Inspect(context.TODO(), &parser.EvalStmt{Expr: expr}, func(node parser.Node, path []parser.Node) error {
+	_, _ = parser.Inspect(context.TODO(), &parser.EvalStmt{Expr: expr}, func(node parser.Node, path []parser.Node) error {
 		n, ok := (node).(*parser.VectorSelector)
 		if !ok {
 			return nil

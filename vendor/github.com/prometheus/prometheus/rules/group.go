@@ -1116,7 +1116,7 @@ func buildDependencyMap(rules []Rule) dependencyMap {
 			break
 		}
 
-		parser.Inspect(context.TODO(), &parser.EvalStmt{Expr: rule.Query()}, func(node parser.Node, _ []parser.Node) error {
+		_, _ = parser.Inspect(context.TODO(), &parser.EvalStmt{Expr: rule.Query()}, func(node parser.Node, _ []parser.Node) error {
 			if n, ok := node.(*parser.VectorSelector); ok {
 				// Find the name matcher for the rule.
 				var nameMatcher *labels.Matcher

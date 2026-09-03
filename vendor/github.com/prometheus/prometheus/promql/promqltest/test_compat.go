@@ -83,9 +83,11 @@ type errStorageQuerier struct{}
 func (errStorageQuerier) Select(_ context.Context, _ bool, _ *storage.SelectHints, _ ...*labels.Matcher) storage.SeriesSet {
 	return storage.EmptySeriesSet()
 }
+
 func (errStorageQuerier) LabelValues(_ context.Context, _ string, _ *storage.LabelHints, _ ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, nil
 }
+
 func (errStorageQuerier) LabelNames(_ context.Context, _ *storage.LabelHints, _ ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, nil
 }
@@ -113,7 +115,7 @@ func (errStorageChunkQuerier) Select(_ context.Context, _ bool, _ *storage.Selec
 type Test struct {
 	t        *test
 	engine   *promql.Engine
-	external *stableStorage // stable storage handed out via Storage()
+	external *stableStorage  // stable storage handed out via Storage()
 	override storage.Storage // installed via SetStorage; nil means "use external directly"
 	closed   bool
 }
