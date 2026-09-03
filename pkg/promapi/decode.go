@@ -248,6 +248,12 @@ func decodeVector(iter *jsoniter.Iterator) []storage.Series {
 				iter.Skip()
 			}
 		}
+		// A nil sample would only fail once the series is iterated -- far from
+		// the response that produced it -- so reject the body here instead.
+		if sample == nil {
+			iter.ReportError("decodeVector", `result entry has neither a "value" nor a "histogram"`)
+			return nil
+		}
 		b.Sort()
 		out = append(out, NewSeries(b.Labels(), []chunks.Sample{sample}))
 	}
