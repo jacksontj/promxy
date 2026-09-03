@@ -385,6 +385,11 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 					}
 				}
 
+				// Add a health check if configured
+				if s.Cfg.HealthCheckConfig != nil {
+					apiClient = promclient.NewHealthCheckClient(ctx, apiClient, s.Cfg.HealthCheckConfig, u.String(), s.client)
+				}
+
 				// Add wrap for the specific target, and add to the list
 				apiClients = append(apiClients, &promclient.ErrorWrap{apiClient, "error in target=" + u.String()})
 			}

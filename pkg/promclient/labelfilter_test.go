@@ -32,54 +32,67 @@ func newCountAPI(a API) *countAPI {
 
 type countAPI struct {
 	API
+	mu        sync.Mutex
 	callCount map[string]int
+}
+
+func (s *countAPI) count(name string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.callCount[name]
+}
+
+func (s *countAPI) inc(name string) {
+	s.mu.Lock()
+	s.callCount[name]++
+	s.mu.Unlock()
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
 func (s *countAPI) LabelNames(ctx context.Context, matchers []string, startTime time.Time, endTime time.Time) ([]string, v1.Warnings, error) {
-	s.callCount["LabelNames"]++
+	s.inc("LabelNames")
 	return s.API.LabelNames(ctx, matchers, startTime, endTime)
 }
 
 // LabelValues performs a query for the values of the given label.
 func (s *countAPI) LabelValues(ctx context.Context, label string, matchers []string, startTime time.Time, endTime time.Time) (model.LabelValues, v1.Warnings, error) {
-	s.callCount["LabelValues"]++
+	s.inc("LabelValues")
 	return s.API.LabelValues(ctx, label, matchers, startTime, endTime)
 }
 
 // Query performs a query for the given time.
 func (s *countAPI) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
-	s.callCount["Query"]++
+	s.inc("Query")
 	return s.API.Query(ctx, query, ts)
 }
 
 // QueryRange performs a query for the given range.
 func (s *countAPI) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
-	s.callCount["QueryRange"]++
+	s.inc("QueryRange")
 	return s.API.QueryRange(ctx, query, r)
 }
 
 // Series finds series by label matchers.
 func (s *countAPI) Series(ctx context.Context, matches []string, startTime time.Time, endTime time.Time) ([]model.LabelSet, v1.Warnings, error) {
-	s.callCount["Series"]++
+	s.inc("Series")
 	return s.API.Series(ctx, matches, startTime, endTime)
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
 func (s *countAPI) GetValue(ctx context.Context, start, end time.Time, matchers []*labels.Matcher) storage.SeriesSet {
-	s.callCount["GetValue"]++
+	s.inc("GetValue")
 	return s.API.GetValue(ctx, start, end, matchers)
 }
 
 // Metadata returns metadata about metrics currently scraped by the metric name.
 func (s *countAPI) Metadata(ctx context.Context, metric, limit string) (map[string][]v1.Metadata, error) {
-	s.callCount["Metadata"]++
+	s.inc("Metadata")
 	return s.API.Metadata(ctx, metric, limit)
 }
 
 // QueryExemplars performs a query for exemplars by the given query and time range.
 func (s *countAPI) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
-	s.callCount["QueryExemplars"]++
+	s.inc("QueryExemplars")
 	return s.API.QueryExemplars(ctx, query, startTime, endTime)
 }
 
@@ -405,6 +418,80 @@ func TestLabelFilterOnSyncError(t *testing.T) {
 		}
 		if got := api.getQueryCount(); got != before {
 			t.Fatalf("expected unknownmetric to be filtered after sync: before=%d after=%d", before, got)
+		}
+	})
+
+	// recover when the first sync succeeded but later on the target times out
+	t.Run("closed_then_relapses", func(t *testing.T) {
+		api := &flakyLabelValuesAPI{stubAPI: &stubAPI{}, fail: false, values: model.LabelValues{"knownmetric"}}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		cfg := &LabelFilterConfig{
+			DynamicLabels: []string{"__name__"},
+			OnSyncError:   LabelFilterOnSyncErrorClosed,
+			SyncInterval:  20 * time.Millisecond,
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		c, err := NewLabelFilterClient(ctx, api, cfg)
+		if err != nil {
+			t.Fatalf("expected initial sync to succeed, got: %v", err)
+		}
+		if c.LabelFilter() == nil {
+			t.Fatal("expected filter to be loaded after a successful initial sync")
+		}
+
+		// Sanity check: queries pass through while healthy
+		before := api.getQueryCount()
+		if err := c.Query(ctx, "knownmetric", time.Now()).Err(); err != nil {
+			t.Fatal(err)
+		}
+		if got := api.getQueryCount(); got != before+1 {
+			t.Fatalf("expected knownmetric to pass through while synced: before=%d after=%d", before, got)
+		}
+
+		// Now the downstream starts failing (e.g. it starts timing out)
+		api.setFail(true)
+		deadline := time.Now().Add(2 * time.Second)
+		for !c.blocked() && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if !c.blocked() {
+			t.Fatal("expected client to become blocked after a later sync failed")
+		}
+
+		// The stale (previously-successful) filter is still cached
+		if c.LabelFilter() == nil {
+			t.Fatal("expected the stale filter to remain cached, not cleared, on a later sync failure")
+		}
+
+		// Even a known-good metric must now be blocked
+		before = api.getQueryCount()
+		if err := c.Query(ctx, "knownmetric", time.Now()).Err(); err != nil {
+			t.Fatal(err)
+		}
+		if got := api.getQueryCount(); got != before {
+			t.Fatalf("expected query to be blocked after sync relapsed, but downstream was called: before=%d after=%d", before, got)
+		}
+
+		// The target recovers again: once a later sync succeeds, the client
+		// must unblock
+		api.setFail(false)
+		deadline = time.Now().Add(2 * time.Second)
+		for c.blocked() && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if c.blocked() {
+			t.Fatal("expected client to unblock after a later sync succeeded again")
+		}
+
+		before = api.getQueryCount()
+		if err := c.Query(ctx, "knownmetric", time.Now()).Err(); err != nil {
+			t.Fatal(err)
+		}
+		if got := api.getQueryCount(); got != before+1 {
+			t.Fatalf("expected knownmetric to pass through again after recovering from relapse: before=%d after=%d", before, got)
 		}
 	})
 }

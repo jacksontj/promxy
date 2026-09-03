@@ -54,7 +54,7 @@ const (
 	// downstream (i.e. no filtering) until the first successful sync.
 	LabelFilterOnSyncErrorOpen LabelFilterOnSyncError = "open"
 	// LabelFilterOnSyncErrorClosed lets startup proceed but filters out every
-	// query (i.e. the target is skipped) until the first successful sync.
+	// query (i.e. the target is skipped) whenever the most recent sync attempt failed.
 	LabelFilterOnSyncErrorClosed LabelFilterOnSyncError = "closed"
 )
 
@@ -78,15 +78,19 @@ type LabelFilterConfig struct {
 	// StaticLabelsExclude is a set of labels to always exclude from the filter. This is done last
 	// so it will apply after the dynamic and static lists are added to the filter.
 	StaticLabelsExclude map[string][]string `yaml:"static_labels_exclude"`
-	// OnSyncError controls behavior while the filter has never successfully synced
-	// from the downstream (e.g. the target is unreachable at startup). This is
-	// distinct from the servergroup's `ignore_error`, which governs the query path.
-	//   abort  - fail the sync; this blocks servergroup startup until a sync
-	//            succeeds (default; preserves historical behavior)
-	//   open   - proceed without filtering; all queries are sent downstream until
-	//            the first successful sync
-	//   closed - proceed but filter out everything (skip this target) until the
-	//            first successful sync
+	// OnSyncError controls behavior while the filter's most recent sync attempt
+	// from the downstream did not succeed (e.g. the target is unreachable at
+	// startup, or becomes unreachable/times out later on). This is distinct from
+	// the servergroup's `ignore_error`, which governs the query path.
+	//   abort  - fail the initial sync; this blocks servergroup startup until a
+	//            sync succeeds (default; preserves historical behavior). Only
+	//            applies to startup -- later sync failures are logged, not fatal.
+	//   open   - proceed without filtering; all queries are sent downstream
+	//            whenever the most recent sync attempt failed
+	//   closed - filter out everything (skip this target) whenever the most
+	//            recent sync attempt failed -- including startup, and any later
+	//            sync that fails after a prior success. Re-opens as soon as a
+	//            subsequent sync succeeds again.
 	OnSyncError LabelFilterOnSyncError `yaml:"on_sync_error"`
 }
 
@@ -189,11 +193,11 @@ func (c *LabelFilterClient) syncLoop(ctx context.Context) {
 	}
 }
 
-// blocked reports whether the filter has never successfully synced and is
-// configured to fail closed, in which case all downstream calls are skipped
-// (the target is treated as "down" until the first successful sync).
+// blocked reports whether the most recent sync attempt failed and this client
+// is configured to fail closed, in which case all downstream calls are skipped
+// (the target is treated as "down" until the sync is successful again).
 func (c *LabelFilterClient) blocked() bool {
-	return c.cfg != nil && c.cfg.OnSyncError == LabelFilterOnSyncErrorClosed && c.LabelFilter() == nil
+	return c.cfg != nil && c.cfg.OnSyncError == LabelFilterOnSyncErrorClosed && !c.syncOK.Load()
 }
 
 // LabelFilterClient filters out calls to the downstream based on a label filter
@@ -203,6 +207,9 @@ type LabelFilterClient struct {
 
 	// filter is an atomic to hold the LabelFilter which is a map of labelName -> labelValue -> nothing (for quick lookups)
 	filter atomic.Value
+
+	// syncOK reflects whether the most recent Sync() attempt succeeded
+	syncOK atomic.Bool
 
 	// Used as the background context for this client
 	ctx context.Context
@@ -220,7 +227,11 @@ func (c *LabelFilterClient) LabelFilter() map[string]map[string]struct{} {
 	return nil
 }
 
-func (c *LabelFilterClient) Sync(ctx context.Context) error {
+func (c *LabelFilterClient) Sync(ctx context.Context) (err error) {
+	defer func() {
+		c.syncOK.Store(err == nil)
+	}()
+
 	filter := make(map[string]map[string]struct{})
 
 	for _, label := range c.cfg.DynamicLabels {
