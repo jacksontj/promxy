@@ -219,6 +219,23 @@ promxy:
           - job
         # (optional) this will define a re-sync interval for dynamic labels from the downstream
         sync_interval: 5m
+        # (optional) sync_lookback bounds how far back each dynamic label sync
+        # looks on the downstream (it asks for label values over
+        # `now-sync_lookback` to `now` instead of over all time).
+        # The default (unset) is unbounded: every sync asks the downstream for
+        # the values of each dynamic label from the epoch to now. That is correct
+        # regardless of the downstream's retention, but it is also the most
+        # expensive question you can ask -- the downstream has to consult every
+        # block on disk, for every dynamic label, for every target in the
+        # server_group, once per `sync_interval`. For the common `__name__` case
+        # that is the complete set of metric names the downstream has ever held.
+        # Setting this to something comfortably larger than your scrape/staleness
+        # window (e.g. 1h or 24h) bounds that work to the recent blocks.
+        # NOTE: a label value that exists downstream but has had no samples
+        # within the lookback window will be absent from the filter, and queries
+        # matching only that value will be filtered out (not sent downstream) --
+        # so keep this well above the age of data you expect to query here.
+        sync_lookback: 24h
         # This will statically define a filter of labels
         static_labels_include:
           instance:
