@@ -1,6 +1,7 @@
 package promapi
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -215,7 +216,8 @@ func decodeResult(resultType string, body []byte) ([]storage.Series, error) {
 	case "matrix":
 		return decodeMatrix(iter), iter.Error
 	case "scalar":
-		t, f := decodeSamplePair(iter)
+		scratch := make([]byte, 0, 32)
+		t, f := decodeSamplePair(iter, &scratch)
 		return []storage.Series{NewSeries(labels.EmptyLabels(), []chunks.Sample{floatSample{t, f}})}, iter.Error
 	case "string":
 		// strings carry no series; the model.Value path didn't support them either.
@@ -228,6 +230,7 @@ func decodeResult(resultType string, body []byte) ([]storage.Series, error) {
 func decodeVector(iter *jsoniter.Iterator) []storage.Series {
 	var out []storage.Series
 	var b labels.ScratchBuilder
+	scratch := make([]byte, 0, 32)
 	for iter.ReadArray() {
 		b.Reset()
 		var sample chunks.Sample
@@ -236,10 +239,10 @@ func decodeVector(iter *jsoniter.Iterator) []storage.Series {
 			case "metric":
 				readMetric(iter, &b)
 			case "value":
-				t, f := decodeSamplePair(iter)
+				t, f := decodeSamplePair(iter, &scratch)
 				sample = floatSample{t, f}
 			case "histogram":
-				t, fh := decodeHistogramPair(iter)
+				t, fh := decodeHistogramPair(iter, &scratch)
 				sample = histSample{t, fh}
 			default:
 				iter.Skip()
@@ -254,6 +257,7 @@ func decodeVector(iter *jsoniter.Iterator) []storage.Series {
 func decodeMatrix(iter *jsoniter.Iterator) []storage.Series {
 	var out []storage.Series
 	var b labels.ScratchBuilder
+	scratch := make([]byte, 0, 32)
 	for iter.ReadArray() {
 		b.Reset()
 		var samples []chunks.Sample
@@ -264,13 +268,13 @@ func decodeMatrix(iter *jsoniter.Iterator) []storage.Series {
 				readMetric(iter, &b)
 			case "values":
 				for iter.ReadArray() {
-					t, f := decodeSamplePair(iter)
+					t, f := decodeSamplePair(iter, &scratch)
 					samples = append(samples, floatSample{t, f})
 				}
 			case "histograms":
 				hadHist = true
 				for iter.ReadArray() {
-					t, fh := decodeHistogramPair(iter)
+					t, fh := decodeHistogramPair(iter, &scratch)
 					samples = append(samples, histSample{t, fh})
 				}
 			default:
@@ -295,11 +299,105 @@ func readMetric(iter *jsoniter.Iterator, b *labels.ScratchBuilder) {
 	}
 }
 
+// millisPerSecond and dotPrecision mirror prometheus/common's model.Time: the
+// API's timestamps are Unix seconds with at most millisecond precision.
+const (
+	millisPerSecond = 1000
+	dotPrecision    = 3
+)
+
+// decodeTimestamp reads the API's <unix-seconds>[.<fraction>] number as a
+// millisecond timestamp.
+//
+// The number is parsed from its decimal text rather than via float64, the same
+// way prometheus/common's model.Time.UnmarshalJSON does, because
+// float64(seconds)*1000 does not reliably land on the integer millisecond the
+// text named: the product can fall a hair short and truncate away the
+// millisecond. Whether it does depends on the binade, so it is easy to miss by
+// sampling -- current-era timestamps are unaffected, 2038-era ones are not.
+//
+// A fraction longer than millisecond precision is truncated, not rounded,
+// matching every other client of this API. Exponent notation is not something
+// the API emits; if a downstream sends it anyway, fall back to the float path
+// rather than reject the response.
+func decodeTimestamp(iter *jsoniter.Iterator, scratch *[]byte) int64 {
+	*scratch = iter.SkipAndAppendBytes((*scratch)[:0])
+	ms, err := unixSecondsToMillis(*scratch)
+	if err != nil {
+		iter.ReportError("decodeTimestamp", err.Error())
+		return 0
+	}
+	return ms
+}
+
+func unixSecondsToMillis(b []byte) (int64, error) {
+	if bytes.ContainsAny(b, "eE") {
+		f, err := strconv.ParseFloat(string(b), 64)
+		if err != nil {
+			return 0, err
+		}
+		return int64(f * millisPerSecond), nil
+	}
+
+	// Handle the sign separately and parse the magnitude. prometheus/common
+	// applies the sign only after summing the two halves, which loses it for
+	// pre-epoch sub-second times (it decodes -59.200 as -58800 rather than
+	// -59200); doing it here keeps such timestamps correct.
+	neg := false
+	if len(b) > 0 && (b[0] == '-' || b[0] == '+') {
+		neg = b[0] == '-'
+		b = b[1:]
+	}
+
+	secs, frac, _ := bytes.Cut(b, []byte("."))
+	v, err := parseDigits(secs)
+	if err != nil {
+		return 0, err
+	}
+	v *= millisPerSecond
+
+	if len(frac) > dotPrecision {
+		frac = frac[:dotPrecision]
+	}
+	if len(frac) > 0 {
+		fv, err := parseDigits(frac)
+		if err != nil {
+			return 0, err
+		}
+		// Scale a short fraction up to milliseconds ("1" -> 100, "12" -> 120).
+		for i := len(frac); i < dotPrecision; i++ {
+			fv *= 10
+		}
+		v += fv
+	}
+
+	if neg {
+		v = -v
+	}
+	return v, nil
+}
+
+// parseDigits is strconv.ParseInt for an unsigned decimal run, without the
+// string conversion that would allocate on this path.
+func parseDigits(b []byte) (int64, error) {
+	if len(b) == 0 {
+		return 0, fmt.Errorf("expected digits")
+	}
+	var v int64
+	for _, c := range b {
+		if c < '0' || c > '9' {
+			return 0, fmt.Errorf("invalid digit %q in timestamp", c)
+		}
+		v = v*10 + int64(c-'0')
+	}
+	return v, nil
+}
+
 // decodeSamplePair reads a [<unix-seconds-float>, "<value>"] pair and returns a
 // millisecond timestamp and float value (NaN/+Inf/-Inf handled by ParseFloat).
-func decodeSamplePair(iter *jsoniter.Iterator) (int64, float64) {
+func decodeSamplePair(iter *jsoniter.Iterator, scratch *[]byte) (int64, float64) {
 	iter.ReadArray()
-	ts := iter.ReadFloat64()
+	ts := decodeTimestamp(iter, scratch)
 	iter.ReadArray()
 	vs := iter.ReadString()
 	iter.ReadArray() // consume closing ]
@@ -307,25 +405,25 @@ func decodeSamplePair(iter *jsoniter.Iterator) (int64, float64) {
 	if err != nil {
 		iter.ReportError("decodeSamplePair", err.Error())
 	}
-	return int64(ts * 1000), f
+	return ts, f
 }
 
 // decodeHistogramPair reads a [<unix-seconds-float>, {histogram}] pair. The
 // histogram object is decoded into a model.SampleHistogram (its JSON shape) and
 // converted to a histogram.FloatHistogram via the same path the model.Value
 // iterator uses, so the result is identical.
-func decodeHistogramPair(iter *jsoniter.Iterator) (int64, *histogram.FloatHistogram) {
+func decodeHistogramPair(iter *jsoniter.Iterator, scratch *[]byte) (int64, *histogram.FloatHistogram) {
 	iter.ReadArray()
-	ts := iter.ReadFloat64()
+	ts := decodeTimestamp(iter, scratch)
 	iter.ReadArray()
 	objBytes := iter.SkipAndReturnBytes()
 	iter.ReadArray() // consume closing ]
 	var sh model.SampleHistogram
 	if err := jsonCfg.Unmarshal(objBytes, &sh); err != nil {
 		iter.ReportError("decodeHistogramPair", err.Error())
-		return int64(ts * 1000), nil
+		return ts, nil
 	}
-	return int64(ts * 1000), sampleHistogramToFloatHistogram(&sh)
+	return ts, sampleHistogramToFloatHistogram(&sh)
 }
 
 // sampleHistogramToFloatHistogram converts the API's model.SampleHistogram
