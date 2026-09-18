@@ -230,6 +230,23 @@ type Config struct {
 
 	LabelFilterConfig *promclient.LabelFilterConfig `yaml:"label_filter"`
 
+	// HealthCheckConfig enables an independent, periodic HTTP health probe
+	// against each target in this server group. While a target's probe(s)
+	// are failing, it is skipped on the query path rather than sent traffic,
+	//which would otherwise hang every query routed to it until that query's
+	// own timeout/deadline. The probe uses its own `timeout`, independent of
+	// `http_client.timeout` (which is disabled by default).
+	// Applies uniformly to every target in this server group
+	// Example:
+	//
+	//    health_check:
+	//      path: /-/healthy
+	//      interval: 10s
+	//      timeout: 2s
+	//      failure_threshold: 1
+	//      success_threshold: 1
+	HealthCheckConfig *promclient.HealthCheckConfig `yaml:"health_check"`
+
 	// InjectMatchers is a list of label matchers that are injected into every selector
 	// of every request sent to this servergroup. This effectively scopes the servergroup
 	// to the subset of downstream data matching these matchers -- even for queries that
