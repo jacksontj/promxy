@@ -1,0 +1,26 @@
+name: Helm Docs
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'deploy/k8s/helm-charts/**'
+      - '.github/workflows/helm-docs.yaml'
+
+permissions:
+  contents: read
+
+jobs:
+  helm-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run helm-docs
+        uses: losisin/helm-docs-github-action@v1
+        with:
+          chart-search-root: deploy/k8s/helm-charts
+          version: v1.11.0
+          fail-on-diff: true

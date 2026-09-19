@@ -1,6 +1,24 @@
+apiVersion: v2
 name: promxy
-version: 0.0.1
-appVersion: 0.0.1
-description: Prometheus proxy to combine multiple prometheuses
+description: A Helm chart for Promxy, a Prometheus proxy that combines multiple Prometheis
+type: application
+version: 0.1.0
+appVersion: "v0.0.93"
+kubeVersion: ">= 1.25.0-0"
+home: https://github.com/jacksontj/promxy
+sources:
+  - https://github.com/jacksontj/promxy
+keywords:
+  - prometheus
+  - promxy
+  - monitoring
+  - federation
+  - high-availability
 maintainers: []
-engine: gotpl
+annotations:
+  artifacthub.io/license: MIT
+  artifacthub.io/links: |
+    - name: Chart Source
+      url: https://github.com/jacksontj/promxy/tree/master/deploy/k8s/helm-charts/promxy
+    - name: Promxy
+      url: https://github.com/jacksontj/promxy

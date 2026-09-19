@@ -1,0 +1,5 @@
+chart-dirs:
+  - deploy/k8s/helm-charts
+target-branch: master
+helm-extra-args: --timeout 600s
+validate-maintainers: false

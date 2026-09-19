@@ -19,3 +19,7 @@
 .project
 .idea/
 *.tmproj
+# Chart development / CI artifacts
+README.md.gotmpl
+ci/
+tests/
