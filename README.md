@@ -44,6 +44,16 @@ With that configuration modified and ready, all that is left is to run promxy:
 ./promxy --config=config.yaml
 ```
 
+## Documentation
+Full documentation lives in [docs/](docs/):
+
+- [Getting started](docs/getting-started.md)
+- [Configuration](docs/configuration/README.md) — [server groups](docs/configuration/server-groups.md), [CLI flags](docs/configuration/cli-flags.md), [alert templates](docs/configuration/alert-templates.md)
+- [Concepts](docs/concepts/architecture.md) — [architecture](docs/concepts/architecture.md), [HA and merging](docs/concepts/ha-and-merging.md)
+- Guides — [multi-tenancy](docs/guides/multi-tenancy.md), [rules and alerting](docs/guides/rules-and-alerting.md), [native histograms](docs/guides/native-histograms.md), [label filtering](docs/guides/label-filtering.md), [security](docs/guides/security.md)
+- Operations — [running promxy](docs/operations/running.md), [metrics](docs/operations/metrics.md), [troubleshooting](docs/operations/troubleshooting.md)
+- [Development](docs/development.md)
+
 ## FAQ
 
 ### What is a "ServerGroup"?
