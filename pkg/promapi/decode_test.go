@@ -325,3 +325,54 @@ func TestDecodeMatrixMissingSamples(t *testing.T) {
 		t.Fatalf("expected one sample-less series, got %v", got)
 	}
 }
+
+func TestDecodeResponse(t *testing.T) {
+	t.Run("2xx_decodes", func(t *testing.T) {
+		ss := DecodeResponse(200, []byte(`{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up"},"value":[100,"1"]}]}}`))
+		if !ss.Next() || ss.At().Labels().Get("__name__") != "up" || ss.Next() || ss.Err() != nil {
+			t.Fatalf("expected the single series up, err=%v", ss.Err())
+		}
+	})
+
+	t.Run("error_envelope_keeps_type_and_message", func(t *testing.T) {
+		for _, status := range []int{400, 422, 503} {
+			var re *ResponseError
+			err := DecodeResponse(status, []byte(`{"status":"error","errorType":"timeout","error":"query timed out"}`)).Err()
+			if !errors.As(err, &re) || re.Type != "timeout" || re.Msg != "query timed out" {
+				t.Fatalf("HTTP %d: expected ResponseError{timeout, query timed out}, got %T: %v", status, err, err)
+			}
+		}
+	})
+
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{"plain_text", "too many outstanding requests\n", "server returned HTTP status 503 Service Unavailable: too many outstanding requests"},
+		{"empty", "", "server returned HTTP status 503 Service Unavailable"},
+		{"truncated_json", `{"status":"err`, `server returned HTTP status 503 Service Unavailable: {"status":"err`},
+		// A non-2xx is an error even when its body claims success.
+		{"success_envelope", `{"status":"success","data":{"resultType":"vector","result":[]}}`, `server returned HTTP status 503 Service Unavailable: {"status":"success","data":{"resultType":"vector","result":[]}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var he *HTTPError
+			err := DecodeResponse(503, []byte(tc.body)).Err()
+			if !errors.As(err, &he) || he.StatusCode != 503 || err.Error() != tc.want {
+				t.Fatalf("got %T: %v\nwant HTTPError: %s", err, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestErrorBody(t *testing.T) {
+	if got := ErrorBody([]byte("  short \n")); got != "short" {
+		t.Fatalf("got %q", got)
+	}
+	// "é" is two bytes; put its first byte at the cap.
+	body := strings.Repeat("x", maxErrorBody-1) + "é" + strings.Repeat("y", 10)
+	want := strings.Repeat("x", maxErrorBody-1) + "... (truncated)"
+	if got := ErrorBody([]byte(body)); got != want {
+		t.Fatalf("got %q...", got[len(got)-20:])
+	}
+}

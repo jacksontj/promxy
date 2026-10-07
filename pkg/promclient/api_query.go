@@ -61,5 +61,5 @@ func queryWithInfos(ctx context.Context, c api.Client, u *url.URL, args url.Valu
 	if resp.StatusCode == http.StatusNoContent {
 		return promapi.NewSeriesSet(nil, nil, nil)
 	}
-	return promapi.DecodeSeriesSet(body)
+	return promapi.DecodeResponse(resp.StatusCode, body)
 }

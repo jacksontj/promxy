@@ -72,7 +72,7 @@ func decodeEnvelope(body []byte) ([]byte, annotations.Annotations, error) {
 		}
 	}
 	if iter.Error != nil && !errors.Is(iter.Error, io.EOF) {
-		return nil, anns, &ResponseError{Type: "bad_response", Msg: iter.Error.Error()}
+		return nil, anns, &ResponseError{Type: badResponse, Msg: iter.Error.Error()}
 	}
 	if status == "error" {
 		return nil, anns, &ResponseError{Type: errType, Msg: errMsg}
