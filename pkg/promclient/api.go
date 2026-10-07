@@ -51,7 +51,8 @@ func (p *PromAPIV1) LabelNames(ctx context.Context, matchers []string, startTime
 		endTime = time.Time{}
 	}
 
-	return p.API.LabelNames(ctx, matchers, startTime, endTime)
+	v, w, err := p.API.LabelNames(ctx, matchers, startTime, endTime)
+	return v, w, NormalizePromError(err)
 }
 
 // LabelValues performs a query for the values of the given label.
@@ -64,11 +65,16 @@ func (p *PromAPIV1) LabelValues(ctx context.Context, label string, matchers []st
 		endTime = time.Time{}
 	}
 
-	return p.API.LabelValues(ctx, label, matchers, startTime, endTime)
+	v, w, err := p.API.LabelValues(ctx, label, matchers, startTime, endTime)
+	return v, w, NormalizePromError(err)
 }
 
 // Query performs a query for the given time.
 func (p *PromAPIV1) Query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
+	return MapErrSeriesSet(p.query(ctx, query, ts), NormalizePromError)
+}
+
+func (p *PromAPIV1) query(ctx context.Context, query string, ts time.Time) storage.SeriesSet {
 	if hasNegativeFractionalSecond(ts) {
 		return storage.ErrSeriesSet(errNegativeFractionalTimestamp)
 	}
@@ -87,6 +93,10 @@ func (p *PromAPIV1) Query(ctx context.Context, query string, ts time.Time) stora
 
 // QueryRange performs a query for the given range.
 func (p *PromAPIV1) QueryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
+	return MapErrSeriesSet(p.queryRange(ctx, query, r), NormalizePromError)
+}
+
+func (p *PromAPIV1) queryRange(ctx context.Context, query string, r v1.Range) storage.SeriesSet {
 	// Reject ranges whose first eval step would land on a pre-epoch
 	// sub-second timestamp; the upstream JSON decoder mis-parses these.
 	// See hasNegativeFractionalSecond. Step times are start + k*step, so
@@ -118,7 +128,8 @@ func (p *PromAPIV1) Series(ctx context.Context, matches []string, startTime time
 		endTime = time.Time{}
 	}
 
-	return p.API.Series(ctx, matches, startTime, endTime)
+	v, w, err := p.API.Series(ctx, matches, startTime, endTime)
+	return v, w, NormalizePromError(err)
 }
 
 // GetValue loads the raw data for a given set of matchers in the time range
@@ -137,7 +148,8 @@ func (p *PromAPIV1) GetValue(ctx context.Context, start, end time.Time, matchers
 
 // QueryExemplars performs a query for exemplars by the given query and time range.
 func (p *PromAPIV1) QueryExemplars(ctx context.Context, query string, startTime, endTime time.Time) ([]v1.ExemplarQueryResult, error) {
-	return p.API.QueryExemplars(ctx, query, startTime, endTime)
+	v, err := p.API.QueryExemplars(ctx, query, startTime, endTime)
+	return v, NormalizePromError(err)
 }
 
 // PromAPIRemoteRead implements our internal API interface using a combination of

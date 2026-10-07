@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"regexp"
 	"sort"
 	"strconv"
@@ -60,6 +61,40 @@ func (e *ResponseError) Error() string {
 		return e.Type + ": " + e.Msg
 	}
 	return e.Msg
+}
+
+// badResponse is the ResponseError type for a body that is not valid API JSON.
+const badResponse = "bad_response"
+
+// HTTPError is a non-2xx downstream response whose body is not a Prometheus
+// API error envelope: the plain-text 503 of a backend that is not ready, a
+// rate limiter's 429, a proxy's HTML error page.
+type HTTPError struct {
+	StatusCode int
+	// Body is the response body as rendered by ErrorBody.
+	Body string
+}
+
+func (e *HTTPError) Error() string {
+	msg := fmt.Sprintf("server returned HTTP status %d %s", e.StatusCode, http.StatusText(e.StatusCode))
+	if e.Body == "" {
+		return msg
+	}
+	return msg + ": " + e.Body
+}
+
+// maxErrorBody caps how much of a response body ErrorBody keeps, so a large
+// HTML error page can't balloon promxy's own error responses.
+const maxErrorBody = 1024
+
+// ErrorBody renders a response body for inclusion in an error message: trimmed,
+// and capped at maxErrorBody bytes without splitting a UTF-8 sequence.
+func ErrorBody(body []byte) string {
+	s := strings.TrimSpace(string(body))
+	if len(s) <= maxErrorBody {
+		return s
+	}
+	return strings.ToValidUTF8(s[:maxErrorBody], "") + "... (truncated)"
 }
 
 // This is the replacement for the model.Value decode path (queryWithInfos +
@@ -140,6 +175,23 @@ func (s *SeriesSet) At() storage.Series                { return s.series[s.idx] 
 func (s *SeriesSet) Err() error                        { return s.err }
 func (s *SeriesSet) Warnings() annotations.Annotations { return s.warnings }
 
+// DecodeResponse decodes a query response given its HTTP status code. A 2xx
+// decodes exactly as DecodeSeriesSet. Any other status is an error: the
+// envelope's errorType and error when the body is a Prometheus API error
+// envelope, otherwise an *HTTPError with the status and body. A non-2xx body
+// is never decoded as JSON parser output or as data.
+func DecodeResponse(status int, body []byte) storage.SeriesSet {
+	ss := DecodeSeriesSet(body)
+	if status/100 == 2 {
+		return ss
+	}
+	var re *ResponseError
+	if errors.As(ss.Err(), &re) && re.Type != badResponse {
+		return ss
+	}
+	return NewSeriesSet(nil, ss.Warnings(), &HTTPError{StatusCode: status, Body: ErrorBody(body)})
+}
+
 // DecodeSeriesSet streams an API response body into a storage.SeriesSet.
 func DecodeSeriesSet(body []byte) storage.SeriesSet {
 	iter := jsonCfg.BorrowIterator(body)
@@ -189,7 +241,7 @@ func DecodeSeriesSet(body []byte) storage.SeriesSet {
 	}
 
 	if iter.Error != nil && !errors.Is(iter.Error, io.EOF) {
-		return NewSeriesSet(nil, anns, &ResponseError{Type: "bad_response", Msg: iter.Error.Error()})
+		return NewSeriesSet(nil, anns, &ResponseError{Type: badResponse, Msg: iter.Error.Error()})
 	}
 	if status == "error" {
 		return NewSeriesSet(nil, anns, &ResponseError{Type: errType, Msg: errMsg})

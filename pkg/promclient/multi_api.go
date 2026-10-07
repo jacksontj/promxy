@@ -30,35 +30,57 @@ var (
 
 // NormalizePromError converts the errors that the prometheus API client returns
 // into errors that the prometheus API server actually handles and returns proper
-// error codes for
+// error codes for: a downstream timeout or cancellation becomes
+// promql.ErrQueryTimeout / promql.ErrQueryCanceled.
+//
+// It matches the client's error types exactly, so it must see the error as the
+// client returned it -- before ErrorWrap adds its context. PromAPIV1 applies it
+// to everything it returns.
 func NormalizePromError(err error) error {
 	type result struct {
 		ErrorType promhttputil.ErrorType `json:"errorType,omitempty"`
 		Error     string                 `json:"error,omitempty"`
 	}
 
-	if typedErr, ok := err.(*v1.Error); ok {
-		res := &result{}
-		// The prometheus client does a terrible job of handling and returning errors
-		// so we need to do the work ourselves.
-		// The `Detail` is actually just the body of the response so we need
-		// to unmarshal that so we can see what happened
-		if err := json.Unmarshal([]byte(typedErr.Detail), res); err != nil {
-			// If the body can't be unmarshaled, return the original error
+	switch typedErr := err.(type) {
+	case *v1.Error:
+		// The v1 client only parses the body of a 400 or 422. For any other
+		// status it returns a generic "server error: 503" and leaves the body
+		// in Detail, so we parse it ourselves.
+		if typedErr.Detail == "" {
 			return typedErr
 		}
+		res := &result{}
+		if err := json.Unmarshal([]byte(typedErr.Detail), res); err != nil || res.Error == "" {
+			// Not an API error envelope: the body is the only description of
+			// what went wrong.
+			return fmt.Errorf("%w: %s", typedErr, promapi.ErrorBody([]byte(typedErr.Detail)))
+		}
+		if normalized := normalizeErrorType(res.ErrorType, res.Error); normalized != nil {
+			return normalized
+		}
+		return fmt.Errorf("%w: %s: %s", typedErr, res.ErrorType, res.Error)
 
-		// Now we want to switch for any errors that the API server will handle differently
-		switch res.ErrorType {
-		case promhttputil.ErrorTimeout:
-			return promql.ErrQueryTimeout(strings.TrimPrefix(res.Error, timeoutPrefix))
-		case promhttputil.ErrorCanceled:
-			return promql.ErrQueryCanceled(strings.TrimPrefix(res.Error, canceledPrefix))
+	case *promapi.ResponseError:
+		if normalized := normalizeErrorType(promhttputil.ErrorType(typedErr.Type), typedErr.Msg); normalized != nil {
+			return normalized
 		}
 	}
 
 	// If all else fails, return the original error
 	return err
+}
+
+// normalizeErrorType returns the promql error for the API error types that the
+// API server answers with their own status code, and nil for all others.
+func normalizeErrorType(errType promhttputil.ErrorType, msg string) error {
+	switch errType {
+	case promhttputil.ErrorTimeout:
+		return promql.ErrQueryTimeout(strings.TrimPrefix(msg, timeoutPrefix))
+	case promhttputil.ErrorCanceled:
+		return promql.ErrQueryCanceled(strings.TrimPrefix(msg, canceledPrefix))
+	}
+	return nil
 }
 
 // MultiAPIMetricFunc defines a method where a client can record metrics about

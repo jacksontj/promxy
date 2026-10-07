@@ -2,6 +2,7 @@ package promclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -15,8 +16,11 @@ import (
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
+
+	"github.com/jacksontj/promxy/pkg/promapi"
 )
 
 type stubAPI struct {
@@ -1080,4 +1084,83 @@ func TestMultiAPIMergeIndependentOfCompletionOrder(t *testing.T) {
 			return v
 		})
 	})
+}
+
+func TestNormalizePromError(t *testing.T) {
+	var (
+		eqt promql.ErrQueryTimeout
+		eqc promql.ErrQueryCanceled
+	)
+	tests := []struct {
+		name string
+		in   error
+		// want is the normalized error's message; isTimeout/isCanceled say
+		// which promql class it must match.
+		want       string
+		isTimeout  bool
+		isCanceled bool
+	}{
+		{name: "nil"},
+		{
+			name: "v1_json_timeout_body",
+			in:   &v1.Error{Type: v1.ErrServer, Msg: "server error: 503", Detail: `{"status":"error","errorType":"timeout","error":"query timed out in expression evaluation"}`},
+			want: "query timed out in expression evaluation", isTimeout: true,
+		},
+		{
+			name: "v1_json_canceled_body",
+			in:   &v1.Error{Type: v1.ErrServer, Msg: "server error: 503", Detail: `{"status":"error","errorType":"canceled","error":"query was canceled in expression evaluation"}`},
+			want: "query was canceled in expression evaluation", isCanceled: true,
+		},
+		{
+			name: "v1_json_other_body",
+			in:   &v1.Error{Type: v1.ErrServer, Msg: "server error: 500", Detail: `{"status":"error","errorType":"internal","error":"boom"}`},
+			want: "server_error: server error: 500: internal: boom",
+		},
+		{
+			name: "v1_plain_text_body",
+			in:   &v1.Error{Type: v1.ErrServer, Msg: "server error: 503", Detail: "too many outstanding requests\n"},
+			want: "server_error: server error: 503: too many outstanding requests",
+		},
+		{
+			name: "v1_no_body",
+			in:   &v1.Error{Type: v1.ErrExec, Msg: "boom"},
+			want: "execution: boom",
+		},
+		{
+			name: "promapi_timeout",
+			in:   &promapi.ResponseError{Type: "timeout", Msg: "query timed out in expression evaluation"},
+			want: "query timed out in expression evaluation", isTimeout: true,
+		},
+		{
+			name: "promapi_canceled",
+			in:   &promapi.ResponseError{Type: "canceled", Msg: "query was canceled in expression evaluation"},
+			want: "query was canceled in expression evaluation", isCanceled: true,
+		},
+		{
+			name: "promapi_other",
+			in:   &promapi.ResponseError{Type: "execution", Msg: "boom"},
+			want: "execution: boom",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NormalizePromError(tc.in)
+			if tc.in == nil {
+				if got != nil {
+					t.Fatalf("got %v, want nil", got)
+				}
+				return
+			}
+			if got.Error() != tc.want {
+				t.Errorf("got %q, want %q", got.Error(), tc.want)
+			}
+			if errors.As(got, &eqt) != tc.isTimeout || errors.As(got, &eqc) != tc.isCanceled {
+				t.Errorf("%T: timeout=%v canceled=%v, want timeout=%v canceled=%v", got, errors.As(got, &eqt), errors.As(got, &eqc), tc.isTimeout, tc.isCanceled)
+			}
+			// Unclassified errors keep the client's error in their chain.
+			if !tc.isTimeout && !tc.isCanceled && !errors.Is(got, tc.in) {
+				t.Errorf("%v does not wrap %v", got, tc.in)
+			}
+		})
+	}
 }
