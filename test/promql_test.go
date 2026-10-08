@@ -105,6 +105,27 @@ promxy:
       remote_read: true
 `
 
+const rawDoublePSConfigRelabel = `
+promxy:
+  server_groups:
+    - static_configs:
+        - targets:
+          - %s
+      labels:
+        az: a
+      metrics_relabel_configs:
+        - action: labeldrop
+          source_label: prometheus_replica
+    - static_configs:
+        - targets:
+          - %s
+      labels:
+        az: b
+      metrics_relabel_configs:
+        - action: labeldrop
+          source_label: prometheus_replica
+`
+
 func getProxyStorage(cfg string) *proxystorage.ProxyStorage {
 	// Create promxy in front of it
 	pstorageConfig := &proxyconfig.Config{}
@@ -371,7 +392,7 @@ func TestEvaluations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i, psConfig := range []string{rawDoublePSConfig, rawDoublePSConfigRR} {
+	for i, psConfig := range []string{rawDoublePSConfig, rawDoublePSConfigRR, rawDoublePSConfigRelabel} {
 		for _, fn := range files {
 			// Skip files with expectations that assume single-server-group
 			// fan-out behavior — they emit 2x sums and `az` labels that the

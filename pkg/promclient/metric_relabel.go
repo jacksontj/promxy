@@ -396,11 +396,14 @@ func (v *MetricsRelabelVisitor) Visit(node parser.Node, path []parser.Node) (w p
 	case *parser.AggregateExpr:
 		nodeTyped.Grouping = RewriteLabels(v.MetricsRelabelConfigs, nodeTyped.Grouping)
 	case *parser.BinaryExpr:
-		// If one is a literal; then it is safe to traverse
-		if ExprIsLiteral(nodeTyped.LHS) || ExprIsLiteral(nodeTyped.RHS) {
+		// Unless both sides are instant vectors there is no vector matching, so
+		// each side's selectors are rewritten on their own and it is safe to
+		// traverse (e.g. `foo > 1`, `time() - foo`). Vector matching can't be
+		// reversed: a dropped label silently changes which series match.
+		if nodeTyped.LHS.Type() != parser.ValueTypeVector || nodeTyped.RHS.Type() != parser.ValueTypeVector {
 			return v, nil
 		}
-		return nil, fmt.Errorf("metricsrelabelvisitor does not support BinaryExprs")
+		return nil, fmt.Errorf("metricsrelabelvisitor does not support BinaryExprs with vector matching")
 	}
 
 	return v, nil

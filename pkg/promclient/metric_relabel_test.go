@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
+	"github.com/prometheus/prometheus/promql/parser"
 	"k8s.io/utils/strings/slices"
 )
 
@@ -159,6 +160,50 @@ func matchersEqual(a, b []*labels.Matcher) bool {
 }
 
 // This is an "integration" test
+func TestMetricsRelabelVisitorBinaryExpr(t *testing.T) {
+	cfgs := []*MetricRelabelConfig{{SourceLabel: "job", TargetLabel: "scrape_job", Action: "replace"}}
+
+	tests := []struct {
+		in  string
+		out string // empty means the visitor must refuse the query
+	}{
+		{in: `foo{scrape_job="a"} > 1`, out: `foo{job="a"} > 1`},
+		{in: `foo{scrape_job="a"} > (1)`, out: `foo{job="a"} > (1)`},
+		{in: `time() - foo{scrape_job="a"}`, out: `time() - foo{job="a"}`},
+		{
+			in:  `max by (scrape_job) (time() - min_over_time(foo{scrape_job="a"}[1m]))`,
+			out: `max by (job) (time() - min_over_time(foo{job="a"}[1m]))`,
+		},
+		{in: `scalar(bar{scrape_job="b"}) * foo{scrape_job="a"}`, out: `scalar(bar{job="b"}) * foo{job="a"}`},
+		{in: `foo + bar`},
+		{in: `foo or vector(0)`},
+		{in: `foo * on (scrape_job) bar`},
+		{in: `time() - (foo + bar)`},
+	}
+
+	for i, test := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			expr, err := parser.ParseExpr(test.in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = parser.Walk(context.TODO(), NewMetricsRelabelVisitor(cfgs, nil), &parser.EvalStmt{Expr: expr}, expr, nil, nil)
+			if test.out == "" {
+				if err == nil {
+					t.Fatalf("expected error, got %s", expr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := expr.String(); got != test.out {
+				t.Fatalf("mismatch\nexpected=%s\nactual=%s", test.out, got)
+			}
+		})
+	}
+}
+
 func TestMetricRelabel(t *testing.T) {
 	client, close, err := CreateTestServer(t, "testdata/metric_relabel.test")
 	if err != nil {
@@ -233,6 +278,8 @@ func TestMetricRelabel(t *testing.T) {
 				`{job="prometheus"}`,    // Test other matcher to make sure we don't get a label back
 				`{__name__=~".+"}`,
 				fmt.Sprintf(`sum(prometheus_build_info) by (%s)`, droplabel), // Do a sum on the
+				`prometheus_build_info > 1`,
+				`max(time() - min_over_time(prometheus_build_info[1m]))`,
 			}
 			for i, query := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -255,6 +302,8 @@ func TestMetricRelabel(t *testing.T) {
 				`{job="prometheus"}`,    // Test other matcher to make sure we don't get a label back
 				`{__name__=~".+"}`,
 				fmt.Sprintf(`sum(prometheus_build_info) by (%s)`, droplabel), // Do a sum on the
+				`prometheus_build_info > 1`,
+				`max(time() - min_over_time(prometheus_build_info[1m]))`,
 			}
 			for i, query := range tests {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
