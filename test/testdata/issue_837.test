@@ -1,0 +1,22 @@
+# Regression test for https://github.com/jacksontj/promxy/issues/837
+#
+# The NodeReplacer sends these scalar-vector expressions downstream whole.
+# With metrics_relabel configured, the visitor must traverse them and rewrite
+# their selectors. Before the fix, the visitor rejects the binary expressions.
+#
+# These aggregations drop all labels, so every config has the same expectations.
+load 5m
+    server_start_ts{prometheus_replica="a", host="h1"} 100+0x10
+    server_start_ts{prometheus_replica="b", host="h1"} 100+0x10
+
+eval instant at 10m max(time() - min_over_time(server_start_ts[1m]))
+    {} 500
+
+eval instant at 10m min(time() - min_over_time(server_start_ts[1m]))
+    {} 500
+
+eval instant at 10m max(time() - server_start_ts)
+    {} 500
+
+eval instant at 10m sum(server_start_ts > 0)
+    {} 400
