@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -28,15 +30,32 @@ var (
 	canceledPrefix = promql.ErrQueryCanceled("").Error()
 )
 
-// NormalizePromError converts the errors that the prometheus API client returns
-// into errors that the prometheus API server actually handles and returns proper
-// error codes for: a downstream timeout or cancellation becomes
-// promql.ErrQueryTimeout / promql.ErrQueryCanceled.
+// NormalizePromError converts an error from a downstream Prometheus API into
+// the promql error class that the API server answers with the matching status
+// code. promxy's downstreams are its storage, so a downstream that fails to
+// answer is a storage failure:
+//
+//   - the downstream refused the query (an API error such as bad_data or
+//     execution): unchanged, 422
+//   - a timeout (an API error of type timeout, or the request timing out):
+//     promql.ErrQueryTimeout, 503
+//   - a cancellation (an API error of type canceled): promql.ErrQueryCanceled,
+//     499
+//   - anything else that kept the downstream from answering (an API error of
+//     type internal or unavailable, any other non-2xx response, a malformed
+//     body, a transport error): promql.ErrStorage, 500
+//
+// The request's own context being canceled is left as is; the API answers
+// context.Canceled with 499.
 //
 // It matches the client's error types exactly, so it must see the error as the
 // client returned it -- before ErrorWrap adds its context. PromAPIV1 applies it
 // to everything it returns.
 func NormalizePromError(err error) error {
+	if err == nil {
+		return nil
+	}
+
 	type result struct {
 		ErrorType promhttputil.ErrorType `json:"errorType,omitempty"`
 		Error     string                 `json:"error,omitempty"`
@@ -44,43 +63,115 @@ func NormalizePromError(err error) error {
 
 	switch typedErr := err.(type) {
 	case *v1.Error:
-		// The v1 client only parses the body of a 400 or 422. For any other
-		// status it returns a generic "server error: 503" and leaves the body
-		// in Detail, so we parse it ourselves.
-		if typedErr.Detail == "" {
-			return typedErr
+		switch typedErr.Type {
+		case v1.ErrServer, v1.ErrClient:
+			// The v1 client only parses the body of a 400 or 422. For any
+			// other non-2xx status it returns a generic "server error: 503"
+			// and leaves the body in Detail, so we parse it ourselves.
+			if typedErr.Detail == "" {
+				return promql.ErrStorage{Err: typedErr}
+			}
+			res := &result{}
+			if err := json.Unmarshal([]byte(typedErr.Detail), res); err != nil || res.Error == "" {
+				// Not an API error envelope: the body is the only
+				// description of what went wrong.
+				return promql.ErrStorage{Err: fmt.Errorf("%w: %s", typedErr, promapi.ErrorBody([]byte(typedErr.Detail)))}
+			}
+			return classifyAPIError(res.ErrorType, res.Error, fmt.Errorf("%w: %s: %s", typedErr, res.ErrorType, res.Error))
+		case v1.ErrBadResponse:
+			return promql.ErrStorage{Err: typedErr}
 		}
-		res := &result{}
-		if err := json.Unmarshal([]byte(typedErr.Detail), res); err != nil || res.Error == "" {
-			// Not an API error envelope: the body is the only description of
-			// what went wrong.
-			return fmt.Errorf("%w: %s", typedErr, promapi.ErrorBody([]byte(typedErr.Detail)))
-		}
-		if normalized := normalizeErrorType(res.ErrorType, res.Error); normalized != nil {
-			return normalized
-		}
-		return fmt.Errorf("%w: %s: %s", typedErr, res.ErrorType, res.Error)
+		// The parsed error envelope of a 400 or 422.
+		return classifyAPIError(promhttputil.ErrorType(typedErr.Type), typedErr.Msg, typedErr)
 
 	case *promapi.ResponseError:
-		if normalized := normalizeErrorType(promhttputil.ErrorType(typedErr.Type), typedErr.Msg); normalized != nil {
-			return normalized
+		if typedErr.Type == string(v1.ErrBadResponse) {
+			return promql.ErrStorage{Err: typedErr}
 		}
+		return classifyAPIError(promhttputil.ErrorType(typedErr.Type), typedErr.Msg, typedErr)
+
+	case *promapi.HTTPError:
+		return promql.ErrStorage{Err: typedErr}
+	}
+
+	if errors.Is(err, context.Canceled) {
+		return err
+	}
+	var netErr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) {
+		return promql.ErrQueryTimeout(err.Error())
+	}
+	// The HTTP client wraps every transport failure (connection refused, DNS,
+	// TLS, a reset connection) in a *url.Error.
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return promql.ErrStorage{Err: err}
 	}
 
 	// If all else fails, return the original error
 	return err
 }
 
-// normalizeErrorType returns the promql error for the API error types that the
-// API server answers with their own status code, and nil for all others.
-func normalizeErrorType(errType promhttputil.ErrorType, msg string) error {
+// classifyAPIError converts a downstream API error envelope into the matching
+// promql error class. err is the error to report for a refused query, which
+// the API server answers as is.
+func classifyAPIError(errType promhttputil.ErrorType, msg string, err error) error {
 	switch errType {
 	case promhttputil.ErrorTimeout:
 		return promql.ErrQueryTimeout(strings.TrimPrefix(msg, timeoutPrefix))
 	case promhttputil.ErrorCanceled:
 		return promql.ErrQueryCanceled(strings.TrimPrefix(msg, canceledPrefix))
+	case promhttputil.ErrorInternal, promhttputil.ErrorUnavailable:
+		return promql.ErrStorage{Err: err}
 	}
-	return nil
+	return err
+}
+
+// errorPicker chooses the error MultiAPI reports when downstreams fail, so the
+// status promxy answers with doesn't depend on which downstream finished last.
+// A refused query outranks a timeout, which outranks a storage failure, which
+// outranks a cancellation: a query one replica refuses, every replica refuses,
+// so that error is the answer, while the others only say this attempt failed.
+// Ties go to the lowest API index.
+type errorPicker struct {
+	err  error
+	rank int
+	i    int
+}
+
+func (p *errorPicker) add(i int, err error) {
+	if r := errorRank(err); p.err == nil || r > p.rank || (r == p.rank && i < p.i) {
+		p.err, p.rank, p.i = err, r, i
+	}
+}
+
+// Error ranks for errorPicker, lowest first.
+const (
+	rankCanceled = iota
+	rankStorage
+	rankTimeout
+	rankRefused
+)
+
+// errorRank ranks err for errorPicker, classifying it the way the API server's
+// returnAPIError does.
+func errorRank(err error) int {
+	var (
+		eqc promql.ErrQueryCanceled
+		eqt promql.ErrQueryTimeout
+		es  promql.ErrStorage
+	)
+	switch {
+	case errors.As(err, &eqc):
+		return rankCanceled
+	case errors.As(err, &eqt):
+		return rankTimeout
+	case errors.As(err, &es):
+		return rankStorage
+	case errors.Is(err, context.Canceled):
+		return rankCanceled
+	}
+	return rankRefused
 }
 
 // MultiAPIMetricFunc defines a method where a client can record metrics about
@@ -160,6 +251,7 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string, matchers []str
 	defer childContextCancel()
 
 	type chanResult struct {
+		i        int // index of the API that produced this result
 		v        model.LabelValues
 		warnings v1.Warnings
 		err      error
@@ -183,6 +275,7 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string, matchers []str
 				m.recordMetric(i, "label_values", "success", took.Seconds())
 			}
 			retChan <- chanResult{
+				i:        i,
 				v:        result,
 				warnings: w,
 				err:      NormalizePromError(err),
@@ -193,7 +286,7 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string, matchers []str
 
 	var result []model.LabelValue
 	warnings := make(promhttputil.WarningSet)
-	var lastError error
+	var errs errorPicker
 	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
 	for i := 0; i < len(m.apis); i++ {
 		select {
@@ -204,11 +297,11 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string, matchers []str
 			warnings.AddWarnings(ret.warnings)
 			outstandingRequests[ret.ls]--
 			if ret.err != nil {
+				errs.add(ret.i, ret.err)
 				// If there aren't enough outstanding requests to possibly succeed, no reason to wait
 				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
-					return nil, warnings.Warnings(), ret.err
+					return nil, warnings.Warnings(), errs.err
 				}
-				lastError = ret.err
 			} else {
 				successMap[ret.ls]++
 				if result == nil {
@@ -223,7 +316,7 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string, matchers []str
 	// Verify that we hit the requiredCount for all of the buckets
 	for k := range outstandingRequests {
 		if successMap[k] < m.requiredCount {
-			return nil, warnings.Warnings(), errors.Wrap(lastError, "Unable to fetch from downstream servers")
+			return nil, warnings.Warnings(), errors.Wrap(errs.err, "Unable to fetch from downstream servers")
 		}
 	}
 
@@ -238,6 +331,7 @@ func (m *MultiAPI) LabelNames(ctx context.Context, matchers []string, startTime 
 	defer childContextCancel()
 
 	type chanResult struct {
+		i        int // index of the API that produced this result
 		v        []string
 		warnings v1.Warnings
 		err      error
@@ -261,6 +355,7 @@ func (m *MultiAPI) LabelNames(ctx context.Context, matchers []string, startTime 
 				m.recordMetric(i, "label_names", "success", took.Seconds())
 			}
 			retChan <- chanResult{
+				i:        i,
 				v:        result,
 				warnings: w,
 				err:      NormalizePromError(err),
@@ -271,7 +366,7 @@ func (m *MultiAPI) LabelNames(ctx context.Context, matchers []string, startTime 
 
 	result := make(map[string]struct{})
 	warnings := make(promhttputil.WarningSet)
-	var lastError error
+	var errs errorPicker
 	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
 	for i := 0; i < len(m.apis); i++ {
 		select {
@@ -282,11 +377,11 @@ func (m *MultiAPI) LabelNames(ctx context.Context, matchers []string, startTime 
 			warnings.AddWarnings(ret.warnings)
 			outstandingRequests[ret.ls]--
 			if ret.err != nil {
+				errs.add(ret.i, ret.err)
 				// If there aren't enough outstanding requests to possibly succeed, no reason to wait
 				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
-					return nil, warnings.Warnings(), ret.err
+					return nil, warnings.Warnings(), errs.err
 				}
-				lastError = ret.err
 			} else {
 				successMap[ret.ls]++
 				for _, v := range ret.v {
@@ -299,7 +394,7 @@ func (m *MultiAPI) LabelNames(ctx context.Context, matchers []string, startTime 
 	// Verify that we hit the requiredCount for all of the buckets
 	for k := range outstandingRequests {
 		if successMap[k] < m.requiredCount {
-			return nil, warnings.Warnings(), errors.Wrap(lastError, "Unable to fetch from downstream servers")
+			return nil, warnings.Warnings(), errors.Wrap(errs.err, "Unable to fetch from downstream servers")
 		}
 	}
 
@@ -351,7 +446,7 @@ func (m *MultiAPI) scatterMerge(ctx context.Context, op string, call func(contex
 	// result must not depend on which replica answered first.
 	slots := make([]storage.SeriesSet, len(m.apis))
 	var warnings annotations.Annotations
-	var lastError error
+	var errs errorPicker
 	successMap := make(map[model.Fingerprint]int)
 	for i := 0; i < len(m.apis); i++ {
 		select {
@@ -362,10 +457,10 @@ func (m *MultiAPI) scatterMerge(ctx context.Context, op string, call func(contex
 			outstandingRequests[ret.ls]--
 			warnings = MergeAnnotations(warnings, ret.ss.Warnings())
 			if err := NormalizePromError(ret.ss.Err()); err != nil {
+				errs.add(ret.i, err)
 				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
-					return promapi.NewSeriesSet(nil, warnings, err)
+					return promapi.NewSeriesSet(nil, warnings, errs.err)
 				}
-				lastError = err
 			} else {
 				successMap[ret.ls]++
 				slots[ret.i] = ret.ss
@@ -375,7 +470,7 @@ func (m *MultiAPI) scatterMerge(ctx context.Context, op string, call func(contex
 
 	for k := range outstandingRequests {
 		if successMap[k] < m.requiredCount {
-			return promapi.NewSeriesSet(nil, warnings, errors.Wrap(lastError, "Unable to fetch from downstream servers"))
+			return promapi.NewSeriesSet(nil, warnings, errors.Wrap(errs.err, "Unable to fetch from downstream servers"))
 		}
 	}
 
@@ -447,7 +542,7 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 	slots := make([][]model.LabelSet, len(m.apis))
 	responded := make([]bool, len(m.apis))
 	warnings := make(promhttputil.WarningSet)
-	var lastError error
+	var errs errorPicker
 	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
 	for i := 0; i < len(m.apis); i++ {
 		select {
@@ -458,11 +553,11 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 			warnings.AddWarnings(ret.warnings)
 			outstandingRequests[ret.ls]--
 			if ret.err != nil {
+				errs.add(ret.i, ret.err)
 				// If there aren't enough outstanding requests to possibly succeed, no reason to wait
 				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
-					return nil, warnings.Warnings(), ret.err
+					return nil, warnings.Warnings(), errs.err
 				}
-				lastError = ret.err
 			} else {
 				successMap[ret.ls]++
 				slots[ret.i] = ret.v
@@ -474,7 +569,7 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 	// Verify that we hit the requiredCount for all of the buckets
 	for k := range outstandingRequests {
 		if successMap[k] < m.requiredCount {
-			return nil, warnings.Warnings(), errors.Wrap(lastError, "Unable to fetch from downstream servers")
+			return nil, warnings.Warnings(), errors.Wrap(errs.err, "Unable to fetch from downstream servers")
 		}
 	}
 
@@ -544,7 +639,7 @@ func (m *MultiAPI) Metadata(ctx context.Context, metric, limit string) (map[stri
 	// downstream's metadata wins.
 	slots := make([]map[string][]v1.Metadata, len(m.apis))
 	responded := make([]bool, len(m.apis))
-	var lastError error
+	var errs errorPicker
 	successMap := make(map[model.Fingerprint]int) // fingerprint -> success
 	for i := 0; i < len(m.apis); i++ {
 		select {
@@ -554,11 +649,11 @@ func (m *MultiAPI) Metadata(ctx context.Context, metric, limit string) (map[stri
 		case ret := <-resultChan:
 			outstandingRequests[ret.ls]--
 			if ret.err != nil {
+				errs.add(ret.i, ret.err)
 				// If there aren't enough outstanding requests to possibly succeed, no reason to wait
 				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
-					return nil, ret.err
+					return nil, errs.err
 				}
-				lastError = ret.err
 			} else {
 				successMap[ret.ls]++
 				slots[ret.i] = ret.v
@@ -570,7 +665,7 @@ func (m *MultiAPI) Metadata(ctx context.Context, metric, limit string) (map[stri
 	// Verify that we hit the requiredCount for all of the buckets
 	for k := range outstandingRequests {
 		if successMap[k] < m.requiredCount {
-			return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+			return nil, errors.Wrap(errs.err, "Unable to fetch from downstream servers")
 		}
 	}
 
@@ -620,6 +715,7 @@ func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, 
 	defer childContextCancel()
 
 	type chanResult struct {
+		i   int // index of the API that produced this result
 		v   []v1.ExemplarQueryResult
 		err error
 		ls  model.Fingerprint
@@ -642,6 +738,7 @@ func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, 
 				m.recordMetric(i, "query_exemplars", "success", took.Seconds())
 			}
 			retChan <- chanResult{
+				i:   i,
 				v:   result,
 				err: NormalizePromError(err),
 				ls:  m.apiFingerprints[i],
@@ -654,7 +751,7 @@ func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, 
 	// Per-series set of exemplars we've already collected, used to drop the
 	// duplicates that the fan-out across HA replicas necessarily returns.
 	seen := map[model.Fingerprint]map[exemplarKey]struct{}{}
-	var lastError error
+	var errs errorPicker
 	successMap := make(map[model.Fingerprint]int)
 	for i := 0; i < len(m.apis); i++ {
 		select {
@@ -664,10 +761,10 @@ func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, 
 		case ret := <-resultChan:
 			outstandingRequests[ret.ls]--
 			if ret.err != nil {
+				errs.add(ret.i, ret.err)
 				if (outstandingRequests[ret.ls] + successMap[ret.ls]) < m.requiredCount {
-					return nil, ret.err
+					return nil, errs.err
 				}
-				lastError = ret.err
 				continue
 			}
 			successMap[ret.ls]++
@@ -695,7 +792,7 @@ func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, 
 
 	for k := range outstandingRequests {
 		if successMap[k] < m.requiredCount {
-			return nil, errors.Wrap(lastError, "Unable to fetch from downstream servers")
+			return nil, errors.Wrap(errs.err, "Unable to fetch from downstream servers")
 		}
 	}
 
@@ -760,7 +857,7 @@ func (m *MultiAPI) MetadataOnePerKey(ctx context.Context, metric, limit string) 
 		members := groups[fp]
 		var (
 			md       map[string][]v1.Metadata
-			lastErr  error
+			errs     errorPicker
 			answered bool
 		)
 		for n := 0; n < len(members); n++ {
@@ -770,7 +867,7 @@ func (m *MultiAPI) MetadataOnePerKey(ctx context.Context, metric, limit string) 
 			took := time.Since(start)
 			if err != nil {
 				m.recordMetric(i, "metadata", "error", took.Seconds())
-				lastErr = NormalizePromError(err)
+				errs.add(i, NormalizePromError(err))
 				continue
 			}
 			m.recordMetric(i, "metadata", "success", took.Seconds())
@@ -778,7 +875,7 @@ func (m *MultiAPI) MetadataOnePerKey(ctx context.Context, metric, limit string) 
 			break
 		}
 		if !answered {
-			return nil, errors.Wrap(lastErr, "Unable to fetch metadata from downstream servers")
+			return nil, errors.Wrap(errs.err, "Unable to fetch metadata from downstream servers")
 		}
 
 		if result == nil {
