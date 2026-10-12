@@ -161,19 +161,12 @@ func TestDownstreamErrors(t *testing.T) {
 		},
 	}
 
-	endpoints := []struct {
-		path string
-		// alwaysExec is set for the endpoints whose vendored Prometheus
-		// handler answers every storage error as 422 execution, without
-		// looking at the error's class. Changing that takes a change to the
-		// Prometheus fork.
-		alwaysExec bool
-	}{
-		{"/api/v1/query?query=up", false},
-		{"/api/v1/query_range?query=up&start=0&end=60&step=15", false},
-		{"/api/v1/series?match[]=up", false},
-		{"/api/v1/labels", true},
-		{"/api/v1/label/job/values", true},
+	endpoints := []string{
+		"/api/v1/query?query=up",
+		"/api/v1/query_range?query=up&start=0&end=60&step=15",
+		"/api/v1/series?match[]=up",
+		"/api/v1/labels",
+		"/api/v1/label/job/values",
 	}
 
 	for _, tc := range cases {
@@ -199,12 +192,8 @@ func TestDownstreamErrors(t *testing.T) {
 			defer func() { srv.Shutdown(context.Background()); <-stop }()
 
 			for _, ep := range endpoints {
-				t.Run(strings.SplitN(ep.path, "?", 2)[0], func(t *testing.T) {
-					wantStatus, wantType := tc.wantStatus, tc.wantType
-					if ep.alwaysExec {
-						wantStatus, wantType = http.StatusUnprocessableEntity, "execution"
-					}
-					resp, err := http.Get("http://" + addr + ep.path)
+				t.Run(strings.SplitN(ep, "?", 2)[0], func(t *testing.T) {
+					resp, err := http.Get("http://" + addr + ep)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -217,8 +206,8 @@ func TestDownstreamErrors(t *testing.T) {
 					if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
 						t.Fatal(err)
 					}
-					if resp.StatusCode != wantStatus || got.ErrorType != wantType {
-						t.Errorf("got HTTP %d %q, want HTTP %d %q (error: %s)", resp.StatusCode, got.ErrorType, wantStatus, wantType, got.Error)
+					if resp.StatusCode != tc.wantStatus || got.ErrorType != tc.wantType {
+						t.Errorf("got HTTP %d %q, want HTTP %d %q (error: %s)", resp.StatusCode, got.ErrorType, tc.wantStatus, tc.wantType, got.Error)
 					}
 					if !strings.Contains(got.Error, tc.wantMsg) {
 						t.Errorf("error %q does not contain %q", got.Error, tc.wantMsg)
