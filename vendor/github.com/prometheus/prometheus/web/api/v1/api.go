@@ -758,7 +758,7 @@ func (api *API) labelNames(r *http.Request) apiFuncResult {
 		}
 		names, warnings, err = q.LabelNames(r.Context(), hints, matchers...)
 		if err != nil {
-			return apiFuncResult{nil, &apiError{errorExec, err}, warnings, nil}
+			return apiFuncResult{nil, returnAPIError(err), warnings, nil}
 		}
 	}
 
@@ -811,7 +811,7 @@ func (api *API) labelValues(r *http.Request) (result apiFuncResult) {
 
 	q, err := api.Queryable.Querier(timestamp.FromTime(start), timestamp.FromTime(end))
 	if err != nil {
-		return apiFuncResult{nil, &apiError{errorExec, err}, nil, nil}
+		return apiFuncResult{nil, returnAPIError(err), nil, nil}
 	}
 	// From now on, we must only return with a finalizer in the result (to
 	// be called by the caller) or call q.Close ourselves (which is required
@@ -835,7 +835,7 @@ func (api *API) labelValues(r *http.Request) (result apiFuncResult) {
 		for _, matchers := range matcherSets {
 			vals, callWarnings, err = q.LabelValues(ctx, name, hints, matchers...)
 			if err != nil {
-				return apiFuncResult{nil, &apiError{errorExec, err}, warnings, closer}
+				return apiFuncResult{nil, returnAPIError(err), warnings, closer}
 			}
 			warnings.Merge(callWarnings)
 			for _, val := range vals {
@@ -854,7 +854,7 @@ func (api *API) labelValues(r *http.Request) (result apiFuncResult) {
 		}
 		vals, warnings, err = q.LabelValues(ctx, name, hints, matchers...)
 		if err != nil {
-			return apiFuncResult{nil, &apiError{errorExec, err}, warnings, closer}
+			return apiFuncResult{nil, returnAPIError(err), warnings, closer}
 		}
 
 		if vals == nil {
