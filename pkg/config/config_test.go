@@ -159,3 +159,96 @@ promxy:
 		t.Fatalf("manager rejected parsed config: %v", err)
 	}
 }
+
+func TestReplicaSetConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		wantErr bool
+	}{
+		{
+			name: "valid replica_set with matching labels",
+			raw: `
+promxy:
+  server_groups:
+    - replica_set: eu
+      labels:
+        region: eu
+    - replica_set: eu
+      labels:
+        region: eu
+`,
+			wantErr: false,
+		},
+		{
+			name: "valid mixed standalone and replica_set",
+			raw: `
+promxy:
+  server_groups:
+    - replica_set: eu
+      labels:
+        region: eu
+    - labels:
+        region: us
+      ignore_error: true
+    - replica_set: eu
+      labels:
+        region: eu
+`,
+			wantErr: false,
+		},
+		{
+			name: "invalid replica_set with differing labels",
+			raw: `
+promxy:
+  server_groups:
+    - replica_set: eu
+      labels:
+        region: eu
+        cluster: a
+    - replica_set: eu
+      labels:
+        region: eu
+        cluster: b
+`,
+			wantErr: true,
+		},
+		{
+			name: "invalid replica_set with missing label on one member",
+			raw: `
+promxy:
+  server_groups:
+    - replica_set: eu
+      labels:
+        region: eu
+    - replica_set: eu
+`,
+			wantErr: true,
+		},
+		{
+			name: "invalid replica_set member with ignore_error true",
+			raw: `
+promxy:
+  server_groups:
+    - replica_set: eu
+      labels:
+        region: eu
+      ignore_error: true
+    - replica_set: eu
+      labels:
+        region: eu
+`,
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ConfigFromBytes([]byte(tc.raw))
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("ConfigFromBytes error = %v, wantErr = %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+

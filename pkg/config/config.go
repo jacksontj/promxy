@@ -52,6 +52,10 @@ func ConfigFromBytes(configBytes []byte) (*Config, error) {
 		return nil, fmt.Errorf("error applying remote_write defaults: %v", err)
 	}
 
+	if err := cfg.PromxyConfig.Validate(); err != nil {
+		return nil, fmt.Errorf("error validating promxy config: %v", err)
+	}
+
 	return cfg, nil
 }
 
@@ -119,4 +123,29 @@ type PromxyConfig struct {
 	// AlertTemplates optionally configures Go templates for alert GeneratorURLs.
 	// When unset, promxy emits its built-in Prometheus-style GeneratorURL.
 	AlertTemplates alerttemplate.Config `yaml:"alert_templates,omitempty"`
+}
+
+// Validate checks configuration invariants for PromxyConfig.
+// Replica sets require:
+//  1. All members of a replica_set must declare identical labels.
+//  2. No member of a replica_set can set ignore_error.
+func (c *PromxyConfig) Validate() error {
+	sets := make(map[string]*servergroup.Config)
+	for _, sg := range c.ServerGroups {
+		if sg.ReplicaSet == "" {
+			continue
+		}
+		if sg.IgnoreError {
+			return fmt.Errorf("server group in replica_set %q cannot set ignore_error", sg.ReplicaSet)
+		}
+		first, exists := sets[sg.ReplicaSet]
+		if !exists {
+			sets[sg.ReplicaSet] = sg
+		} else {
+			if !first.Labels.Equal(sg.Labels) {
+				return fmt.Errorf("server groups in replica_set %q must declare identical labels", sg.ReplicaSet)
+			}
+		}
+	}
+	return nil
 }

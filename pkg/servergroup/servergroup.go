@@ -368,7 +368,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				// Since these are called in the reverse order of what we add, we want
 				// to make sure that this is the first wrap of the client
 				if logrus.GetLevel() >= logrus.DebugLevel {
-					apiClient = &promclient.DebugAPI{apiClient, u.String()}
+					apiClient = &promclient.DebugAPI{A: apiClient, PrefixMessage: u.String()}
 				}
 
 				if cfg.RemoteRead {
@@ -378,7 +378,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 						return err
 					}
 
-					apiClient = &promclient.PromAPIRemoteRead{apiClient, remoteStorageClient}
+					apiClient = &promclient.PromAPIRemoteRead{API: apiClient, ReadClient: remoteStorageClient}
 				}
 
 				// Optionally add time range layers
@@ -429,7 +429,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				}
 
 				// Add labels
-				apiClient = &promclient.AddLabelClient{apiClient, modelLabelSet.Merge(cfg.Labels)}
+				apiClient = &promclient.AddLabelClient{API: apiClient, Labels: modelLabelSet.Merge(cfg.Labels)}
 
 				// Add MetricRelabel if set
 				if len(cfg.MetricsRelabelConfigs) > 0 {
@@ -450,7 +450,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 				}
 
 				// Add wrap for the specific target, and add to the list
-				apiClients = append(apiClients, &promclient.ErrorWrap{apiClient, "error in target=" + u.String()})
+				apiClients = append(apiClients, &promclient.ErrorWrap{A: apiClient, Msg: "error in target=" + u.String()})
 			}
 		}
 	}
@@ -468,18 +468,18 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 	newState := &ServerGroupState{
 		Targets: targets,
 		// Add error wrap for this specific servergroup
-		apiClient: &promclient.ErrorWrap{apiClient, fmt.Sprintf("error in servergroup ord=%d", cfg.Ordinal)},
+		apiClient: &promclient.ErrorWrap{A: apiClient, Msg: fmt.Sprintf("error in servergroup ord=%d", cfg.Ordinal)},
 		multiAPI:  apiClient,
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
 	}
 
 	if cfg.IgnoreError {
-		newState.apiClient = &promclient.IgnoreErrorAPI{newState.apiClient}
+		newState.apiClient = &promclient.IgnoreErrorAPI{A: newState.apiClient}
 	}
 
 	if cfg.DowngradeError {
-		newState.apiClient = &promclient.DowngradeErrorAPI{newState.apiClient}
+		newState.apiClient = &promclient.DowngradeErrorAPI{A: newState.apiClient}
 	}
 
 	s.logTargetTransition(cfg, oldCount, len(targets), !s.loaded)
