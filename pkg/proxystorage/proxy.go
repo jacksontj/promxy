@@ -125,11 +125,14 @@ func (p *ProxyStorage) GetState() *proxyStorageState {
 
 // ApplyConfig updates the current state of this ProxyStorage
 func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
+	if err := c.PromxyConfig.Validate(); err != nil {
+		return err
+	}
+
 	oldState := p.GetState() // Fetch the old state
 
 	failed := false
 
-	apis := make([]promclient.API, len(c.ServerGroups))
 	newState := &proxyStorageState{
 		sgs: make([]*servergroup.ServerGroup, len(c.ServerGroups)),
 		cfg: c,
@@ -146,7 +149,6 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		// Once the ServerGroup was created; we want to add this to the lists as there
 		// are background goroutines launched (so we'd need to cancel)
 		newState.sgs[i] = tmp
-		apis[i] = tmp
 
 		if err := tmp.ApplyConfig(sgCfg); err != nil {
 			failed = true
@@ -160,8 +162,62 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		return fmt.Errorf("error applying config to one or more server group(s)")
 	}
 
-	multiApi, err := promclient.NewMultiAPI(apis, model.TimeFromUnix(0), false, nil, len(apis), false)
+	type topLevelItem struct {
+		name string
+		apis []promclient.API
+		cfg  *servergroup.Config
+	}
+
+	var topItems []*topLevelItem
+	replicaSetIndex := make(map[string]int)
+
+	for i, sgCfg := range c.ServerGroups {
+		sg := newState.sgs[i]
+		if sgCfg.ReplicaSet == "" {
+			topItems = append(topItems, &topLevelItem{
+				apis: []promclient.API{sg},
+				cfg:  sgCfg,
+			})
+		} else {
+			idx, exists := replicaSetIndex[sgCfg.ReplicaSet]
+			if !exists {
+				idx = len(topItems)
+				replicaSetIndex[sgCfg.ReplicaSet] = idx
+				topItems = append(topItems, &topLevelItem{
+					name: sgCfg.ReplicaSet,
+					apis: []promclient.API{sg},
+					cfg:  sgCfg,
+				})
+			} else {
+				topItems[idx].apis = append(topItems[idx].apis, sg)
+			}
+		}
+	}
+
+	topAPIs := make([]promclient.API, 0, len(topItems))
+	for _, item := range topItems {
+		if item.name == "" {
+			topAPIs = append(topAPIs, item.apis[0])
+		} else {
+			replicaAPI, err := promclient.NewMultiAPI(
+				item.apis,
+				item.cfg.GetAntiAffinity(),
+				item.cfg.AntiAffinityDynamic,
+				nil,
+				1,
+				item.cfg.GetPreferMax(),
+			)
+			if err != nil {
+				newState.Cancel(nil)
+				return err
+			}
+			topAPIs = append(topAPIs, replicaAPI)
+		}
+	}
+
+	multiApi, err := promclient.NewMultiAPI(topAPIs, model.TimeFromUnix(0), false, nil, len(topAPIs), false)
 	if err != nil {
+		newState.Cancel(nil)
 		return err
 	}
 

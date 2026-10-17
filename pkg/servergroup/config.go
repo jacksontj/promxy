@@ -45,6 +45,10 @@ type Config struct {
 	Ordinal int `yaml:"-"`
 	// Name is an optional human-readable identifier for this server group.
 	Name string `yaml:"name,omitempty"`
+	// ReplicaSet is an optional identifier grouping multiple server groups into an HA replica set.
+	// Server groups naming the same replica_set are merged using anti-affinity with requiredCount=1
+	// (any one member answering is enough).
+	ReplicaSet string `yaml:"replica_set,omitempty"`
 	// RemoteRead directs promxy to load RAW data (meaning matrix selectors such as `foo[1h]`)
 	// through the RemoteRead API on prom.
 	// Pros:
