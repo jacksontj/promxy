@@ -601,38 +601,43 @@ func main() {
 }
 
 // sendAlerts implements the rules.NotifyFunc for a Notifier.
-// It filters any non-firing alerts from the input.
 func sendAlerts(n *notifier.Manager, externalURL string, alertTemplates *alerttemplate.Manager) rules.NotifyFunc {
 	return func(ctx context.Context, expr string, alerts ...*rules.Alert) {
-		var res []*notifier.Alert
-
-		for _, alert := range alerts {
-			// Only send actually firing alerts.
-			if alert.State == rules.StatePending {
-				continue
-			}
-			// Use a configured GeneratorURL template if one applies, otherwise
-			// fall back to the built-in Prometheus-style URL.
-			generatorURL, ok := alertTemplates.GeneratorURL(alert, expr, externalURL)
-			if !ok {
-				generatorURL = externalURL + strutil.TableLinkForExpression(expr)
-			}
-			a := &notifier.Alert{
-				StartsAt:     alert.FiredAt,
-				Labels:       alert.Labels,
-				Annotations:  alert.Annotations,
-				GeneratorURL: generatorURL,
-			}
-			if !alert.ResolvedAt.IsZero() {
-				a.EndsAt = alert.ResolvedAt
-			}
-			res = append(res, a)
-		}
-
-		if len(alerts) > 0 {
+		if res := notifierAlerts(alerts, expr, externalURL, alertTemplates); len(res) > 0 {
 			n.Send(res...)
 		}
 	}
+}
+
+// notifierAlerts converts the firing and resolved alerts, skipping pending ones.
+func notifierAlerts(alerts []*rules.Alert, expr, externalURL string, alertTemplates *alerttemplate.Manager) []*notifier.Alert {
+	var res []*notifier.Alert
+	for _, alert := range alerts {
+		if alert.State == rules.StatePending {
+			continue
+		}
+		// Use a configured GeneratorURL template if one applies, otherwise
+		// fall back to the built-in Prometheus-style URL.
+		generatorURL, ok := alertTemplates.GeneratorURL(alert, expr, externalURL)
+		if !ok {
+			generatorURL = externalURL + strutil.TableLinkForExpression(expr)
+		}
+		a := &notifier.Alert{
+			StartsAt:     alert.FiredAt,
+			Labels:       alert.Labels,
+			Annotations:  alert.Annotations,
+			GeneratorURL: generatorURL,
+		}
+		// As in Prometheus rules.SendAlerts: a firing alert stays valid until ValidUntil,
+		// so Alertmanager keeps it open between two runs of a slow rule group.
+		if !alert.ResolvedAt.IsZero() {
+			a.EndsAt = alert.ResolvedAt
+		} else {
+			a.EndsAt = alert.ValidUntil
+		}
+		res = append(res, a)
+	}
+	return res
 }
 
 func startsOrEndsWithQuote(s string) bool {
