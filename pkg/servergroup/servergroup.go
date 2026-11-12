@@ -381,6 +381,17 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 					apiClient = &promclient.PromAPIRemoteRead{apiClient, remoteStorageClient}
 				}
 
+				// Record request metrics beneath the wrappers that can answer a call
+				// without forwarding it (time ranges, label matching, label_filter),
+				// so only calls actually sent to this target are observed.
+				host := u.Host
+				apiClient = &promclient.MetricAPI{
+					A: apiClient,
+					MetricFunc: func(api, status string, took float64) {
+						serverGroupSummary.WithLabelValues(host, api, status).Observe(took)
+					},
+				}
+
 				// Optionally add time range layers
 				if cfg.AbsoluteTimeRangeConfig != nil {
 					apiClient = &promclient.AbsoluteTimeFilter{
@@ -455,12 +466,8 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 		}
 	}
 
-	apiClientMetricFunc := func(i int, api, status string, took float64) {
-		serverGroupSummary.WithLabelValues(targets[i], api, status).Observe(took)
-	}
-
 	logrus.Debugf("Updating targets from discovery manager: %v", targets)
-	apiClient, err := promclient.NewMultiAPI(apiClients, cfg.GetAntiAffinity(), cfg.AntiAffinityDynamic, apiClientMetricFunc, 1, cfg.GetPreferMax())
+	apiClient, err := promclient.NewMultiAPI(apiClients, cfg.GetAntiAffinity(), cfg.AntiAffinityDynamic, nil, 1, cfg.GetPreferMax())
 	if err != nil {
 		return err
 	}
