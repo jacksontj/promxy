@@ -13,7 +13,8 @@ import (
 // MetricAPIFunc records the outcome of a single call made through a MetricAPI.
 type MetricAPIFunc func(api, status string, took float64)
 
-// MetricAPI reports every call made to the wrapped API through MetricFunc.
+// MetricAPI reports every call made to the wrapped API through MetricFunc. A
+// nil MetricFunc records nothing.
 //
 // It is meant to wrap the downstream client directly, beneath any wrapper that
 // can answer a call without forwarding it (time range filters, label matching,
@@ -24,6 +25,9 @@ type MetricAPI struct {
 }
 
 func (m *MetricAPI) record(api string, start time.Time, err error) {
+	if m.MetricFunc == nil {
+		return
+	}
 	took := time.Since(start)
 	status := "success"
 	if err != nil {
