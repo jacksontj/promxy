@@ -174,13 +174,9 @@ func errorRank(err error) int {
 	return rankRefused
 }
 
-// MultiAPIMetricFunc defines a method where a client can record metrics about
-// the specific API calls made through this multi client
-type MultiAPIMetricFunc func(i int, api, status string, took float64)
-
 // NewMustMultiAPI returns a MultiAPI
-func NewMustMultiAPI(apis []API, antiAffinity model.Time, antiAffinityDynamic bool, metricFunc MultiAPIMetricFunc, requiredCount int, preferMax bool) *MultiAPI {
-	a, err := NewMultiAPI(apis, antiAffinity, antiAffinityDynamic, metricFunc, requiredCount, preferMax)
+func NewMustMultiAPI(apis []API, antiAffinity model.Time, antiAffinityDynamic bool, requiredCount int, preferMax bool) *MultiAPI {
+	a, err := NewMultiAPI(apis, antiAffinity, antiAffinityDynamic, requiredCount, preferMax)
 	if err != nil {
 		panic(err)
 	}
@@ -193,7 +189,7 @@ func NewMustMultiAPI(apis []API, antiAffinity model.Time, antiAffinityDynamic bo
 // too few samples are present to estimate. This lets a single server-
 // group host series with mixed scrape intervals without forcing one
 // global buffer that's wrong for half the metrics. See #734.
-func NewMultiAPI(apis []API, antiAffinity model.Time, antiAffinityDynamic bool, metricFunc MultiAPIMetricFunc, requiredCount int, preferMax bool) (*MultiAPI, error) {
+func NewMultiAPI(apis []API, antiAffinity model.Time, antiAffinityDynamic bool, requiredCount int, preferMax bool) (*MultiAPI, error) {
 	fingerprintCounts := make(map[model.Fingerprint]int)
 	apiFingerprints := make([]model.Fingerprint, len(apis))
 	for i, api := range apis {
@@ -218,7 +214,6 @@ func NewMultiAPI(apis []API, antiAffinity model.Time, antiAffinityDynamic bool, 
 		apiFingerprints:     apiFingerprints,
 		antiAffinity:        antiAffinity,
 		antiAffinityDynamic: antiAffinityDynamic,
-		metricFunc:          metricFunc,
 		requiredCount:       requiredCount,
 		preferMax:           preferMax,
 	}, nil
@@ -230,19 +225,12 @@ type MultiAPI struct {
 	apiFingerprints     []model.Fingerprint
 	antiAffinity        model.Time
 	antiAffinityDynamic bool
-	metricFunc          MultiAPIMetricFunc
 	requiredCount       int // number "per key" that we require to respond
 	preferMax           bool
 
 	// metadataRotation advances on every MetadataOnePerKey call so that
 	// consecutive calls start from a different member of each HA key.
 	metadataRotation atomic.Uint64
-}
-
-func (m *MultiAPI) recordMetric(i int, api, status string, took float64) {
-	if m.metricFunc != nil {
-		m.metricFunc(i, api, status, took)
-	}
 }
 
 // LabelValues performs a query for the values of the given label.
@@ -266,14 +254,7 @@ func (m *MultiAPI) LabelValues(ctx context.Context, label string, matchers []str
 	for i, api := range m.apis {
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API, label string) {
-			start := time.Now()
 			result, w, err := api.LabelValues(childContext, label, matchers, startTime, endTime)
-			took := time.Since(start)
-			if err != nil {
-				m.recordMetric(i, "label_values", "error", took.Seconds())
-			} else {
-				m.recordMetric(i, "label_values", "success", took.Seconds())
-			}
 			retChan <- chanResult{
 				i:        i,
 				v:        result,
@@ -346,14 +327,7 @@ func (m *MultiAPI) LabelNames(ctx context.Context, matchers []string, startTime 
 	for i, api := range m.apis {
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API) {
-			start := time.Now()
 			result, w, err := api.LabelNames(childContext, matchers, startTime, endTime)
-			took := time.Since(start)
-			if err != nil {
-				m.recordMetric(i, "label_names", "error", took.Seconds())
-			} else {
-				m.recordMetric(i, "label_names", "success", took.Seconds())
-			}
 			retChan <- chanResult{
 				i:        i,
 				v:        result,
@@ -429,14 +403,7 @@ func (m *MultiAPI) scatterMerge(ctx context.Context, op string, call func(contex
 	for i, api := range m.apis {
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API) {
-			start := time.Now()
 			ss := call(childContext, api)
-			took := time.Since(start)
-			status := "success"
-			if ss.Err() != nil {
-				status = "error"
-			}
-			m.recordMetric(i, op, status, took.Seconds())
 			retChan <- chanResult{i: i, ss: ss, ls: m.apiFingerprints[i]}
 		}(i, resultChan, api)
 	}
@@ -518,14 +485,7 @@ func (m *MultiAPI) Series(ctx context.Context, matches []string, startTime time.
 	for i, api := range m.apis {
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API) {
-			start := time.Now()
 			result, w, err := api.Series(childContext, matches, startTime, endTime)
-			took := time.Since(start)
-			if err != nil {
-				m.recordMetric(i, "series", "error", took.Seconds())
-			} else {
-				m.recordMetric(i, "series", "success", took.Seconds())
-			}
 			retChan <- chanResult{
 				i:        i,
 				v:        result,
@@ -617,14 +577,7 @@ func (m *MultiAPI) Metadata(ctx context.Context, metric, limit string) (map[stri
 	for i, api := range m.apis {
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API, metric, limit string) {
-			start := time.Now()
 			result, err := api.Metadata(childContext, metric, limit)
-			took := time.Since(start)
-			if err != nil {
-				m.recordMetric(i, "query", "error", took.Seconds())
-			} else {
-				m.recordMetric(i, "query", "success", took.Seconds())
-			}
 			retChan <- chanResult{
 				i:   i,
 				v:   result,
@@ -729,14 +682,7 @@ func (m *MultiAPI) QueryExemplars(ctx context.Context, query string, startTime, 
 	for i, api := range m.apis {
 		outstandingRequests[m.apiFingerprints[i]]++
 		go func(i int, retChan chan chanResult, api API) {
-			start := time.Now()
 			result, err := api.QueryExemplars(childContext, query, startTime, endTime)
-			took := time.Since(start)
-			if err != nil {
-				m.recordMetric(i, "query_exemplars", "error", took.Seconds())
-			} else {
-				m.recordMetric(i, "query_exemplars", "success", took.Seconds())
-			}
 			retChan <- chanResult{
 				i:   i,
 				v:   result,
@@ -862,15 +808,11 @@ func (m *MultiAPI) MetadataOnePerKey(ctx context.Context, metric, limit string) 
 		)
 		for n := 0; n < len(members); n++ {
 			i := members[(rotation+n)%len(members)]
-			start := time.Now()
 			v, err := m.apis[i].Metadata(ctx, metric, limit)
-			took := time.Since(start)
 			if err != nil {
-				m.recordMetric(i, "metadata", "error", took.Seconds())
 				errs.add(i, NormalizePromError(err))
 				continue
 			}
-			m.recordMetric(i, "metadata", "success", took.Seconds())
 			md, answered = v, true
 			break
 		}

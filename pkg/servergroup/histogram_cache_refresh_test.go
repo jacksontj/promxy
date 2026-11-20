@@ -94,7 +94,7 @@ func newServerGroupMultiAPI(t *testing.T, targets []*metadataTarget) *promclient
 		var api promclient.API = &promclient.AddLabelClient{API: target, Labels: model.LabelSet{"sg": "0"}}
 		apis[i] = &promclient.ErrorWrap{A: api, Msg: fmt.Sprintf("error in target=%d", i)}
 	}
-	m, err := promclient.NewMultiAPI(apis, model.Time(0), false, nil, 1, false)
+	m, err := promclient.NewMultiAPI(apis, model.Time(0), false, 1, false)
 	if err != nil {
 		t.Fatalf("error building multi api: %v", err)
 	}

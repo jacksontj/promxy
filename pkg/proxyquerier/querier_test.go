@@ -69,7 +69,7 @@ func newTestQuerier(t *testing.T, data string, sgLabels model.LabelSet) *ProxyQu
 
 	multi, err := promclient.NewMultiAPI(
 		[]promclient.API{&promclient.AddLabelClient{API: api, Labels: sgLabels}},
-		0, false, nil, 1, false,
+		0, false, 1, false,
 	)
 	if err != nil {
 		t.Fatalf("new multi api: %v", err)
