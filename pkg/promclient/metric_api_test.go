@@ -109,6 +109,11 @@ func TestMetricAPIRecordsCalls(t *testing.T) {
 	}
 }
 
+func TestMetricAPINilMetricFunc(t *testing.T) {
+	end := time.Now()
+	callAll(&MetricAPI{A: &metricTestAPI{}}, end.Add(-time.Hour), end)
+}
+
 // Calls answered by a wrapper above MetricAPI without being forwarded must not
 // be recorded.
 func TestMetricAPIBeneathTimeFilter(t *testing.T) {
