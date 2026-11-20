@@ -5,11 +5,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
+	"go.uber.org/goleak"
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
+	"github.com/jacksontj/promxy/pkg/servergroup"
 )
 
 func noStepSubqueryInterval(int64) int64 { return 0 }
@@ -97,3 +100,87 @@ func TestNoRemoteWriteAppender(t *testing.T) {
 }
 
 var _ storage.Appendable = appendableStub{}
+
+const (
+	rwConfig = `
+remote_write:
+  - url: http://localhost:1/api/v1/write
+promxy:
+  server_groups:
+    - static_configs:
+        - targets: [localhost:1]
+`
+	noRWConfig = `
+promxy:
+  server_groups:
+    - static_configs:
+        - targets: [localhost:1]
+`
+)
+
+// fastDiscovery shortens the wait for server groups to become ready, which
+// every successful ApplyConfig does.
+func fastDiscovery(t *testing.T) {
+	old := servergroup.DiscoveryUpdateInterval
+	servergroup.DiscoveryUpdateInterval = 10 * time.Millisecond
+	t.Cleanup(func() { servergroup.DiscoveryUpdateInterval = old })
+}
+
+// TestRemoteWriteReAdded removes remote_write on reload and adds it back. The
+// second pipeline registers the same collectors as the first, which panicked
+// on duplicate registration until closing a pipeline unregistered them.
+func TestRemoteWriteReAdded(t *testing.T) {
+	fastDiscovery(t)
+	ps, err := NewProxyStorage(noStepSubqueryInterval, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, raw := range []string{rwConfig, noRWConfig, rwConfig} {
+		if err := ps.ApplyConfig(loadConfig(t, raw)); err != nil {
+			t.Fatalf("reload %d: %v", i, err)
+		}
+	}
+	defer ps.GetState().Cancel(nil)
+
+	app := ps.Appender(context.Background())
+	if _, err := app.Append(0, labels.FromStrings(labels.MetricName, "promxy_test_metric"), 1, 1); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	if err := app.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+}
+
+// TestRemoteWriteSetupFailure fails a reload while building the remote_write
+// pipeline (the WAL directory is a file). The reload must not leave the server
+// groups or the half-built pipeline running, and must not leave collectors
+// registered that would make the next attempt panic.
+func TestRemoteWriteSetupFailure(t *testing.T) {
+	fastDiscovery(t)
+	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+
+	walDir := filepath.Join(t.TempDir(), "wal")
+	if err := os.WriteFile(walDir, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ps, err := NewProxyStorage(noStepSubqueryInterval, walDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ps.ApplyConfig(loadConfig(t, rwConfig)); err == nil {
+		t.Fatal("ApplyConfig succeeded with a file as the WAL directory")
+	}
+	if got := len(ps.GetState().sgs); got != 0 {
+		t.Fatalf("the failed config was applied: %d server groups in the current state", got)
+	}
+
+	// Once the WAL directory is usable, the same config applies.
+	if err := os.Remove(walDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := ps.ApplyConfig(loadConfig(t, rwConfig)); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	ps.GetState().Cancel(nil)
+}
