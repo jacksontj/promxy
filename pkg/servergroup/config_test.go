@@ -257,7 +257,7 @@ http_client:
     password: pass
 `,
 			wantErr: true,
-			errMsg:  "at most one of basic_auth, authorization, bearer_token, bearer_token_file, sigv4 must be configured",
+			errMsg:  "at most one of basic_auth, authorization, bearer_token, bearer_token_file, oauth2, sigv4 must be configured",
 		},
 		{
 			name: "sigv4 and bearer_token (should fail)",
@@ -268,7 +268,7 @@ http_client:
   bearer_token: mytoken
 `,
 			wantErr: true,
-			errMsg:  "at most one of basic_auth, authorization, bearer_token, bearer_token_file, sigv4 must be configured",
+			errMsg:  "at most one of basic_auth, authorization, bearer_token, bearer_token_file, oauth2, sigv4 must be configured",
 		},
 		{
 			name: "sigv4 and bearer_token_file (should fail)",
@@ -279,7 +279,7 @@ http_client:
   bearer_token_file: /path/to/token
 `,
 			wantErr: true,
-			errMsg:  "at most one of basic_auth, authorization, bearer_token, bearer_token_file, sigv4 must be configured",
+			errMsg:  "at most one of basic_auth, authorization, bearer_token, bearer_token_file, oauth2, sigv4 must be configured",
 		},
 		{
 			name: "sigv4 and authorization (should fail)",
@@ -292,7 +292,32 @@ http_client:
     credentials: mytoken
 `,
 			wantErr: true,
-			errMsg:  "at most one of basic_auth, authorization, bearer_token, bearer_token_file, sigv4 must be configured",
+			errMsg:  "at most one of basic_auth, authorization, bearer_token, bearer_token_file, oauth2, sigv4 must be configured",
+		},
+		{
+			name: "sigv4 and oauth2 (should fail)",
+			config: `
+http_client:
+  sigv4:
+    region: us-west-2
+  oauth2:
+    client_id: id
+    client_secret: secret
+    token_url: http://localhost/token
+`,
+			wantErr: true,
+			errMsg:  "at most one of basic_auth, authorization, bearer_token, bearer_token_file, oauth2, sigv4 must be configured",
+		},
+		{
+			name: "oauth2 only (should succeed)",
+			config: `
+http_client:
+  oauth2:
+    client_id: id
+    client_secret: secret
+    token_url: http://localhost/token
+`,
+			wantErr: false,
 		},
 		{
 			name: "sigv4 only (should succeed)",

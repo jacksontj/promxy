@@ -361,12 +361,16 @@ func (c *Config) validateAuthConfig() error {
 		authMethods = append(authMethods, "bearer_token_file")
 	}
 
+	if c.HTTPConfig.HTTPConfig.OAuth2 != nil {
+		authMethods = append(authMethods, "oauth2")
+	}
+
 	if c.HTTPConfig.SigV4Config != nil {
 		authMethods = append(authMethods, "sigv4")
 	}
 
 	if len(authMethods) > 1 {
-		return fmt.Errorf("at most one of basic_auth, authorization, bearer_token, bearer_token_file, sigv4 must be configured")
+		return fmt.Errorf("at most one of basic_auth, authorization, bearer_token, bearer_token_file, oauth2, sigv4 must be configured")
 	}
 
 	return nil
