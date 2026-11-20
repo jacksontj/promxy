@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"os"
 	"reflect"
 	"sort"
 	"strconv"
@@ -15,7 +14,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
@@ -32,8 +30,6 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunks"
 	"github.com/prometheus/prometheus/tsdb/index"
 	"github.com/sirupsen/logrus"
-
-	"github.com/jacksontj/promxy/pkg/logging"
 
 	proxyconfig "github.com/jacksontj/promxy/pkg/config"
 	"github.com/jacksontj/promxy/pkg/promapi"
@@ -86,7 +82,10 @@ func (p *proxyStorageState) Ready() {
 func (p *proxyStorageState) Cancel(n *proxyStorageState) {
 	if p.sgs != nil {
 		for _, sg := range p.sgs {
-			sg.Cancel()
+			// nil if NewServerGroup failed for this slot.
+			if sg != nil {
+				sg.Cancel()
+			}
 		}
 	}
 	// Close the remote_write storage (agent WAL + queue managers) unless the
@@ -124,7 +123,7 @@ func (p *ProxyStorage) GetState() *proxyStorageState {
 }
 
 // ApplyConfig updates the current state of this ProxyStorage
-func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
+func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) (err error) {
 	oldState := p.GetState() // Fetch the old state
 
 	failed := false
@@ -134,6 +133,14 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		sgs: make([]*servergroup.ServerGroup, len(c.ServerGroups)),
 		cfg: c,
 	}
+	// The server groups run background goroutines from the moment they're
+	// created, so a config that fails to apply must stop them.
+	defer func() {
+		if err != nil {
+			newState.Cancel(nil)
+		}
+	}()
+
 	for i, sgCfg := range c.ServerGroups {
 		sgCfg.Ordinal = i
 		tmp, err := servergroup.NewServerGroup()
@@ -154,21 +161,17 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		}
 	}
 
-	// If there was a failure anywhere, we need to cancel the newState and return an error
 	if failed {
-		newState.Cancel(nil)
 		return fmt.Errorf("error applying config to one or more server group(s)")
 	}
 
-	apis, err := groupReplicaSets(c.ServerGroups, apis)
+	apis, err = groupReplicaSets(c.ServerGroups, apis)
 	if err != nil {
-		newState.Cancel(nil)
 		return err
 	}
 
 	multiApi, err := promclient.NewMultiAPI(apis, model.TimeFromUnix(0), false, len(apis), false)
 	if err != nil {
-		newState.Cancel(nil)
 		return err
 	}
 
@@ -185,59 +188,14 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 			newState.appendable = oldState.appendable
 			newState.appenderCloser = oldState.appenderCloser
 		} else {
-			walDir := p.localStoragePath
-			ephemeral := walDir == ""
-			if ephemeral {
-				dir, err := os.MkdirTemp("", "promxy-remote-wal-")
-				if err != nil {
-					return fmt.Errorf("creating remote_write WAL dir: %w", err)
-				}
-				walDir = dir
-			}
-			rwLogger := logging.NewLogger(logrus.WithField("component", "remote_write").Logger)
-			rs := remote.NewStorage(
-				rwLogger,
-				prometheus.DefaultRegisterer,
-				func() (int64, error) { return 0, nil },
-				walDir,
-				1*time.Second,
-				noopScrapeManager{},
-			)
-			// promxy has no local TSDB writing a WAL, so remote.Storage's queue
-			// managers have nothing to tail. Run an agent-mode WAL-only DB whose
-			// appender writes the WAL that those queue managers consume. Without
-			// this the WAL watcher fails with "error tailing WAL ... no such file
-			// or directory" and no samples are ever shipped (see issue #771).
-			db, err := agent.Open(rwLogger, prometheus.DefaultRegisterer, rs, walDir, agent.DefaultOptions())
+			rw, err := newRemoteWrite(&c.PromConfig, p.localStoragePath)
 			if err != nil {
-				if ephemeral {
-					os.RemoveAll(walDir)
-				}
-				return fmt.Errorf("creating remote_write WAL: %w", err)
-			}
-			// Wake the queue managers' WAL watchers as soon as samples are committed.
-			db.SetWriteNotified(rs)
-			if err := rs.ApplyConfig(&c.PromConfig); err != nil {
-				db.Close()
-				if ephemeral {
-					os.RemoveAll(walDir)
-				}
 				return err
 			}
-			newState.remoteStorage = rs
-			newState.agentDB = db
-			newState.appendable = db
-			newState.appenderCloser = func() error {
-				dbErr := db.Close()
-				rsErr := rs.Close()
-				if ephemeral {
-					os.RemoveAll(walDir)
-				}
-				if dbErr != nil {
-					return dbErr
-				}
-				return rsErr
-			}
+			newState.remoteStorage = rw.storage
+			newState.agentDB = rw.db
+			newState.appendable = rw.db
+			newState.appenderCloser = rw.close
 		}
 	} else {
 		newState.appendable = appendableStub{}
