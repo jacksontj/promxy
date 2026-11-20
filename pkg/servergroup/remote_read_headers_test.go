@@ -2,6 +2,7 @@ package servergroup
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -98,14 +99,39 @@ http_client:
 // --proxy-headers), and returns the headers the downstream received.
 func remoteReadRequestHeaders(t *testing.T, extraConfig string, incoming map[string]string) http.Header {
 	t.Helper()
+	return remoteReadRequest(t, extraConfig, incoming).header
+}
+
+// capturedRequest is a request as received by the fake remote_read downstream.
+type capturedRequest struct {
+	method string
+	host   string
+	path   string
+	header http.Header
+	body   []byte
+}
+
+// remoteReadRequest is remoteReadRequestHeaders, returning the whole request.
+func remoteReadRequest(t *testing.T, extraConfig string, incoming map[string]string) *capturedRequest {
+	t.Helper()
 	var (
 		mu  sync.Mutex
-		got http.Header
+		got *capturedRequest
 	)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/prometheus/api/v1/read" {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("reading remote_read body: %v", err)
+			}
 			mu.Lock()
-			got = r.Header.Clone()
+			got = &capturedRequest{
+				method: r.Method,
+				host:   r.Host,
+				path:   r.URL.Path,
+				header: r.Header.Clone(),
+				body:   body,
+			}
 			mu.Unlock()
 		}
 		http.Error(w, "not implemented", http.StatusNotImplemented)
