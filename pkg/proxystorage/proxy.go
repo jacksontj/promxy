@@ -160,8 +160,15 @@ func (p *ProxyStorage) ApplyConfig(c *proxyconfig.Config) error {
 		return fmt.Errorf("error applying config to one or more server group(s)")
 	}
 
+	apis, err := groupReplicaSets(c.ServerGroups, apis)
+	if err != nil {
+		newState.Cancel(nil)
+		return err
+	}
+
 	multiApi, err := promclient.NewMultiAPI(apis, model.TimeFromUnix(0), false, len(apis), false)
 	if err != nil {
+		newState.Cancel(nil)
 		return err
 	}
 

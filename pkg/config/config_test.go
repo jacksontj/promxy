@@ -2,6 +2,7 @@ package proxyconfig
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/jacksontj/promxy/pkg/alerttemplate"
@@ -157,5 +158,109 @@ promxy:
 	// The parsed config must be accepted by the manager.
 	if err := alerttemplate.NewManager().Apply(at); err != nil {
 		t.Fatalf("manager rejected parsed config: %v", err)
+	}
+}
+
+// TestReplicaSetValidation checks the rules that keep a replica_set's members
+// mergeable as copies of the same data (#842).
+func TestReplicaSetValidation(t *testing.T) {
+	member := func(extra string) string {
+		return "    - static_configs: [{targets: [localhost:9090]}]\n      replica_set: eu\n" + extra
+	}
+	tests := []struct {
+		name    string
+		groups  []string
+		wantErr string
+	}{
+		{
+			name:   "identical members",
+			groups: []string{member("      labels: {region: eu}\n"), member("      labels: {region: eu}\n")},
+		},
+		{
+			name: "unrelated groups may differ",
+			groups: []string{
+				member("      labels: {region: eu}\n"),
+				"    - static_configs: [{targets: [localhost:9090]}]\n      labels: {region: us}\n      ignore_error: true\n",
+				"    - static_configs: [{targets: [localhost:9090]}]\n      replica_set: us\n      labels: {region: us}\n",
+			},
+		},
+		{
+			name:    "differing labels",
+			groups:  []string{member("      labels: {region: eu}\n"), member("      labels: {region: eu, tenant: b}\n")},
+			wantErr: "identical labels",
+		},
+		{
+			name:    "differing anti_affinity",
+			groups:  []string{member(""), member("      anti_affinity: 30s\n")},
+			wantErr: "identical anti_affinity",
+		},
+		{
+			name:   "anti_affinity equal once truncated to seconds",
+			groups: []string{member("      anti_affinity: 10s\n"), member("      anti_affinity: 10500ms\n")},
+		},
+		{
+			name:    "differing relabel_configs",
+			groups:  []string{member(""), member("      relabel_configs: [{target_label: tenant, replacement: b}]\n")},
+			wantErr: "identical relabel_configs",
+		},
+		{
+			name:    "differing metrics_relabel_configs",
+			groups:  []string{member(""), member("      metrics_relabel_configs: [{action: labeldrop, source_label: tenant}]\n")},
+			wantErr: "identical metrics_relabel_configs",
+		},
+		{
+			name:    "differing relative_time_range",
+			groups:  []string{member("      relative_time_range: {start: -72h}\n"), member("")},
+			wantErr: "identical relative_time_range",
+		},
+		{
+			name:    "differing absolute_time_range",
+			groups:  []string{member(""), member("      absolute_time_range: {start: '2026-01-01T00:00:00Z'}\n")},
+			wantErr: "identical absolute_time_range",
+		},
+		{
+			name:    "differing label_filter",
+			groups:  []string{member(""), member("      label_filter: {static_labels_include: {job: [node]}}\n")},
+			wantErr: "identical label_filter",
+		},
+		{
+			name:    "differing inject_matchers",
+			groups:  []string{member("      inject_matchers: ['env=\"prod\"']\n"), member("")},
+			wantErr: "identical inject_matchers",
+		},
+		{
+			name:   "identical time range and relabel",
+			groups: []string{member("      relative_time_range: {start: -72h}\n      relabel_configs: [{target_label: x, replacement: y}]\n"), member("      relative_time_range: {start: -72h}\n      relabel_configs: [{target_label: x, replacement: y}]\n")},
+		},
+		{
+			name:    "null server group",
+			groups:  []string{"    -\n", member("")},
+			wantErr: "server_groups[0]: empty server group",
+		},
+		{
+			name:    "ignore_error member",
+			groups:  []string{member(""), member("      ignore_error: true\n")},
+			wantErr: "ignore_error",
+		},
+		{
+			name:    "downgrade_error member",
+			groups:  []string{member("      downgrade_error: true\n"), member("")},
+			wantErr: "downgrade_error",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := "promxy:\n  server_groups:\n" + strings.Join(tc.groups, "")
+			_, err := ConfigFromBytes([]byte(raw))
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("got error %v, want one mentioning %q", err, tc.wantErr)
+			}
+		})
 	}
 }

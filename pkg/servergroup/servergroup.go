@@ -571,10 +571,15 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 		return err
 	}
 
+	var groupClient promclient.API = apiClient
+	if len(apiClients) == 0 && cfg.ReplicaSet != "" {
+		groupClient = noTargetsAPI{err: fmt.Errorf("no targets")}
+	}
+
 	newState := &ServerGroupState{
 		Targets: targets,
 		// Add error wrap for this specific servergroup
-		apiClient: &promclient.ErrorWrap{apiClient, fmt.Sprintf("error in servergroup ord=%d", cfg.Ordinal)},
+		apiClient: &promclient.ErrorWrap{groupClient, fmt.Sprintf("error in servergroup ord=%d", cfg.Ordinal)},
 		multiAPI:  apiClient,
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
