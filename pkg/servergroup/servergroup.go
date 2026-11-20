@@ -84,7 +84,7 @@ func newRemoteReadConfig(cfg *Config, u *url.URL) *remote.ClientConfig {
 	}
 	return &remote.ClientConfig{
 		URL:              &config_util.URL{URL: u},
-		HTTPClientConfig: cfg.HTTPConfig.HTTPConfig,
+		HTTPClientConfig: remoteReadHTTPClientConfig(cfg),
 		SigV4Config:      cfg.HTTPConfig.SigV4Config,
 		Timeout:          model.Duration(timeout),
 		ChunkedReadLimit: prom_config.DefaultChunkedReadLimit,
@@ -234,6 +234,32 @@ func (s *ServerGroup) Cancel() {
 	s.ctxCancel()
 }
 
+// remoteReadHTTPClientConfig returns the server group's http_client config for
+// the remote_read client, minus any http_client.http_headers entry that the
+// server group's http_headers also sets. Prometheus's header round tripper
+// appends rather than replaces, so leaving both would send the header twice,
+// and backends such as Mimir read the first value. Dropping the
+// http_client.http_headers entry lets http_headers win, as it does for
+// forwarded headers.
+func remoteReadHTTPClientConfig(cfg *Config) config_util.HTTPClientConfig {
+	hc := cfg.HTTPConfig.HTTPConfig
+	if hc.HTTPHeaders == nil || len(cfg.HTTPClientHeaders) == 0 {
+		return hc
+	}
+	overridden := make(map[string]struct{}, len(cfg.HTTPClientHeaders))
+	for k := range cfg.HTTPClientHeaders {
+		overridden[http.CanonicalHeaderKey(k)] = struct{}{}
+	}
+	kept := make(map[string]config_util.Header, len(hc.HTTPHeaders.Headers))
+	for k, v := range hc.HTTPHeaders.Headers {
+		if _, ok := overridden[http.CanonicalHeaderKey(k)]; !ok {
+			kept[k] = v
+		}
+	}
+	hc.HTTPHeaders = &config_util.Headers{Headers: kept}
+	return hc
+}
+
 // RoundTrip allows us to intercept and mutate downstream HTTP requests at the transport level
 func (s *ServerGroup) RoundTrip(r *http.Request) (*http.Response, error) {
 	// Snapshot the config and client once for this request; ApplyConfig may
@@ -244,7 +270,24 @@ func (s *ServerGroup) RoundTrip(r *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("servergroup %s has no client; no configuration applied yet", configIdentifier(cfg))
 	}
 
+	setDownstreamHeaders(r, cfg, nil)
+	// Ensure Body is non-nil so downstream transports (e.g. SigV4) that
+	// unconditionally read the body don't panic on GET requests.
+	if r.Body == nil {
+		r.Body = http.NoBody
+	}
+	return client.Transport.RoundTrip(r)
+}
+
+// setDownstreamHeaders sets the headers every downstream request carries: the
+// client headers named by --proxy-headers (stashed in the context by
+// middleware.ProxyHeaders), then the server group's http_headers, which win on
+// conflict. Forwarded headers whose canonical name is in skip are not set.
+func setDownstreamHeaders(r *http.Request, cfg *Config, skip map[string]struct{}) {
 	for k, v := range middleware.GetHeaders(r.Context()) {
+		if _, ok := skip[http.CanonicalHeaderKey(k)]; ok {
+			continue
+		}
 		r.Header.Set(k, v)
 	}
 	if cfg != nil {
@@ -253,12 +296,50 @@ func (s *ServerGroup) RoundTrip(r *http.Request) (*http.Response, error) {
 			logrus.Tracef("Set ServerGroup custom header %s: %s", k, v)
 		}
 	}
-	// Ensure Body is non-nil so downstream transports (e.g. SigV4) that
-	// unconditionally read the body don't panic on GET requests.
-	if r.Body == nil {
-		r.Body = http.NoBody
+}
+
+// downstreamHeadersRoundTripper applies setDownstreamHeaders to requests that
+// don't go through ServerGroup.RoundTrip. The remote_read client builds its own
+// transport from the full HTTPClientConfig (oauth2, proxy settings, ...), so it
+// is layered on top of that transport rather than replacing it.
+//
+// That transport appends http_client.http_headers after this runs, so
+// forwarded headers with those names are skipped (configured headers win over
+// forwarded ones) instead of being sent alongside them.
+type downstreamHeadersRoundTripper struct {
+	cfg  *Config
+	skip map[string]struct{}
+	next http.RoundTripper
+}
+
+func (t *downstreamHeadersRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	// A RoundTripper must not modify the caller's request.
+	r = r.Clone(r.Context())
+	setDownstreamHeaders(r, t.cfg, t.skip)
+	return t.next.RoundTrip(r)
+}
+
+// newRemoteReadClient builds the remote_read client for one target of the
+// server group, carrying the same forwarded and configured headers as the
+// server group's other downstream requests.
+func newRemoteReadClient(cfg *Config, u *url.URL) (remote.ReadClient, error) {
+	rc, err := remote.NewReadClient("foo", newRemoteReadConfig(cfg, u))
+	if err != nil {
+		return nil, err
 	}
-	return client.Transport.RoundTrip(r)
+	c, ok := rc.(*remote.Client)
+	if !ok {
+		return nil, fmt.Errorf("unexpected remote read client type %T; cannot apply downstream headers", rc)
+	}
+	var skip map[string]struct{}
+	if hh := cfg.HTTPConfig.HTTPConfig.HTTPHeaders; hh != nil {
+		skip = make(map[string]struct{}, len(hh.Headers))
+		for k := range hh.Headers {
+			skip[http.CanonicalHeaderKey(k)] = struct{}{}
+		}
+	}
+	c.Client.Transport = &downstreamHeadersRoundTripper{cfg: cfg, skip: skip, next: c.Client.Transport}
+	return c, nil
 }
 
 // Sync updates the targets from our discovery manager
@@ -373,7 +454,7 @@ func (s *ServerGroup) loadTargetGroupMap(targetGroupMap map[string][]*targetgrou
 
 				if cfg.RemoteRead {
 					u.Path = path.Join(u.Path, cfg.RemoteReadPath)
-					remoteStorageClient, err := remote.NewReadClient("foo", newRemoteReadConfig(cfg, u))
+					remoteStorageClient, err := newRemoteReadClient(cfg, u)
 					if err != nil {
 						return err
 					}
