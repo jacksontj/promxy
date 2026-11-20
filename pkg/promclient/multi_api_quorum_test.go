@@ -61,7 +61,7 @@ func TestMultiAPIToleratesDownReplica(t *testing.T) {
 
 	call := func(t *testing.T, apis []API) error {
 		t.Helper()
-		m, err := NewMultiAPI(apis, model.TimeFromUnix(0), false, nil, 1, false)
+		m, err := NewMultiAPI(apis, model.TimeFromUnix(0), false, 1, false)
 		if err != nil {
 			t.Fatalf("NewMultiAPI: %v", err)
 		}

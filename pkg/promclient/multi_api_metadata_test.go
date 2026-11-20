@@ -57,7 +57,7 @@ func totalCalls(stubs ...[]*metadataCountAPI) int64 {
 func TestMultiAPIMetadataOnePerKey(t *testing.T) {
 	t.Run("one target per HA key", func(t *testing.T) {
 		stubs, apis := newMetadataTargets(5, model.LabelSet{"a": "1"})
-		m := NewMustMultiAPI(apis, model.Time(0), false, nil, 1, false)
+		m := NewMustMultiAPI(apis, model.Time(0), false, 1, false)
 
 		md, err := m.MetadataOnePerKey(context.Background(), "", "")
 		if err != nil {
@@ -81,7 +81,7 @@ func TestMultiAPIMetadataOnePerKey(t *testing.T) {
 
 	t.Run("rotates across replicas", func(t *testing.T) {
 		stubs, apis := newMetadataTargets(3, model.LabelSet{"a": "1"})
-		m := NewMustMultiAPI(apis, model.Time(0), false, nil, 1, false)
+		m := NewMustMultiAPI(apis, model.Time(0), false, 1, false)
 
 		for i := 0; i < len(stubs); i++ {
 			if _, err := m.MetadataOnePerKey(context.Background(), "", ""); err != nil {
@@ -99,7 +99,7 @@ func TestMultiAPIMetadataOnePerKey(t *testing.T) {
 		stubs, apis := newMetadataTargets(3, model.LabelSet{"a": "1"})
 		// The first call starts at index 0, so break that one.
 		stubs[0].err = fmt.Errorf("target is down")
-		m := NewMustMultiAPI(apis, model.Time(0), false, nil, 1, false)
+		m := NewMustMultiAPI(apis, model.Time(0), false, 1, false)
 
 		md, err := m.MetadataOnePerKey(context.Background(), "", "")
 		if err != nil {
@@ -118,7 +118,7 @@ func TestMultiAPIMetadataOnePerKey(t *testing.T) {
 		for _, s := range stubs {
 			s.err = fmt.Errorf("target is down")
 		}
-		m := NewMustMultiAPI(apis, model.Time(0), false, nil, 1, false)
+		m := NewMustMultiAPI(apis, model.Time(0), false, 1, false)
 
 		if _, err := m.MetadataOnePerKey(context.Background(), "", ""); err == nil {
 			t.Fatal("expected an error when no replica of a key answers")
@@ -135,7 +135,7 @@ func TestMultiAPIMetadataOnePerKey(t *testing.T) {
 		for i, s := range stubsB {
 			s.name = fmt.Sprintf("other_metric_%d", i)
 		}
-		m := NewMustMultiAPI(append(apisA, apisB...), model.Time(0), false, nil, 1, false)
+		m := NewMustMultiAPI(append(apisA, apisB...), model.Time(0), false, 1, false)
 
 		md, err := m.MetadataOnePerKey(context.Background(), "", "")
 		if err != nil {
