@@ -194,6 +194,22 @@ type Config struct {
 	// Note: this allows you to make the tradeoff between availability of queries and consistency of results
 	DowngradeError bool `yaml:"downgrade_error"`
 
+	// ReplicaSet names a set of server groups that hold the same data, e.g. two
+	// tenants of a multi-tenant backend that are dual-written, or replicas each
+	// behind their own credentials. Server groups naming the same set are merged
+	// the way the targets of a single server group are: deduplicated using
+	// anti_affinity, with any one member answering being enough. The set as a
+	// whole is still required, so a query fails if every member fails, and a
+	// member with no targets counts as failed.
+	//
+	// Members of a set must declare identical labels, relabel_configs,
+	// metrics_relabel_configs, anti_affinity, anti_affinity_dynamic, prefer_max,
+	// relative_time_range, absolute_time_range, label_filter and
+	// inject_matchers, and may not set ignore_error or downgrade_error. Their
+	// targets must also carry the same labels (from static_configs or
+	// discovery): series that differ in any label are not deduplicated.
+	ReplicaSet string `yaml:"replica_set,omitempty"`
+
 	// RelativeTimeRangeConfig defines a relative time range that this servergroup will respond to
 	// An example use-case would be if a specific servergroup was long-term storage, it might only
 	// have data 3d old and retain 90d of data.

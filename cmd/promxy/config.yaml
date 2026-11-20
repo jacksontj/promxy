@@ -205,6 +205,19 @@ promxy:
       # query can still succeed
       ignore_error: true
 
+      # replica_set names a set of server groups holding the same data, for copies
+      # that can't share a server group because they need different credentials or
+      # headers (e.g. two tenants of Mimir/Cortex that are dual-written). Server
+      # groups naming the same set are merged like the targets of one server group:
+      # deduplicated with anti_affinity, and any one member answering is enough. If
+      # every member fails (or has no targets), the query still fails.
+      # Members must declare identical labels, relabel_configs,
+      # metrics_relabel_configs, anti_affinity, anti_affinity_dynamic, prefer_max,
+      # relative_time_range, absolute_time_range, label_filter and inject_matchers,
+      # and may not set ignore_error or downgrade_error. Their targets must carry
+      # the same labels too, or the copies' series won't be deduplicated.
+      # replica_set: eu
+
       # LabelFilterConfig is a mechanism to restrict which queries are sent to the particular downstream.
       # This is done by maintaining a "filter" of labels that are downstream and ensuring that the
       # matchers for any particular query match that in-memory filter. This can be defined both

@@ -48,6 +48,10 @@ func ConfigFromBytes(configBytes []byte) (*Config, error) {
 		return nil, fmt.Errorf("error unmarshaling config: %v", err)
 	}
 
+	if err := servergroup.ValidateReplicaSets(cfg.ServerGroups); err != nil {
+		return nil, fmt.Errorf("error validating config: %v", err)
+	}
+
 	if err := applyRemoteWriteDefaults(cfg, configBytes); err != nil {
 		return nil, fmt.Errorf("error applying remote_write defaults: %v", err)
 	}
